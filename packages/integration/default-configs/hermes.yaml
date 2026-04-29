@@ -1,9 +1,15 @@
-# Default Hermes agent configuration — placeholder values
-# Real values are injected at runtime via environment variables.
-# See hermes.env.template for the full list of required variables.
+# hermes.yaml — default Hermes agent configuration
+# Copied to /data/config/hermes.yaml on first container run.
+# Edit this file to customise Hermes behaviour.
+
+storage:
+  type: local
+  path: /data/data/hermes
 
 server:
-  host: "0.0.0.0"
-  port: 8080
+  host: 0.0.0.0
+  port: 8787
 
-# TODO (task 05): flesh out with full onboarding config schema
+logging:
+  level: info
+  file: /data/logs/hermes.log
