@@ -1,5 +1,79 @@
-# TODO (task 03): Implement full integration container build
-# This stub exists to establish the package structure.
-FROM ubuntu:22.04
-LABEL org.opencontainers.image.title="fox-in-the-box"
-RUN echo "Stub — replace in task 03"
+# syntax=docker/dockerfile:1
+FROM python:3.11-slim
+
+# ── build args ────────────────────────────────────────────────────────────────
+ARG TARGETARCH
+# Pin QDRANT_VERSION to match qdrant-client in hermes-agent (see task 03 docs).
+# Do NOT use "latest" in production builds.
+ARG QDRANT_VERSION=v1.9.4
+# Baked into /app/version.txt; entrypoint clones this git tag on first run.
+ARG FITB_VERSION=v0.1.0
+
+# ── system dependencies ───────────────────────────────────────────────────────
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        curl \
+        ca-certificates \
+        gnupg \
+        git \
+        lsb-release \
+        iproute2 \
+        iptables \
+    && rm -rf /var/lib/apt/lists/*
+
+# ── Tailscale ─────────────────────────────────────────────────────────────────
+RUN curl -fsSL "https://pkgs.tailscale.com/stable/debian/$(lsb_release -cs).noarmor.gpg" \
+        | tee /usr/share/keyrings/tailscale-archive-keyring.gpg >/dev/null \
+    && curl -fsSL "https://pkgs.tailscale.com/stable/debian/$(lsb_release -cs).tailscale-keyring.list" \
+        | tee /etc/apt/sources.list.d/tailscale.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends tailscale \
+    && rm -rf /var/lib/apt/lists/*
+
+# ── Python packages (runtime infrastructure only — NO app code) ───────────────
+RUN pip install --no-cache-dir supervisor
+
+# ── Qdrant binary ─────────────────────────────────────────────────────────────
+RUN set -eux; \
+    mkdir -p /app/qdrant; \
+    case "${TARGETARCH}" in \
+        arm64) ARCH="aarch64" ;; \
+        *)     ARCH="x86_64"  ;; \
+    esac; \
+    if [ "${QDRANT_VERSION}" = "latest" ]; then \
+        QDRANT_VERSION=$(curl -fsSL -o /dev/null -w '%{url_effective}' \
+            https://github.com/qdrant/qdrant/releases/latest \
+            | sed 's|.*/tag/||'); \
+    fi; \
+    curl -fsSL \
+        "https://github.com/qdrant/qdrant/releases/download/${QDRANT_VERSION}/qdrant-${ARCH}-unknown-linux-musl.tar.gz" \
+        | tar -xzf - -C /app/qdrant; \
+    chmod +x /app/qdrant/qdrant
+
+# ── non-root user ─────────────────────────────────────────────────────────────
+RUN useradd -r -s /bin/bash -d /app foxinthebox \
+    && mkdir -p /data \
+    && chown -R foxinthebox:foxinthebox /app /data
+
+# Marker for Hermes WebUI: bind behavior / container hints (see hermes-webui server.py)
+RUN printf '1\n' > /.within_container
+
+# ── bake FITB_VERSION for entrypoint git clone ────────────────────────────────
+RUN echo "${FITB_VERSION}" > /app/version.txt
+
+# ── supervisord config ────────────────────────────────────────────────────────
+COPY packages/integration/supervisord.conf /etc/supervisor/supervisord.conf
+
+# ── default configs and scripts ────────────────────────────────────────────────
+COPY packages/integration/default-configs/ /app/defaults/
+COPY packages/integration/scripts/ /app/scripts/
+RUN chmod +x /app/scripts/*.sh
+
+# ── entrypoint ────────────────────────────────────────────────────────────────
+COPY packages/integration/entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+
+# ── runtime ───────────────────────────────────────────────────────────────────
+VOLUME ["/data"]
+EXPOSE 8787 6333
+
+ENTRYPOINT ["/app/entrypoint.sh"]
