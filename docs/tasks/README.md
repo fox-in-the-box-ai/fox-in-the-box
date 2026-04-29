@@ -10,8 +10,8 @@
 
 | # | File | Title | Executor | Status | Depends On | Unblocks |
 |---|------|-------|----------|--------|------------|----------|
-| 01 | [01-github-repo-setup.md](01-github-repo-setup.md) | GitHub Repository Setup | **Stan** | — | _(nothing)_ | 02 |
-| 02 | [02-monorepo-scaffold.md](02-monorepo-scaffold.md) | Monorepo Scaffold | Agent | — | 01 | 03, 04, 05, 08 |
+|| 01 | [01-github-repo-setup.md](01-github-repo-setup.md) | GitHub Repository Setup | **Stan** | ✅ DONE | _(nothing)_ | 02 |
+|| 02 | [02-monorepo-scaffold.md](02-monorepo-scaffold.md) | Monorepo Scaffold | Agent | 🔄 IN PROGRESS | 01 | 03, 04, 05, 08 |
 | 03 | [03-dockerfile.md](03-dockerfile.md) | Dockerfile & Container Build | Agent | — | 02 | 04, 05, 06, 07, 08 |
 | 04 | [04-entrypoint.md](04-entrypoint.md) | Container Entrypoint Script | Agent | — | 03 | Integration test |
 || 05a | [05a-onboarding-wizard-tests.md](05a-onboarding-wizard-tests.md) | Onboarding Wizard — Tests | Agent | — | 02 + 03 | 05b |
