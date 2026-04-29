@@ -6,8 +6,6 @@ ARG TARGETARCH
 # Pin QDRANT_VERSION to match qdrant-client in hermes-agent (see task 03 docs).
 # Do NOT use "latest" in production builds.
 ARG QDRANT_VERSION=v1.9.4
-# Baked into /app/version.txt; entrypoint clones this git tag on first run.
-ARG FITB_VERSION=v0.1.0
 
 # ── system dependencies ───────────────────────────────────────────────────────
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -57,18 +55,18 @@ RUN useradd -r -s /bin/bash -d /app foxinthebox \
 # Marker for Hermes WebUI: bind behavior / container hints (see hermes-webui server.py)
 RUN printf '1\n' > /.within_container
 
-# ── bake FITB_VERSION for entrypoint git clone ────────────────────────────────
-RUN echo "${FITB_VERSION}" > /app/version.txt
-
 # ── supervisord config ────────────────────────────────────────────────────────
 COPY packages/integration/supervisord.conf /etc/supervisor/supervisord.conf
 
-# ── default configs and scripts ────────────────────────────────────────────────
+# ── default configs and version ───────────────────────────────────────────────
 COPY packages/integration/default-configs/ /app/defaults/
+COPY packages/integration/app-root/version.txt /app/version.txt
+
+# ── migration scripts ─────────────────────────────────────────────────────────
 COPY packages/integration/scripts/ /app/scripts/
 RUN chmod +x /app/scripts/*.sh
 
-# ── entrypoint ────────────────────────────────────────────────────────────────
+# ── entrypoint (full version — replaces Task 03 stub) ─────────────────────────
 COPY packages/integration/entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 
