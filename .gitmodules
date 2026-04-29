@@ -1,0 +1,8 @@
+[submodule "forks/hermes-agent"]
+	path = forks/hermes-agent
+	url = https://github.com/fox-in-the-box-ai/hermes-agent.git
+	branch = main
+[submodule "forks/hermes-webui"]
+	path = forks/hermes-webui
+	url = https://github.com/fox-in-the-box-ai/hermes-webui.git
+	branch = master
