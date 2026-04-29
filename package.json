@@ -1,0 +1,20 @@
+{
+  "name": "fox-in-the-box",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Fox in the Box — self-hosted AI assistant monorepo",
+  "engines": {
+    "node": ">=20",
+    "pnpm": ">=9"
+  },
+  "packageManager": "pnpm@9.0.0",
+  "scripts": {
+    "install:all": "pnpm install --recursive",
+    "build": "pnpm --recursive run build",
+    "test": "pnpm --recursive run test",
+    "lint": "pnpm --recursive run lint",
+    "dev": "pnpm --recursive run dev",
+    "clean": "pnpm --recursive run clean"
+  },
+  "devDependencies": {}
+}
