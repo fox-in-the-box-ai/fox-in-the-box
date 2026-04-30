@@ -70,9 +70,8 @@ _clone_app() {
             --branch "$FITB_VERSION" \
             "https://github.com/fox-in-the-box-ai/$APP" \
             "$DEST" 2>/dev/null; then
-        echo "[entrypoint] Tag $FITB_VERSION not found — falling back to main branch ..."
+        echo "[entrypoint] Tag $FITB_VERSION not found — falling back to default branch ..."
         if ! git clone --depth 1 \
-                --branch main \
                 "https://github.com/fox-in-the-box-ai/$APP" \
                 "$DEST"; then
             echo "[entrypoint] ERROR: Failed to clone $APP. Check network and try again."
@@ -82,7 +81,13 @@ _clone_app() {
     fi
 
     echo "[entrypoint] Installing $APP ..."
-    pip install -e "$DEST" --quiet --no-cache-dir
+    if [ -f "$DEST/setup.py" ] || [ -f "$DEST/pyproject.toml" ]; then
+        pip install -e "$DEST" --quiet --no-cache-dir
+    elif [ -f "$DEST/requirements.txt" ]; then
+        pip install -r "$DEST/requirements.txt" --quiet --no-cache-dir
+    else
+        echo "[entrypoint] WARNING: No installable package or requirements.txt in $APP — skipping pip install."
+    fi
     echo "[entrypoint] $APP ready."
 }
 
