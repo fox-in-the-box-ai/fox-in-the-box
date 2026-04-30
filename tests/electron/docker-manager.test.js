@@ -57,3 +57,27 @@ test('stopContainer is a no-op when container is not running', async () => {
   // getContainer should NOT be called
   expect(mockDockerInstance.getContainer).not.toHaveBeenCalled();
 });
+
+test('startContainer uses FOX_DATA_DIR env var when set', async () => {
+  process.env.FOX_DATA_DIR = '/custom/data/path';
+  const mockContainer = { start: jest.fn().mockResolvedValue({}) };
+  mockDockerInstance.createContainer.mockResolvedValue(mockContainer);
+
+  await docker.startContainer();
+
+  const call = mockDockerInstance.createContainer.mock.calls[0][0];
+  expect(call.HostConfig.Binds[0]).toMatch(/^\/custom\/data\/path:/);
+  delete process.env.FOX_DATA_DIR;
+});
+
+test('startContainer falls back to homedir path when FOX_DATA_DIR unset', async () => {
+  delete process.env.FOX_DATA_DIR;
+  const mockContainer = { start: jest.fn().mockResolvedValue({}) };
+  mockDockerInstance.createContainer.mockResolvedValue(mockContainer);
+
+  await docker.startContainer();
+
+  const call = mockDockerInstance.createContainer.mock.calls[0][0];
+  // Should contain some path ending in :/data — not empty
+  expect(call.HostConfig.Binds[0]).toMatch(/.*:\/data$/);
+});
