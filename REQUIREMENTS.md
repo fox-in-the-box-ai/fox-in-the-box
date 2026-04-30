@@ -417,6 +417,7 @@ Requires=docker.service
 Restart=always
 ExecStart=docker run --rm --name fox-in-the-box \
   --cap-add=NET_ADMIN \
+  --device /dev/net/tun \
   -v __DATA_DIR__:/data \
   -p 8787:8787 \
   foxinthebox/cloud:stable

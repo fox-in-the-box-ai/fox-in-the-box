@@ -175,6 +175,7 @@ $DOCKER_CMD run -d \
   --name "$CONTAINER" \
   --restart unless-stopped \
   --cap-add=NET_ADMIN \
+  --device /dev/net/tun \
   --sysctl net.ipv4.ip_forward=1 \
   -v "$DATA_DIR":/data \
   $PORT_BIND \
