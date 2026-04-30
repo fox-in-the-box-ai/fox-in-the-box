@@ -739,7 +739,7 @@ EOF
   # Override curl stub so get.docker.com returns a failing script
   cat > "$STUB_BIN/curl" <<'EOF'
 #!/usr/bin/env bash
-echo '#!/usr/bin/env bash; exit 1'
+echo 'exit 1'
 EOF
   chmod +x "$STUB_BIN/curl"
 
