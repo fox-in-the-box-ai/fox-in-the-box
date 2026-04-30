@@ -13,7 +13,11 @@ You do NOT commit, push, or open PRs on your own.
 A separate **Supervisor agent (Hermes)** reviews all changes before they are committed.
 The workflow is: **you implement → Supervisor reviews → Supervisor commits**.
 
-Do not bypass this. Do not `git commit` or `git push` under any circumstances.
+Do not bypass this. Do not `git push` under any circumstances.
+
+**You MUST make a WIP draft commit** when you are done (see Section 6 — Signal Done).
+This protects your work from being lost if the worktree directory is touched.
+The Supervisor will amend the commit message and push.
 
 ---
 
@@ -83,11 +87,19 @@ For every task you receive:
    - [ ] Code follows existing patterns in the repo (check neighboring files first)
    - [ ] No `console.log` / `print` debug statements left in
    - [ ] `docker build` still succeeds if you touched anything in `packages/integration/`
-6. **Signal done** — write a `DONE.md` in the worktree root with:
-   - What you implemented
-   - How to run the tests
-   - Any open issues or assumptions you made
-   - Anything that needs Supervisor's attention
+6. **Signal done** — do these steps in order:
+   a. Write `DONE.md` in the worktree root with:
+      - What you implemented
+      - How to run the tests
+      - Any open issues or assumptions you made
+      - Anything that needs Supervisor's attention
+   b. **Make a WIP draft commit** (this is mandatory — not optional):
+      ```bash
+      git add -A
+      git commit -m "WIP: task(NN) — pending supervisor review"
+      ```
+      This protects your work. The Supervisor will amend the message on approval.
+      Do NOT `git push`. The Supervisor handles all pushes.
 
 ---
 
