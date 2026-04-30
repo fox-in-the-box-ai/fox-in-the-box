@@ -1,0 +1,9 @@
+[Unit]
+Description=Watch for Fox in the Box update sentinel file
+
+[Path]
+PathExists=__DATA_DIR__/update.trigger
+Unit=foxinthebox-updater.service
+
+[Install]
+WantedBy=multi-user.target
