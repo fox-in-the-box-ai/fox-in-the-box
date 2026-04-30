@@ -2,6 +2,10 @@ appId: io.foxinthebox.desktop
 productName: Fox in the Box
 copyright: "Copyright © 2024 Fox in the Box AI"
 
+# Skip native module rebuild — no native modules need rebuilding for the target platform
+# (cpu-features via ssh2/dockerode fails on Windows with pnpm due to .cjs invocation issue)
+npmRebuild: false
+
 directories:
   output: dist
 
