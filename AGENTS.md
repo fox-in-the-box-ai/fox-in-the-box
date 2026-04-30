@@ -131,7 +131,7 @@ cd tests/container && bats test_install.bats
 ### Container smoke test
 ```bash
 docker build -f packages/integration/Dockerfile -t fitb:test .
-docker run -d --name fitb-test --cap-add=NET_ADMIN -p 127.0.0.1:8787:8787 fitb:test
+docker run -d --name fitb-test --cap-add=NET_ADMIN --device /dev/net/tun -p 127.0.0.1:8787:8787 fitb:test
 sleep 15
 curl -f http://localhost:8787/
 docker stop fitb-test && docker rm fitb-test

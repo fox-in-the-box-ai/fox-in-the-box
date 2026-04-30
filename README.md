@@ -9,6 +9,7 @@ All-in-one self-hosted AI assistant platform packaged as a single Docker contain
 docker run -d \
   --name fox-in-the-box \
   --cap-add=NET_ADMIN \
+  --device /dev/net/tun \
   -p 8787:8787 \
   ghcr.io/fox-in-the-box-ai/cloud:stable
 ```
