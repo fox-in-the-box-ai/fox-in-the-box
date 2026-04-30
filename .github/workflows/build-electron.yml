@@ -30,6 +30,16 @@ jobs:
         with:
           submodules: recursive
 
+      # Windows: enable long paths in git and OS (pnpm hashed store paths exceed MAX_PATH)
+      - name: Enable long paths (Windows only)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          git config --system core.longpaths true
+          New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" `
+            -Name "LongPathsEnabled" -Value 1 -PropertyType DWORD -Force | Out-Null
+          Write-Host "Long paths enabled"
+
       - name: Setup pnpm 9
         uses: pnpm/action-setup@v3
         with:
@@ -41,7 +51,14 @@ jobs:
           node-version: "20"
           cache: "pnpm"
 
-      - name: Install dependencies
+      # Windows: hoist node_modules to avoid deeply-nested pnpm store paths
+      # that cause makensis.exe to fail with !include path-too-long errors
+      - name: Install dependencies (Windows — hoisted)
+        if: runner.os == 'Windows'
+        run: pnpm install --frozen-lockfile --shamefully-hoist
+
+      - name: Install dependencies (non-Windows)
+        if: runner.os != 'Windows'
         run: pnpm install --frozen-lockfile
 
       - name: Build Electron app
