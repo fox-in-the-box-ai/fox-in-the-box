@@ -49,7 +49,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-          cache: "pnpm"
 
       # Windows: use npm install (flat node_modules) to avoid pnpm's deeply-hashed
       # store paths that exceed Windows MAX_PATH — makensis.exe can't open NSIS includes
