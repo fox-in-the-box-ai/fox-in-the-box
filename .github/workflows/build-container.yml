@@ -1,0 +1,94 @@
+# .github/workflows/build-container.yml
+name: Build Container
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build-and-push:
+    name: Build & Push Docker Image
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write   # required to push to GHCR
+
+    steps:
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Determine image tag
+        id: meta
+        run: |
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            echo "tag=dev" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=latest" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build Docker image
+        run: |
+          docker build \
+            --platform linux/amd64 \
+            --build-arg FITB_VERSION=${{ github.sha }} \
+            -t ghcr.io/fox-in-the-box-ai/cloud:${{ steps.meta.outputs.tag }} \
+            -f packages/integration/Dockerfile \
+            .
+
+      - name: Push Docker image to GHCR
+        run: |
+          docker push ghcr.io/fox-in-the-box-ai/cloud:${{ steps.meta.outputs.tag }}
+
+      - name: Smoke test — start container
+        run: |
+          docker run -d \
+            --name test-fox \
+            --cap-add=NET_ADMIN \
+            --device /dev/net/tun \
+            --sysctl net.ipv4.ip_forward=1 \
+            -p 127.0.0.1:8787:8787 \
+            ghcr.io/fox-in-the-box-ai/cloud:${{ steps.meta.outputs.tag }}
+
+      - name: Smoke test — wait for container to be healthy
+        # Poll instead of blind sleep: first boot clones git repos + pip install,
+        # which takes 30–90 seconds on a cold CI runner. sleep 10 is not enough.
+        # Retry for up to 3 minutes (36 × 5s). Fail fast if container exits.
+        run: |
+          for i in $(seq 1 36); do
+            if curl -sf http://localhost:8787/health -o /dev/null 2>/dev/null; then
+              echo "✅ /health returned HTTP 200 (attempt $i)"
+              exit 0
+            fi
+            # Abort early if the container died
+            if ! docker inspect test-fox --format '{{.State.Running}}' | grep -q true; then
+              echo "❌ Container exited unexpectedly"
+              docker logs test-fox
+              exit 1
+            fi
+            echo "  Waiting... ($i/36)"
+            sleep 5
+          done
+          echo "❌ Container did not become healthy within 3 minutes"
+          exit 1
+
+      - name: Smoke test — print container logs (for debugging)
+        if: always()
+        run: docker logs test-fox 2>&1 || true
+
+      - name: Smoke test — stop container
+        if: always()
+        run: docker stop test-fox || true
