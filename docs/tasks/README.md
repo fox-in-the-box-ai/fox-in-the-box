@@ -12,12 +12,12 @@
 |---|------|-------|----------|--------|------------|----------|
 || 01 | [01-github-repo-setup.md](01-github-repo-setup.md) | GitHub Repository Setup | **Stan** | ✅ DONE | _(nothing)_ | 02 |
 || 02 | [02-monorepo-scaffold.md](02-monorepo-scaffold.md) | Monorepo Scaffold | Agent | ✅ DONE | 01 | 03, 04, 05, 08 |
-| 03 | [03-dockerfile.md](03-dockerfile.md) | Dockerfile & Container Build | Agent | 🔄 IN PROGRESS | 02 | 04, 05, 06, 07, 08 |
-| 04 | [04-entrypoint.md](04-entrypoint.md) | Container Entrypoint Script | Agent | — | 03 | Integration test |
-|| 05a | [05a-onboarding-wizard-tests.md](05a-onboarding-wizard-tests.md) | Onboarding Wizard — Tests | Agent | — | 02 + 03 | 05b |
-|| 05b | [05b-onboarding-wizard-impl.md](05b-onboarding-wizard-impl.md) | Onboarding Wizard — Implementation | Agent | — | 05a approved | 06 |
-| 06 | [06-electron-app.md](06-electron-app.md) | Electron Desktop App | Agent | — | 03 | Release |
-| 07 | [07-install-scripts.md](07-install-scripts.md) | Install Scripts | Agent | — | 02 + 03 | Release |
+|| 03 | [03-dockerfile.md](03-dockerfile.md) | Dockerfile & Container Build | Agent | ✅ DONE | 02 | 04, 05, 06, 07, 08 |
+|| 04 | [04-entrypoint.md](04-entrypoint.md) | Container Entrypoint Script | Agent | ✅ DONE | 03 | Integration test |
+|| 05a | [05a-onboarding-wizard-tests.md](05a-onboarding-wizard-tests.md) | Onboarding Wizard — Tests | Agent | ✅ DONE | 02 + 03 | 05b |
+|| 05b | [05b-onboarding-wizard-impl.md](05b-onboarding-wizard-impl.md) | Onboarding Wizard — Implementation | Agent | ✅ DONE | 05a approved | 06 |
+|| 06 | [06-electron-app.md](06-electron-app.md) | Electron Desktop App | Agent | ✅ DONE | 03 | Release |
+|| 07 | [07-install-scripts.md](07-install-scripts.md) | Install Scripts | Agent | ✅ DONE | 02 + 03 | Release |
 | 08 | [08-github-actions.md](08-github-actions.md) | GitHub Actions CI/CD | Agent | — | 02 (write early); fully works after 03 + 06 | Release |
 
 > **Note:** `08-github-actions.md` has not been written yet — create it before spawning Agent C.
