@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+
+  <!-- ── Main service ────────────────────────────────────────────────── -->
+  <key>Label</key>
+  <string>io.foxinthebox</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/local/bin/docker</string>
+    <string>run</string>
+    <string>--rm</string>
+    <string>--name</string>
+    <string>fox-in-the-box</string>
+    <string>--cap-add=NET_ADMIN</string>
+    <string>--sysctl</string>
+    <string>net.ipv4.ip_forward=1</string>
+    <string>-v</string>
+    <string>__DATA_DIR__:/data</string>
+    <string>-p</string>
+    <string>0.0.0.0:8787:8787</string>
+    <string>ghcr.io/fox-in-the-box-ai/cloud:stable</string>
+  </array>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <key>KeepAlive</key>
+  <true/>
+
+  <key>StandardOutPath</key>
+  <string>__DATA_DIR__/logs/launchd-stdout.log</string>
+
+  <key>StandardErrorPath</key>
+  <string>__DATA_DIR__/logs/launchd-stderr.log</string>
+
+  <!-- ── Updater (watches sentinel file) ─────────────────────────────── -->
+  <key>WatchPaths</key>
+  <array>
+    <string>__DATA_DIR__/update.trigger</string>
+  </array>
+
+  <!-- When launchd fires on file change it re-runs ProgramArguments.
+       The container start will inherently pull latest because
+       ExecStartPre pulls the image first via a wrapper script.
+       For a cleaner update flow, replace ProgramArguments above with
+       a wrapper script that: docker pull → docker stop → docker run.  -->
+
+</dict>
+</plist>
