@@ -135,6 +135,15 @@ if [ -f "$HERMES_ENV" ]; then
     set +a
 fi
 
-# ── 6. Hand off to supervisord ─────────────────────────────────────────────────
+# ── 6. Configure Tailscale Serve (if Tailscale state exists) ──────────────────
+# tailscale serve routes https://<machine>.tailnet.ts.net → http://localhost:8787
+# This is a no-op if Tailscale is not yet authenticated.
+if [ -f "/data/data/tailscale/tailscaled.state" ]; then
+    echo "[entrypoint] Configuring Tailscale Serve..."
+    tailscale serve --bg / http://localhost:8787 2>/dev/null || \
+        echo "[entrypoint] WARNING: tailscale serve failed (daemon may not be ready yet — will retry at next restart)."
+fi
+
+# ── 7. Hand off to supervisord ─────────────────────────────────────────────────
 echo "[entrypoint] Starting supervisord ..."
 exec /usr/local/bin/supervisord -c /etc/supervisor/supervisord.conf

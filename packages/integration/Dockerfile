@@ -6,6 +6,9 @@ ARG TARGETARCH
 # Pin QDRANT_VERSION to match qdrant-client in hermes-agent (see task 03 docs).
 # Do NOT use "latest" in production builds.
 ARG QDRANT_VERSION=v1.9.4
+# FITB_VERSION: the git tag to clone for hermes-agent and hermes-webui.
+# Override at build time: docker build --build-arg FITB_VERSION=v0.2.0 ...
+ARG FITB_VERSION=v0.1.0
 
 # ── system dependencies ───────────────────────────────────────────────────────
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -61,6 +64,8 @@ COPY packages/integration/supervisord.conf /etc/supervisor/supervisord.conf
 # ── default configs and version ───────────────────────────────────────────────
 COPY packages/integration/default-configs/ /app/defaults/
 COPY packages/integration/app-root/version.txt /app/version.txt
+# Overwrite version.txt with the build-arg value so entrypoint uses the right tag
+RUN echo "${FITB_VERSION}" > /app/version.txt
 
 # ── migration scripts ─────────────────────────────────────────────────────────
 COPY packages/integration/scripts/ /app/scripts/

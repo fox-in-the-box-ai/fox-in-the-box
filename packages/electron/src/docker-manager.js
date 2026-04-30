@@ -78,9 +78,20 @@ async function getRunningContainer() {
  * Returns the container object.
  */
 async function startContainer() {
-  const os = require('os');
-  const path = require('path');
-  const dataDir = path.join(os.homedir(), '.foxinthebox');
+  // Use Electron's app.getPath('userData') for the OS-native path:
+  //   Windows: %APPDATA%\Fox in the Box
+  //   macOS:   ~/Library/Application Support/Fox in the Box
+  //   Linux:   ~/.config/Fox in the Box  (or FOX_DATA_DIR override)
+  // Fall back to FOX_DATA_DIR env var, then ~/.foxinthebox for non-Electron contexts.
+  let dataDir;
+  try {
+    const { app } = require('electron');
+    dataDir = process.env.FOX_DATA_DIR || app.getPath('userData');
+  } catch (_) {
+    const os = require('os');
+    const path = require('path');
+    dataDir = process.env.FOX_DATA_DIR || path.join(os.homedir(), '.foxinthebox');
+  }
 
   const container = await docker.createContainer({
     name: CNAME,
