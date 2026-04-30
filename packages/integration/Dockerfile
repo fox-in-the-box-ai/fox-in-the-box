@@ -2,7 +2,7 @@
 FROM python:3.11-slim
 
 # ── build args ────────────────────────────────────────────────────────────────
-ARG TARGETARCH
+ARG TARGETARCH=amd64
 # Pin QDRANT_VERSION to match qdrant-client in hermes-agent (see task 03 docs).
 # Do NOT use "latest" in production builds.
 ARG QDRANT_VERSION=v1.9.4
