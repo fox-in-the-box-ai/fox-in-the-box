@@ -1,0 +1,37 @@
+appId: io.foxinthebox.desktop
+productName: Fox in the Box
+copyright: "Copyright © 2024 Fox in the Box AI"
+
+directories:
+  output: dist
+
+files:
+  - src/**/*
+  - assets/**/*
+  - package.json
+
+icon: assets/icon.png
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  artifactName: "fox-in-the-box-setup-${version}-${arch}.exe"
+
+nsis:
+  oneClick: true
+  perMachine: false
+  allowToChangeInstallationDirectory: false
+  deleteAppDataOnUninstall: false
+
+mac:
+  target:
+    - target: zip
+      arch:
+        - x64
+        - arm64
+  artifactName: "fox-in-the-box-${version}-${arch}-mac.zip"
+  identity: null   # unsigned build
+
+publish: null      # no auto-update endpoint yet

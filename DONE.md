@@ -1,37 +1,68 @@
-# Task 05a — Onboarding wizard tests (DONE)
+# Task 06 — Electron desktop app — DONE
 
-## Deliverable
+## Summary
 
-- Single authoritative file: `forks/hermes-webui/tests/test_setup_api.py`
-- All **12** required tests are present, with the exact names from the task spec and a **docstring** on each test function.
+Implemented the Fox in the Box Electron tray app under `packages/electron/`:
 
-**Note:** An outdated path `tests/integration/test_setup_api.py` may remain as a one-line redirect docstring stub if deletion was blocked in-agent — **Supervisor should remove it** (`git rm tests/integration/test_setup_api.py`) so only the Hermes fork copy remains.
+| Path | Purpose |
+|------|---------|
+| `packages/electron/package.json` | Dependencies (`dockerode`, `electron-log`, `electron`, `electron-builder`, `jest`), scripts, electron-builder extend, **Jest** `rootDir`/`testMatch` plus `moduleDirectories` so tests resolve deps from `packages/electron/node_modules` |
+| `packages/electron/electron-builder.yml` | NSIS Win x64 zip mac x64/arm64 unsigned, app id/product name per spec |
+| `packages/electron/src/docker-manager.js` | Docker API via Dockerode — ping, pull, create/start/stop/restart, volume `~/.foxinthebox:/data`, port binding |
+| `packages/electron/src/health-check.js` | Poll `http://localhost:8787/health` |
+| `packages/electron/src/tray-manager.js` | Tray menu: status → Open Fox → Restart Fox → Start/Stop → Quit |
+| `packages/electron/src/main.js` | Startup sequence per task doc (single-instance lock, no `BrowserWindow`, install Docker prompt, pull, health, open browser, tray) |
+| `packages/electron/assets/icon.png` | 1024×1024 solid `#FF6B35` PNG (stdlib Python zlib/struct) |
+| `tests/electron/docker-manager.test.js` | Six Jest cases with mocked `dockerode` |
+| `.gitignore` | Appended `node_modules/`, `packages/electron/dist/`, `packages/electron/node_modules/` |
 
-## Pytest
+`pnpm-lock.yaml` was updated by `pnpm install` (workspace root).
 
-From repo root:
+## How to run tests
+
+From repo root (with pnpm on `PATH`, or via `npx pnpm@9`):
 
 ```bash
-cd forks/hermes-webui && python3 -m pytest tests/test_setup_api.py -v 2>&1
+cd packages/electron && pnpm install
+cd packages/electron && npx jest --testPathPattern=tests/electron
 ```
 
-Run was not executed in this environment; expected before Task **05b**:
+Or `pnpm --filter @fox-in-the-box/electron test` from root if `packageManager` scripts are wired.
 
-- With **`forks/hermes-webui`** missing or **without importable ``server.Handler``**, collection may **error** at the `Handler_cls` fixture (`pytest.fail` with import message).
-- With WebUI checked out but **routes not implemented**, tests should **fail** on assertions (wrong status codes, bodies, missing files).
-- **Expected before 05b:** no syntax/import failures in the **test module itself** once `pytest` is installed under the same interpreter as Hermes dependencies.
+## Full test output (6 passing)
 
-### Cross-thread logging (API key leakage)
+```
+> @fox-in-the-box/electron@0.1.0 test /home/ubuntu/workspace/fitb-task-06/packages/electron
+> jest --testPathPattern=tests/electron
 
-`pytest`’s **`caplog`** does not reliably capture logs emitted by the threaded **`HTTPServer`** worker. OpenRouter-related tests attach a **`logging.Handler`** (**`LogCapture`**) on the **root logger** and assert substring absence on `"\n".join(log_capture.records)` so key material is actually checked across threads.
+PASS ../../tests/electron/docker-manager.test.js
+  ✓ isDaemonRunning returns true when ping succeeds (3 ms)
+  ✓ isDaemonRunning returns false when ping throws (2 ms)
+  ✓ isImagePresent returns true when image list is non-empty (2 ms)
+  ✓ isImagePresent returns false when image list is empty (1 ms)
+  ✓ getRunningContainer returns null when no container matches (2 ms)
+  ✓ stopContainer is a no-op when container is not running (3 ms)
 
-## Assumptions about the web stack
+Test Suites: 1 passed, 1 total
+Tests:       6 passed, 6 total
+Snapshots:   0 total
+Time:        0.589 s, estimated 1 s
+Ran all test suites matching /tests\/electron/i.
+```
 
-- **`forks/hermes-webui/server.py`** exposes **`Handler`** (subclasses **`BaseHTTPRequestHandler`**).
-- Behaviour honours **`ONBOARDING_PATH`**, **`HERMES_ENV_PATH`**, optional **`check_auth`** bypass as before.
-- Tailscale **`subprocess.Popen`** patch target is **`subprocess.Popen`** (global patch as in task examples).
+## Issues / assumptions
 
-## Supervisor / 05b follow-ups
+1. **Jest `moduleDirectories`** — The task’s Jest config alone could not resolve `dockerode` because `rootDir` is the monorepo root while dependencies live under `packages/electron/node_modules`. Added `moduleDirectories` including `<rootDir>/packages/electron/node_modules` so the six tests run without hoisting or duplicating deps at the repo root.
 
-- Remove **`tests/integration/test_setup_api.py`** if present (move completed).
-- If Tailscale implementation uses **`Popen`** only under the **`server`** module’s **`subprocess`** reference, patches may need **`@patch("server.subprocess.Popen")`** instead of patching **`subprocess.Popen`** globally.
+2. **`main.js` pull dialog** — Matches the task doc (`showMessageBox` with `buttons: []`); platform behavior for a buttonless info box varies. Tray-only flow and pulls are exercised manually per the task’s manual checklist.
+
+3. **`installDocker()` on Linux** — The task snippet uses Homebrew for all non-Windows platforms; Linux users without Homebrew see a failing command. Prefer the documented Linux shell installer for Docker for that platform (per roadmap/Roadmap); Electron path is optimized for Windows (primary).
+
+4. **macOS Docker socket fallbacks** — Task notes mention trying `/var/run/docker.sock` then `~/.docker/run/docker.sock`; `docker-manager.js` stays on default Dockerode socket resolution as in the task’s Step 4. Supervisor may want a small follow-up to pass `Dockerode` socket options.
+
+5. **Build** — `pnpm build` / `electron-builder` was not executed in this environment (no assertion in CI here). Task AC1 expects GH Actions runners later.
+
+## Supervisor
+
+- A transient `package-lock.json` under `packages/electron/` from an exploratory `npm install` was deleted; **`pnpm-lock.yaml` is authoritative**.
+- No commits or pushes performed (per AGENTS).

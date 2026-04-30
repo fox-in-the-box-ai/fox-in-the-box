@@ -1,1 +1,5 @@
 .github/
+
+node_modules/
+packages/electron/dist/
+packages/electron/node_modules/
