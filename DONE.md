@@ -1,51 +1,63 @@
-# Task 07 — Install Scripts (DONE)
+# DONE — Task 08: GitHub Actions CI/CD
 
-## Implemented
+## What was implemented
 
-- **`packages/scripts/install.sh`** — Installer per `docs/tasks/07-install-scripts.md` (Linux/macOS detection, Docker bootstrap, GHCR pull, access-mode prompt with Tailscale help, container run, optional Tailscale log/exec flow, systemd or launchd installation, summary).
-- **`packages/scripts/foxinthebox.service`** — systemd unit for `docker run` with `__DATA_DIR__` placeholder.
-- **`packages/scripts/foxinthebox-updater.service`** — oneshot unit: pull, restart, remove trigger path as specified.
-- **`packages/scripts/foxinthebox-updater.path`** — path unit watching `__DATA_DIR__/update.trigger`.
-- **`packages/scripts/io.foxinthebox.plist`** — launchd plist with `__DATA_DIR__` placeholders.
-- **`tests/container/test_install.bats`** — Bats suite copied verbatim from the task doc.
-- **`install.sh`** is executable (`chmod +x`).
+Three workflow files created under `.github/workflows/`:
 
-No changes under `forks/`.
+### `build-container.yml`
+- Triggers on push to `main` and PRs targeting `main`
+- Tags `:latest` on main push, `:dev` on PR builds
+- Builds with `--build-arg FITB_VERSION=${{ github.sha }}` so the image knows its version
+- Added `--device /dev/net/tun` and `--sysctl net.ipv4.ip_forward=1` to the smoke test
+  `docker run` command (required for tailscaled — task doc was missing these flags)
+- Polls `/health` with retry loop (up to 3 min / 36 × 5s) — no blind sleep
+- Prints container logs on failure (`if: always()`)
 
-## Bats
+### `build-electron.yml`
+- Triggers on push to `main` and `v*` tags
+- Matrix: `windows-latest` (→ `.exe`) and `macos-latest` (→ `.zip`)
+- `fail-fast: false` so one platform failure doesn't cancel the other
+- Uploads artifacts with `if-no-files-found: error` (catches silent build failures)
+- On `v*` tags: also attaches artifacts directly to the GitHub Release via `softprops/action-gh-release@v2`
 
-`bats` was not on the default PATH; it was installed with `sudo apt-get install -y bats` so the suite could be run.
+### `release.yml`
+- Triggers on `v*` tag push
+- Uses reusable workflow calls (`uses: ./.github/workflows/...`) to re-run
+  container + electron builds from the exact tagged commit
+- Re-tags `:latest` → `:[version]` and `:stable` on GHCR
+- Creates GitHub Release with auto-generated notes and attached installers
 
-### Test output
+## Acceptance criteria status
+
+| # | Criterion | Status |
+|---|-----------|--------|
+| 1 | Push to main → :latest on GHCR | ✅ Workflow present — verifiable once pushed |
+| 2 | Push to main → Windows .exe + macOS .zip artifacts | ✅ Workflow present |
+| 3 | Smoke test: /health returns HTTP 200 | ✅ Retry-poll in build-container.yml |
+| 4 | Tag v* → GitHub Release with installers | ✅ release.yml + build-electron.yml tag path |
+| 5 | PR build: only container workflow, :dev tag, no Electron | ✅ Electron on `push` only, not `pull_request` |
+| 6 | Tag v* → :v0.1.0 and :stable on GHCR | ✅ Re-tag step in release.yml |
+
+## Open issues / assumptions
+
+1. **`/health` endpoint**: The smoke test polls `GET /health`. This endpoint was verified
+   to exist via local browser testing (task 05b). If it ever moves or disappears, update
+   the smoke test URL.
+2. **`FITB_VERSION` build-arg**: Added `--build-arg FITB_VERSION=${{ github.sha }}` so the
+   image embeds the git SHA. Task doc didn't specify this but it's a no-op if the Dockerfile
+   ignores it, and useful if it does.
+3. **`download-artifact` in release.yml**: Uses default (no `run-id`) — downloads from the
+   same workflow run, which is correct since we use reusable workflow calls that produce
+   artifacts in the same run context.
+4. **macOS unsigned**: `.zip` artifact is unsigned; Gatekeeper warning expected. Documented
+   in task doc pitfall #3.
+
+## Files changed
 
 ```
-1..7
-ok 1 detects Linux platform from uname -s
-ok 2 detects macOS platform from uname -s Darwin
-ok 3 skips Docker install when docker info succeeds
-ok 4 port-only mode uses 0.0.0.0:8787 binding
-ok 5 tailscale-only mode binds to 127.0.0.1
-ok 6 entering ? shows Tailscale explanation and re-prompts
-not ok 7 exits 1 with error when Docker install script fails
-# (in test file tests/container/test_install.bats, line 223)
-#   `[ "$status" -eq 1 ]' failed
+.github/
+└── workflows/
+    ├── build-container.yml  (new)
+    ├── build-electron.yml   (new)
+    └── release.yml          (new)
 ```
-
-(Full `apt-get` run also printed debconf / needrestart messages; omitted here for clarity.)
-
-## Issues / assumptions
-
-1. **Failing test 7 (Docker install failure):** The task-spec `curl` stub prints a single line `#!/usr/bin/env bash; exit 1`. When that line is fed to `sh` (as in `curl ... | sh`), POSIX shells treat `#` as starting a comment for the **entire line**, so the simulated install script is effectively empty and `sh` exits **0**. The pipeline therefore does not fail, `die` is never run, and the test expects status 1 incorrectly. Fixing this would require adjusting the stub or the test (for example `echo exit 1` without a leading `#`), which was out of scope because the task asked for an exact copy of the bats file.
-
-2. **`foxinthebox-updater.service`:** The task text uses `rm -f /data/update.trigger` on the host unit; on the host filesystem the sentinel is under the bind-mounted data dir (e.g. `__DATA_DIR__/update.trigger`). Supervisor may want to align that with the path unit’s host path if updates should clear the trigger reliably.
-
-3. **macOS `sed`:** `install.sh` uses `sed -i ''` only in the macOS branch, which matches the task spec.
-
-## How to re-run tests
-
-```bash
-cd /home/ubuntu/workspace/fitb-task-07
-bats tests/container/test_install.bats
-```
-
-Per user instruction: no `git commit` / `git push` from this session (Supervisor handles that).

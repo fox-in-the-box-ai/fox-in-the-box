@@ -1,4 +1,6 @@
-.github/
+# Allow GitHub Actions workflows to be tracked
+!.github/
+!.github/workflows/
 
 node_modules/
 packages/electron/dist/
