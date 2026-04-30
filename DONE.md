@@ -1,68 +1,51 @@
-# Task 06 — Electron desktop app — DONE
+# Task 07 — Install Scripts (DONE)
 
-## Summary
+## Implemented
 
-Implemented the Fox in the Box Electron tray app under `packages/electron/`:
+- **`packages/scripts/install.sh`** — Installer per `docs/tasks/07-install-scripts.md` (Linux/macOS detection, Docker bootstrap, GHCR pull, access-mode prompt with Tailscale help, container run, optional Tailscale log/exec flow, systemd or launchd installation, summary).
+- **`packages/scripts/foxinthebox.service`** — systemd unit for `docker run` with `__DATA_DIR__` placeholder.
+- **`packages/scripts/foxinthebox-updater.service`** — oneshot unit: pull, restart, remove trigger path as specified.
+- **`packages/scripts/foxinthebox-updater.path`** — path unit watching `__DATA_DIR__/update.trigger`.
+- **`packages/scripts/io.foxinthebox.plist`** — launchd plist with `__DATA_DIR__` placeholders.
+- **`tests/container/test_install.bats`** — Bats suite copied verbatim from the task doc.
+- **`install.sh`** is executable (`chmod +x`).
 
-| Path | Purpose |
-|------|---------|
-| `packages/electron/package.json` | Dependencies (`dockerode`, `electron-log`, `electron`, `electron-builder`, `jest`), scripts, electron-builder extend, **Jest** `rootDir`/`testMatch` plus `moduleDirectories` so tests resolve deps from `packages/electron/node_modules` |
-| `packages/electron/electron-builder.yml` | NSIS Win x64 zip mac x64/arm64 unsigned, app id/product name per spec |
-| `packages/electron/src/docker-manager.js` | Docker API via Dockerode — ping, pull, create/start/stop/restart, volume `~/.foxinthebox:/data`, port binding |
-| `packages/electron/src/health-check.js` | Poll `http://localhost:8787/health` |
-| `packages/electron/src/tray-manager.js` | Tray menu: status → Open Fox → Restart Fox → Start/Stop → Quit |
-| `packages/electron/src/main.js` | Startup sequence per task doc (single-instance lock, no `BrowserWindow`, install Docker prompt, pull, health, open browser, tray) |
-| `packages/electron/assets/icon.png` | 1024×1024 solid `#FF6B35` PNG (stdlib Python zlib/struct) |
-| `tests/electron/docker-manager.test.js` | Six Jest cases with mocked `dockerode` |
-| `.gitignore` | Appended `node_modules/`, `packages/electron/dist/`, `packages/electron/node_modules/` |
+No changes under `forks/`.
 
-`pnpm-lock.yaml` was updated by `pnpm install` (workspace root).
+## Bats
 
-## How to run tests
+`bats` was not on the default PATH; it was installed with `sudo apt-get install -y bats` so the suite could be run.
 
-From repo root (with pnpm on `PATH`, or via `npx pnpm@9`):
-
-```bash
-cd packages/electron && pnpm install
-cd packages/electron && npx jest --testPathPattern=tests/electron
-```
-
-Or `pnpm --filter @fox-in-the-box/electron test` from root if `packageManager` scripts are wired.
-
-## Full test output (6 passing)
+### Test output
 
 ```
-> @fox-in-the-box/electron@0.1.0 test /home/ubuntu/workspace/fitb-task-06/packages/electron
-> jest --testPathPattern=tests/electron
-
-PASS ../../tests/electron/docker-manager.test.js
-  ✓ isDaemonRunning returns true when ping succeeds (3 ms)
-  ✓ isDaemonRunning returns false when ping throws (2 ms)
-  ✓ isImagePresent returns true when image list is non-empty (2 ms)
-  ✓ isImagePresent returns false when image list is empty (1 ms)
-  ✓ getRunningContainer returns null when no container matches (2 ms)
-  ✓ stopContainer is a no-op when container is not running (3 ms)
-
-Test Suites: 1 passed, 1 total
-Tests:       6 passed, 6 total
-Snapshots:   0 total
-Time:        0.589 s, estimated 1 s
-Ran all test suites matching /tests\/electron/i.
+1..7
+ok 1 detects Linux platform from uname -s
+ok 2 detects macOS platform from uname -s Darwin
+ok 3 skips Docker install when docker info succeeds
+ok 4 port-only mode uses 0.0.0.0:8787 binding
+ok 5 tailscale-only mode binds to 127.0.0.1
+ok 6 entering ? shows Tailscale explanation and re-prompts
+not ok 7 exits 1 with error when Docker install script fails
+# (in test file tests/container/test_install.bats, line 223)
+#   `[ "$status" -eq 1 ]' failed
 ```
+
+(Full `apt-get` run also printed debconf / needrestart messages; omitted here for clarity.)
 
 ## Issues / assumptions
 
-1. **Jest `moduleDirectories`** — The task’s Jest config alone could not resolve `dockerode` because `rootDir` is the monorepo root while dependencies live under `packages/electron/node_modules`. Added `moduleDirectories` including `<rootDir>/packages/electron/node_modules` so the six tests run without hoisting or duplicating deps at the repo root.
+1. **Failing test 7 (Docker install failure):** The task-spec `curl` stub prints a single line `#!/usr/bin/env bash; exit 1`. When that line is fed to `sh` (as in `curl ... | sh`), POSIX shells treat `#` as starting a comment for the **entire line**, so the simulated install script is effectively empty and `sh` exits **0**. The pipeline therefore does not fail, `die` is never run, and the test expects status 1 incorrectly. Fixing this would require adjusting the stub or the test (for example `echo exit 1` without a leading `#`), which was out of scope because the task asked for an exact copy of the bats file.
 
-2. **`main.js` pull dialog** — Matches the task doc (`showMessageBox` with `buttons: []`); platform behavior for a buttonless info box varies. Tray-only flow and pulls are exercised manually per the task’s manual checklist.
+2. **`foxinthebox-updater.service`:** The task text uses `rm -f /data/update.trigger` on the host unit; on the host filesystem the sentinel is under the bind-mounted data dir (e.g. `__DATA_DIR__/update.trigger`). Supervisor may want to align that with the path unit’s host path if updates should clear the trigger reliably.
 
-3. **`installDocker()` on Linux** — The task snippet uses Homebrew for all non-Windows platforms; Linux users without Homebrew see a failing command. Prefer the documented Linux shell installer for Docker for that platform (per roadmap/Roadmap); Electron path is optimized for Windows (primary).
+3. **macOS `sed`:** `install.sh` uses `sed -i ''` only in the macOS branch, which matches the task spec.
 
-4. **macOS Docker socket fallbacks** — Task notes mention trying `/var/run/docker.sock` then `~/.docker/run/docker.sock`; `docker-manager.js` stays on default Dockerode socket resolution as in the task’s Step 4. Supervisor may want a small follow-up to pass `Dockerode` socket options.
+## How to re-run tests
 
-5. **Build** — `pnpm build` / `electron-builder` was not executed in this environment (no assertion in CI here). Task AC1 expects GH Actions runners later.
+```bash
+cd /home/ubuntu/workspace/fitb-task-07
+bats tests/container/test_install.bats
+```
 
-## Supervisor
-
-- A transient `package-lock.json` under `packages/electron/` from an exploratory `npm install` was deleted; **`pnpm-lock.yaml` is authoritative**.
-- No commits or pushes performed (per AGENTS).
+Per user instruction: no `git commit` / `git push` from this session (Supervisor handles that).

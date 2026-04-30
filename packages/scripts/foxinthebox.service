@@ -1,0 +1,26 @@
+[Unit]
+Description=Fox in the Box container
+Documentation=https://github.com/fox-in-the-box-ai/fox-in-the-box
+After=docker.service network-online.target
+Requires=docker.service
+
+[Service]
+Type=simple
+Restart=on-failure
+RestartSec=10s
+
+ExecStartPre=-/usr/bin/docker stop fox-in-the-box
+ExecStartPre=-/usr/bin/docker rm   fox-in-the-box
+ExecStart=/usr/bin/docker run \
+  --rm \
+  --name fox-in-the-box \
+  --cap-add=NET_ADMIN \
+  --sysctl net.ipv4.ip_forward=1 \
+  -v __DATA_DIR__:/data \
+  -p 0.0.0.0:8787:8787 \
+  ghcr.io/fox-in-the-box-ai/cloud:stable
+
+ExecStop=/usr/bin/docker stop fox-in-the-box
+
+[Install]
+WantedBy=multi-user.target

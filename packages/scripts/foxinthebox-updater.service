@@ -1,0 +1,11 @@
+[Unit]
+Description=Fox in the Box image updater
+After=docker.service network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash -c '\
+  /usr/bin/docker pull ghcr.io/fox-in-the-box-ai/cloud:stable && \
+  /usr/bin/systemctl restart foxinthebox && \
+  rm -f /data/update.trigger'
