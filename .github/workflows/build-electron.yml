@@ -51,15 +51,18 @@ jobs:
           node-version: "20"
           cache: "pnpm"
 
-      # Windows: hoist node_modules to avoid deeply-nested pnpm store paths
-      # that cause makensis.exe to fail with !include path-too-long errors
-      - name: Install dependencies (Windows — hoisted)
-        if: runner.os == 'Windows'
-        run: pnpm install --frozen-lockfile --shamefully-hoist
-
-      - name: Install dependencies (non-Windows)
-        if: runner.os != 'Windows'
-        run: pnpm install --frozen-lockfile
+      # Windows: use npm install (flat node_modules) to avoid pnpm's deeply-hashed
+      # store paths that exceed Windows MAX_PATH — makensis.exe can't open NSIS includes
+      # from paths like node_modules/.pnpm/app-builder-lib@24.13.3_<longhash>/...
+      - name: Install dependencies
+        shell: bash
+        run: |
+          if [[ "${{ runner.os }}" == "Windows" ]]; then
+            cd packages/electron
+            npm install
+          else
+            pnpm install --frozen-lockfile
+          fi
 
       - name: Build Electron app
         working-directory: packages/electron
