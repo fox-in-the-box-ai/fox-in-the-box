@@ -1,0 +1,10 @@
+# FITB Hermes Configuration — Skills + External Dirs
+# This is the canonical config for all FITB instances
+
+skills:
+  external_dirs:
+    - /home/ubuntu/workspace/skills
+  template_vars: true
+  inline_shell: false
+  inline_shell_timeout: 10
+  guard_agent_created: false
