@@ -9,6 +9,7 @@ DATA_VERSION_FILE="/data/version.txt"
 APP_VERSION_FILE="/app/version.txt"
 APPS_DIR="/data/apps"
 FITB_VERSION=$(cat "$APP_VERSION_FILE" 2>/dev/null || echo "v0.1.0")
+FITB_DEV=${FITB_DEV:-0}  # Set by docker build --build-arg FITB_DEV=1
 
 # ── 1. First-run detection ─────────────────────────────────────────────────────
 if [ ! -f "$ONBOARDING_FLAG" ]; then
@@ -54,48 +55,62 @@ fi
 # ── 2. App code bootstrap (git-in-volume model) ────────────────────────────────
 # hermes-agent and hermes-webui live as git repos on the /data volume.
 # Clone on first run, skip if already present. Updates happen separately.
-_clone_app() {
-    local APP="$1"
-    local DEST="$APPS_DIR/$APP"
+# If FITB_DEV=1, skip cloning and use bind-mounted repos instead.
+if [ "$FITB_DEV" = "1" ]; then
+    echo "[entrypoint] Dev mode — skipping git clone, will use bind-mounted repos"
+else
+    _clone_app() {
+        local APP="$1"
+        local DEST="$APPS_DIR/$APP"
 
-    if [ -d "$DEST/.git" ]; then
-        echo "[entrypoint] $APP already present at $DEST — skipping clone."
-        return 0
-    fi
-
-    echo "[entrypoint] Cloning $APP @ $FITB_VERSION ..."
-    # Remove any partial clone before retrying
-    rm -rf "$DEST"
-    if ! git clone --depth 1 \
-            --branch "$FITB_VERSION" \
-            "https://github.com/fox-in-the-box-ai/$APP" \
-            "$DEST" 2>/dev/null; then
-        echo "[entrypoint] Tag $FITB_VERSION not found — falling back to default branch ..."
-        if ! git clone --depth 1 \
-                "https://github.com/fox-in-the-box-ai/$APP" \
-                "$DEST"; then
-            echo "[entrypoint] ERROR: Failed to clone $APP. Check network and try again."
-            echo "[entrypoint] If offline, manually place a git repo at $DEST and restart."
-            exit 1
+        if [ -d "$DEST/.git" ]; then
+            echo "[entrypoint] $APP already present at $DEST — skipping clone."
+            return 0
         fi
-    fi
 
-    echo "[entrypoint] Installing $APP ..."
-    if [ -f "$DEST/setup.py" ] || [ -f "$DEST/pyproject.toml" ]; then
-        pip install -e "$DEST" --quiet --no-cache-dir
-    elif [ -f "$DEST/requirements.txt" ]; then
-        pip install -r "$DEST/requirements.txt" --quiet --no-cache-dir
+        echo "[entrypoint] Cloning $APP @ $FITB_VERSION ..."
+        # Remove any partial clone before retrying
+        rm -rf "$DEST"
+        if ! git clone --depth 1 \
+                --branch "$FITB_VERSION" \
+                "https://github.com/fox-in-the-box-ai/$APP" \
+                "$DEST" 2>/dev/null; then
+            echo "[entrypoint] Tag $FITB_VERSION not found — falling back to default branch ..."
+            if ! git clone --depth 1 \
+                    "https://github.com/fox-in-the-box-ai/$APP" \
+                    "$DEST"; then
+                echo "[entrypoint] ERROR: Failed to clone $APP. Check network and try again."
+                echo "[entrypoint] If offline, manually place a git repo at $DEST and restart."
+                exit 1
+            fi
+        fi
+
+        echo "[entrypoint] Installing $APP ..."
+        if [ -f "$DEST/setup.py" ] || [ -f "$DEST/pyproject.toml" ]; then
+            pip install -e "$DEST" --quiet --no-cache-dir
+        elif [ -f "$DEST/requirements.txt" ]; then
+            pip install -r "$DEST/requirements.txt" --quiet --no-cache-dir
+        else
+            echo "[entrypoint] WARNING: No installable package or requirements.txt in $APP — skipping pip install."
+        fi
+        echo "[entrypoint] $APP ready."
+    }
+
+    _clone_app hermes-agent
+    _clone_app hermes-webui
+fi
+
+# ── 2b. Dev mode initialization (if FITB_DEV=1) ─────────────────────────────────
+if [ "$FITB_DEV" = "1" ]; then
+    echo "[entrypoint] Dev mode detected (FITB_DEV=1) — using bind-mounted repos"
+    if [ -x "/app/scripts/dev-init.sh" ]; then
+        /app/scripts/dev-init.sh
     else
-        echo "[entrypoint] WARNING: No installable package or requirements.txt in $APP — skipping pip install."
+        echo "[entrypoint] WARNING: /app/scripts/dev-init.sh not found"
     fi
-    echo "[entrypoint] $APP ready."
-}
-
-_clone_app hermes-agent
-_clone_app hermes-webui
+fi
 
 # ── 3. Version migration ───────────────────────────────────────────────────────
-CURRENT_VERSION="0.0.0"
 if [ -f "$DATA_VERSION_FILE" ]; then
     CURRENT_VERSION=$(cat "$DATA_VERSION_FILE")
 fi
