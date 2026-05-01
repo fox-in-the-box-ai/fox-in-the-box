@@ -61,3 +61,22 @@ Three workflow files created under `.github/workflows/`:
     ├── build-electron.yml   (new)
     └── release.yml          (new)
 ```
+
+
+## Task 10: CLI Graceful Shutdown (P0)
+
+**Status:** In progress — tracking upstream branches
+
+Added task documentation for graceful shutdown implementation across both forks:
+
+- **hermes-agent branch:** `cli-graceful-shutdown` — SIGTERM/SIGINT handlers, session checkpoint, clean asyncio exit
+- **hermes-webui branch:** `cli-graceful-shutdown` — AgentSessionLock with timeout watchdog, force-release mechanism
+
+**FITB submodules:** Updated to track feature branches for integration once upstream merges to `local-patches`.
+
+**Task doc:** `docs/tasks/10-cli-graceful-shutdown.md` — full scope, phases, acceptance criteria, and testing strategy.
+
+**Next steps:**
+1. Monitor upstream branches for merge to `local-patches`
+2. Update submodule pointers when ready
+3. Run end-to-end test: gateway restart → CLI checkpoints cleanly → auto-resume works
