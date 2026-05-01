@@ -1,0 +1,61 @@
+rank,keyword,volume,difficulty,tier,intent,target_url,content_status,published_date,current_serp_position,current_traffic,current_backlinks,last_updated,notes
+1,fox in the box hermes,90,7,TIER 1,Navigational,,Backlog,,,0,0,2026-04-30,
+2,what is hermes ai,180,12,TIER 1,Informational,,Backlog,,,0,0,2026-04-30,
+3,is hermes ai free,180,12,TIER 1,Informational,,Backlog,,,0,0,2026-04-30,
+4,fox in the box ai,120,12,TIER 1,Commercial,,Backlog,,,0,0,2026-04-30,
+5,fox in the box app,90,12,TIER 1,Navigational,,Backlog,,,0,0,2026-04-30,
+6,open source hermes alternative,150,17,TIER 1,Commercial,,Backlog,,,0,0,2026-04-30,
+7,what is hermes agent,600,22,TIER 1,Informational,,Backlog,,,0,0,2026-04-30,
+8,how to install hermes agent,280,22,TIER 1,Transactional,,Backlog,,,0,0,2026-04-30,
+9,fox in the box docker,240,22,TIER 1,Transactional,,Backlog,,,0,0,2026-04-30,
+10,fox in the box download,240,22,TIER 1,Transactional,,Backlog,,,0,0,2026-04-30,
+11,best local ai tools 2025,150,22,TIER 1,Commercial,,Backlog,,,0,0,2026-04-30,
+12,hermes ai self hosted,240,27,TIER 1,Transactional,,Backlog,,,0,0,2026-04-30,
+13,hermes agent supervisor,270,30,TIER 2,Informational,,Backlog,,,0,0,2026-04-30,
+14,hermes agent setup,850,35,TIER 2,Transactional,,Backlog,,,0,0,2026-04-30,
+15,hermes agent install,700,35,TIER 2,Transactional,,Backlog,,,0,0,2026-04-30,
+16,electron app docker,90,30,TIER 2,Technical,,Backlog,,,0,0,2026-04-30,
+17,containerized ai workloads,90,30,TIER 2,Technical,,Backlog,,,0,0,2026-04-30,
+18,hermes agent tutorial,450,35,TIER 2,Informational,,Backlog,,,0,0,2026-04-30,
+19,hermes ai setup,400,35,TIER 2,Transactional,,Backlog,,,0,0,2026-04-30,
+20,hermes alternatives,375,35,TIER 2,Commercial,,Backlog,,,0,0,2026-04-30,
+21,hermes ai docker,360,35,TIER 2,Transactional,,Backlog,,,0,0,2026-04-30,
+22,hermes ai local,360,35,TIER 2,Transactional,,Backlog,,,0,0,2026-04-30,
+23,hermes agent self-host,350,35,TIER 2,Transactional,,Backlog,,,0,0,2026-04-30,
+24,hermes ai tutorial,270,35,TIER 2,Informational,,Backlog,,,0,0,2026-04-30,
+25,hermes agent performance,270,35,TIER 2,Informational,,Backlog,,,0,0,2026-04-30,
+26,self-hosted ai comparison,225,35,TIER 2,Commercial,,Backlog,,,0,0,2026-04-30,
+27,hermes agent github,200,35,TIER 2,Navigational,,Backlog,,,0,0,2026-04-30,
+28,ollama docker,800,40,TIER 2,Transactional,,Backlog,,,0,0,2026-04-30,
+29,self hosted ai,650,40,TIER 2,Informational,,Backlog,,,0,0,2026-04-30,
+30,claude code vs hermes,150,37,TIER 2,Commercial,,Backlog,,,0,0,2026-04-30,
+31,llm orchestration,450,40,TIER 3,Informational,,Backlog,,,0,0,2026-04-30,
+32,local llm setup,360,40,TIER 3,Transactional,,Backlog,,,0,0,2026-04-30,
+33,run ollama locally,360,40,TIER 3,Transactional,,Backlog,,,0,0,2026-04-30,
+34,docker compose llm,360,40,TIER 3,Transactional,,Backlog,,,0,0,2026-04-30,
+35,llm inference locally,360,40,TIER 3,Transactional,,Backlog,,,0,0,2026-04-30,
+36,local ai inference,360,40,TIER 3,Transactional,,Backlog,,,0,0,2026-04-30,
+37,local llm desktop,320,40,TIER 3,Transactional,,Backlog,,,0,0,2026-04-30,
+38,ai development environment,270,40,TIER 3,Informational,,Backlog,,,0,0,2026-04-30,
+39,ai agent framework,270,40,TIER 3,Informational,,Backlog,,,0,0,2026-04-30,
+40,ai devops tools,270,40,TIER 3,Informational,,Backlog,,,0,0,2026-04-30,
+41,How do I install hermes agent?,280,39,TIER 3,Transactional,,Backlog,,,0,0,2026-04-30,Getting Started with Hermes
+42,Do I need Docker for hermes?,150,32,TIER 3,Transactional,,Backlog,,,0,0,2026-04-30,Getting Started with Hermes
+43,What are the system requirements for hermes agent?,120,31,TIER 3,Informational,,Backlog,,,0,0,2026-04-30,Standalone
+44,How long does hermes setup take?,80,29,TIER 3,Informational,,Backlog,,,0,0,2026-04-30,Standalone
+45,Can I run hermes on my laptop?,100,30,TIER 3,Transactional,,Backlog,,,0,0,2026-04-30,Getting Started with Hermes
+46,Is hermes better than Claude?,200,35,TIER 3,Commercial,,Backlog,,,0,0,2026-04-30,Choosing Your AI Tool
+47,Hermes vs Cursor: which is better?,180,34,TIER 3,Commercial,,Backlog,,,0,0,2026-04-30,Choosing Your AI Tool
+48,Can I use hermes offline?,120,31,TIER 3,Transactional,,Backlog,,,0,0,2026-04-30,Standalone
+49,Why won't hermes agent start?,90,29,TIER 3,Transactional,,Backlog,,,0,0,2026-04-30,Getting Started with Hermes
+50,How do I debug hermes errors?,70,28,TIER 3,Transactional,,Backlog,,,0,0,2026-04-30,Hermes FAQ & Troubleshooting
+51,What if hermes can't find my models?,60,28,TIER 3,Transactional,,Backlog,,,0,0,2026-04-30,Hermes FAQ & Troubleshooting
+52,Is hermes agent free?,140,32,TIER 3,Informational,,Backlog,,,0,0,2026-04-30,Choosing Your AI Tool
+53,Do I need a subscription for hermes?,110,30,TIER 3,Informational,,Backlog,,,0,0,2026-04-30,Standalone
+54,What's the cost of running hermes locally?,95,29,TIER 3,Informational,,Backlog,,,0,0,2026-04-30,Standalone
+55,How many models can hermes handle?,75,28,TIER 3,Informational,,Backlog,,,0,0,2026-04-30,Standalone
+56,Does hermes support GPUs?,85,29,TIER 3,Transactional,,Backlog,,,0,0,2026-04-30,Hermes FAQ & Troubleshooting
+57,Can I use Ollama with hermes?,110,30,TIER 3,Transactional,,Backlog,,,0,0,2026-04-30,Hermes FAQ & Troubleshooting
+58,What is hermes agent?,300,40,TIER 3,Informational,,Backlog,,,0,0,2026-04-30,Choosing Your AI Tool
+59,How does hermes work?,180,34,TIER 3,Informational,,Backlog,,,0,0,2026-04-30,Standalone
+60,What problems does hermes solve?,140,32,TIER 3,Informational,,Backlog,,,0,0,2026-04-30,Standalone

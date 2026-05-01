@@ -1,0 +1,21 @@
+question,intent,estimated_volume,difficulty,blog_series,notes
+How do I install hermes agent?,Transactional,280,39,Getting Started with Hermes,Step-by-step needed
+Do I need Docker for hermes?,Transactional,150,32,Getting Started with Hermes,Common blocker
+What are the system requirements for hermes agent?,Informational,120,31,Standalone,Prerequisites
+How long does hermes setup take?,Informational,80,29,Standalone,Time commitment
+Can I run hermes on my laptop?,Transactional,100,30,Getting Started with Hermes,Compatibility
+Is hermes better than Claude?,Commercial,200,35,Choosing Your AI Tool,Tool evaluation
+Hermes vs Cursor: which is better?,Commercial,180,34,Choosing Your AI Tool,Head-to-head
+Can I use hermes offline?,Transactional,120,31,Standalone,Feature question
+Why won't hermes agent start?,Transactional,90,29,Getting Started with Hermes,Error resolution
+How do I debug hermes errors?,Transactional,70,28,Hermes FAQ & Troubleshooting,Troubleshooting
+What if hermes can't find my models?,Transactional,60,28,Hermes FAQ & Troubleshooting,Error handling
+Is hermes agent free?,Informational,140,32,Choosing Your AI Tool,Cost question
+Do I need a subscription for hermes?,Informational,110,30,Standalone,Pricing
+What's the cost of running hermes locally?,Informational,95,29,Standalone,Cost analysis
+How many models can hermes handle?,Informational,75,28,Standalone,Capability
+Does hermes support GPUs?,Transactional,85,29,Hermes FAQ & Troubleshooting,Performance
+Can I use Ollama with hermes?,Transactional,110,30,Hermes FAQ & Troubleshooting,Integration
+What is hermes agent?,Informational,300,40,Choosing Your AI Tool,Introduction
+How does hermes work?,Informational,180,34,Standalone,Architecture
+What problems does hermes solve?,Informational,140,32,Standalone,Use cases

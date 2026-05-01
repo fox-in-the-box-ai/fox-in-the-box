@@ -1,0 +1,41 @@
+keyword,intent_type,content_type,target_url_slug,word_count,primary_cta,estimated_volume,difficulty,opportunity_score,tier
+fox in the box hermes,Navigational,Resource Hub,/fox-in-the-box-hermes,500-800,Link to GitHub,90,7,92.5,TIER 1
+what is hermes ai,Informational,Blog Post,/what-is-hermes-ai,1500-2500,Try Free,180,12,87.4,TIER 1
+is hermes ai free,Informational,Blog Post,/is-hermes-ai-free,1500-2500,Try Free,180,12,87.4,TIER 1
+fox in the box ai,Commercial,Comparison Page,/fox-in-the-box-ai,1500-2500,Compare Tools,120,12,86.8,TIER 1
+fox in the box app,Navigational,Resource Hub,/fox-in-the-box-app,500-800,Link to GitHub,90,12,86.5,TIER 1
+open source hermes alternative,Commercial,Comparison Page,/open-source-hermes-alternative,1500-2500,Compare Tools,150,17,81.1,TIER 1
+what is hermes agent,Informational,Blog Post,/what-is-hermes-agent,1500-2500,Try Free,600,22,79.6,TIER 1
+how to install hermes agent,Transactional,Step-by-Step Guide,/how-to-install-hermes-agent,1200-2000,Download Fox in the Box,280,22,76.4,TIER 1
+fox in the box docker,Transactional,Step-by-Step Guide,/fox-in-the-box-docker,1200-2000,Download Fox in the Box,240,22,76.0,TIER 1
+fox in the box download,Transactional,Step-by-Step Guide,/fox-in-the-box-download,1200-2000,Download Fox in the Box,240,22,76.0,TIER 1
+best local ai tools 2025,Commercial,Comparison Page,/best-local-ai-tools-2025,1500-2500,Compare Tools,150,22,75.1,TIER 1
+hermes ai self hosted,Transactional,Step-by-Step Guide,/hermes-ai-self-hosted,1200-2000,Download Fox in the Box,240,27,70.0,TIER 1
+hermes agent supervisor,Informational,Blog Post,/hermes-agent-supervisor,1500-2500,Try Free,270,30,66.7,TIER 2
+hermes agent setup,Transactional,Step-by-Step Guide,/hermes-agent-setup,1200-2000,Download Fox in the Box,850,35,66.5,TIER 2
+hermes agent install,Transactional,Step-by-Step Guide,/hermes-agent-install,1200-2000,Download Fox in the Box,700,35,65.0,TIER 2
+electron app docker,Technical,Technical Deep-Dive,/electron-app-docker,2000-3000,Read Full Guide,90,30,64.9,TIER 2
+containerized ai workloads,Technical,Technical Deep-Dive,/containerized-ai-workloads,2000-3000,Read Full Guide,90,30,64.9,TIER 2
+hermes agent tutorial,Informational,Blog Post,/hermes-agent-tutorial,1500-2500,Try Free,450,35,62.5,TIER 2
+hermes ai setup,Transactional,Step-by-Step Guide,/hermes-ai-setup,1200-2000,Download Fox in the Box,400,35,62.0,TIER 2
+hermes alternatives,Commercial,Comparison Page,/hermes-alternatives,1500-2500,Compare Tools,375,35,61.8,TIER 2
+hermes ai docker,Transactional,Step-by-Step Guide,/hermes-ai-docker,1200-2000,Download Fox in the Box,360,35,61.6,TIER 2
+hermes ai local,Transactional,Step-by-Step Guide,/hermes-ai-local,1200-2000,Download Fox in the Box,360,35,61.6,TIER 2
+hermes agent self-host,Transactional,Step-by-Step Guide,/hermes-agent-self-host,1200-2000,Download Fox in the Box,350,35,61.5,TIER 2
+hermes ai tutorial,Informational,Blog Post,/hermes-ai-tutorial,1500-2500,Try Free,270,35,60.7,TIER 2
+hermes agent performance,Informational,Blog Post,/hermes-agent-performance,1500-2500,Try Free,270,35,60.7,TIER 2
+self-hosted ai comparison,Commercial,Comparison Page,/self-hosted-ai-comparison,1500-2500,Compare Tools,225,35,60.2,TIER 2
+hermes agent github,Navigational,Resource Hub,/hermes-agent-github,500-800,Link to GitHub,200,35,60.0,TIER 2
+ollama docker,Transactional,Step-by-Step Guide,/ollama-docker,1200-2000,Download Fox in the Box,800,40,60.0,TIER 2
+self hosted ai,Informational,Blog Post,/self-hosted-ai,1500-2500,Try Free,650,40,58.5,TIER 2
+claude code vs hermes,Commercial,Comparison Page,/claude-code-vs-hermes,1500-2500,Compare Tools,150,37,57.1,TIER 2
+llm orchestration,Informational,Blog Post,/llm-orchestration,1500-2500,Try Free,450,40,56.5,TIER 3
+local llm setup,Transactional,Step-by-Step Guide,/local-llm-setup,1200-2000,Download Fox in the Box,360,40,55.6,TIER 3
+run ollama locally,Transactional,Step-by-Step Guide,/run-ollama-locally,1200-2000,Download Fox in the Box,360,40,55.6,TIER 3
+docker compose llm,Transactional,Step-by-Step Guide,/docker-compose-llm,1200-2000,Download Fox in the Box,360,40,55.6,TIER 3
+llm inference locally,Transactional,Step-by-Step Guide,/llm-inference-locally,1200-2000,Download Fox in the Box,360,40,55.6,TIER 3
+local ai inference,Transactional,Step-by-Step Guide,/local-ai-inference,1200-2000,Download Fox in the Box,360,40,55.6,TIER 3
+local llm desktop,Transactional,Step-by-Step Guide,/local-llm-desktop,1200-2000,Download Fox in the Box,320,40,55.2,TIER 3
+ai development environment,Informational,Blog Post,/ai-development-environment,1500-2500,Try Free,270,40,54.7,TIER 3
+ai agent framework,Informational,Blog Post,/ai-agent-framework,1500-2500,Try Free,270,40,54.7,TIER 3
+ai devops tools,Informational,Blog Post,/ai-devops-tools,1500-2500,Try Free,270,40,54.7,TIER 3
