@@ -23,6 +23,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         iptables \
     && rm -rf /var/lib/apt/lists/*
 
+# ── Node.js (LTS) — required for npx-based MCP servers (e.g. Brave Search) ───
+RUN curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
 # ── Tailscale ─────────────────────────────────────────────────────────────────
 RUN curl -fsSL "https://pkgs.tailscale.com/stable/debian/$(lsb_release -cs).noarmor.gpg" \
         | tee /usr/share/keyrings/tailscale-archive-keyring.gpg >/dev/null \
