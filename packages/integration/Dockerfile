@@ -7,8 +7,10 @@ ARG TARGETARCH=amd64
 # Do NOT use "latest" in production builds.
 ARG QDRANT_VERSION=v1.9.4
 # FITB_VERSION: the git tag to clone for hermes-agent and hermes-webui.
-# Override at build time: docker build --build-arg FITB_VERSION=v0.2.0 ...
+# Defaults to content of VERSION file; override at build time: docker build --build-arg FITB_VERSION=v0.2.0 ...
+# For dev mode: pass FITB_DEV=1 to skip version tag cloning and use local mounts instead
 ARG FITB_VERSION=v0.1.0
+ARG FITB_DEV=0
 
 # ── system dependencies ───────────────────────────────────────────────────────
 RUN apt-get update && apt-get install -y --no-install-recommends \

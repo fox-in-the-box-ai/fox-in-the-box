@@ -11,9 +11,12 @@
   "scripts": {
     "install:all": "pnpm install --recursive",
     "build": "pnpm --recursive run build",
+    "build:docker": "docker build -f packages/integration/Dockerfile -t fox-in-the-box:$(cat VERSION) .",
+    "build:docker:dev": "docker build -f packages/integration/Dockerfile -t fox-in-the-box:dev --build-arg FITB_DEV=1 --build-arg FITB_VERSION=$(cat VERSION) .",
     "test": "pnpm --recursive run test",
     "lint": "pnpm --recursive run lint",
     "dev": "pnpm --recursive run dev",
+    "dev:container": "docker run -it --rm --cap-add=NET_ADMIN --device /dev/net/tun -p 127.0.0.1:8787:8787 -v $(pwd)/forks/hermes-agent:/root/.hermes/hermes-agent -v $(pwd)/forks/hermes-webui:/root/.hermes/hermes-webui fox-in-the-box:dev",
     "clean": "pnpm --recursive run clean"
   },
   "devDependencies": {}
