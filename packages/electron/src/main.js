@@ -36,11 +36,54 @@ function runCommand(cmd) {
 
 async function installDocker() {
   const platform = process.platform;
-  const instruction =
-    platform === 'win32'
-      ? 'winget install Docker.DockerDesktop'
-      : 'brew install --cask docker';
 
+  if (platform === 'win32') {
+    // On Windows, winget launches the Docker Desktop installer as a background
+    // GUI process — the winget command returns immediately but Docker takes
+    // several minutes to install and the daemon isn't available until the user
+    // reboots or manually starts Docker Desktop.
+    // Best UX: confirm with user, kick off install, then tell them to relaunch.
+    const { response } = await dialog.showMessageBox({
+      type: 'question',
+      buttons: ['Install Docker Desktop', 'Cancel'],
+      defaultId: 0,
+      cancelId: 1,
+      title: 'Docker not found',
+      message: 'Docker Desktop is required but was not found.',
+      detail:
+        'Fox in the Box will install Docker Desktop via winget.\n\n' +
+        'After the Docker Desktop installer finishes, launch Docker Desktop ' +
+        'from the Start Menu, wait for it to show "Docker Desktop is running", ' +
+        'then reopen Fox in the Box.',
+    });
+
+    if (response !== 0) throw new Error('User cancelled Docker installation');
+
+    log.info('Installing Docker Desktop via winget');
+    // Fire-and-forget — installer runs in background GUI
+    exec('winget install Docker.DockerDesktop', (err) => {
+      if (err) log.warn('winget exited with error:', err.message);
+    });
+
+    // Tell user to come back after install, then exit cleanly
+    await dialog.showMessageBox({
+      type: 'info',
+      buttons: ['OK'],
+      title: 'Docker Desktop installing…',
+      message: 'Docker Desktop is being installed.',
+      detail:
+        '1. Wait for the Docker Desktop installer to finish.\n' +
+        '2. Launch Docker Desktop from the Start Menu.\n' +
+        '3. Wait until it shows "Docker Desktop is running".\n' +
+        '4. Reopen Fox in the Box.\n\n' +
+        'Fox in the Box will close now.',
+    });
+
+    app.quit();
+    return; // unreachable, but keeps control flow clear
+  }
+
+  // macOS path (Homebrew)
   const { response } = await dialog.showMessageBox({
     type: 'question',
     buttons: ['Install Docker', 'Cancel'],
@@ -48,13 +91,13 @@ async function installDocker() {
     cancelId: 1,
     title: 'Docker not found',
     message: 'Docker Desktop is required but was not found.',
-    detail: `Fox in the Box will run:\n\n  ${instruction}\n\nThis may take several minutes.`,
+    detail: 'Fox in the Box will run:\n\n  brew install --cask docker\n\nThis may take several minutes.',
   });
 
   if (response !== 0) throw new Error('User cancelled Docker installation');
 
-  log.info('Installing Docker:', instruction);
-  await runCommand(instruction);
+  log.info('Installing Docker via Homebrew');
+  await runCommand('brew install --cask docker');
   log.info('Docker install command finished — waiting 5s for daemon');
   await new Promise((r) => setTimeout(r, 5000));
 }
