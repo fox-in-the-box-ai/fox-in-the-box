@@ -83,8 +83,16 @@ then re-run this installer."
     fi
   fi
 
-  # Final check
-  _docker_running || die "Docker installed but daemon is still not responding. Start Docker and re-run."
+  # Final check — retry up to 5 times (1s apart) to let the daemon finish starting
+  _DOCKER_READY=false
+  for _i in 1 2 3 4 5; do
+    if _docker_running; then
+      _DOCKER_READY=true
+      break
+    fi
+    sleep 1
+  done
+  $_DOCKER_READY || die "Docker installed but daemon is still not responding after 5s. Start Docker and re-run."
 fi
 
 DOCKER_CMD="${DOCKER_CMD:-docker}"
@@ -142,9 +150,9 @@ _prompt_access_mode() {
     ACCESS_MODE="${ACCESS_MODE:-1}"
 
     case "$ACCESS_MODE" in
-      1) PORT_BIND="-p 0.0.0.0:8787:8787"; USE_TAILSCALE=false; break ;;
-      2) PORT_BIND="-p 127.0.0.1:8787:8787"; USE_TAILSCALE=true;  break ;;
-      3) PORT_BIND="-p 0.0.0.0:8787:8787";  USE_TAILSCALE=true;  break ;;
+      1) PORT_BIND="-p 0.0.0.0:8787:8787";   USE_TAILSCALE=false; TAILSCALE_FLAGS="";                                                          break ;;
+      2) PORT_BIND="-p 127.0.0.1:8787:8787"; USE_TAILSCALE=true;  TAILSCALE_FLAGS="--cap-add=NET_ADMIN --device /dev/net/tun --sysctl net.ipv4.ip_forward=1"; break ;;
+      3) PORT_BIND="-p 0.0.0.0:8787:8787";   USE_TAILSCALE=true;  TAILSCALE_FLAGS="--cap-add=NET_ADMIN --device /dev/net/tun --sysctl net.ipv4.ip_forward=1"; break ;;
       "?"|"help"|"explain"|"more"|"what") _explain_tailscale ;;
       *) warn "Invalid selection: '$ACCESS_MODE'. Please enter 1, 2, 3 or ?." ;;
     esac
@@ -174,9 +182,7 @@ info "Starting container…"
 $DOCKER_CMD run -d \
   --name "$CONTAINER" \
   --restart unless-stopped \
-  --cap-add=NET_ADMIN \
-  --device /dev/net/tun \
-  --sysctl net.ipv4.ip_forward=1 \
+  $TAILSCALE_FLAGS \
   -v "$DATA_DIR":/data \
   $PORT_BIND \
   "$IMAGE" \
@@ -247,7 +253,31 @@ fi
 ##############################################################################
 # 8 / 9. Install service manager integration
 ##############################################################################
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# When run via `curl ... | bash`, BASH_SOURCE[0] is empty or /dev/stdin, so
+# __dirname-style detection doesn't work.  We download the service files from
+# GitHub instead and write them to a temp directory.
+_download_service_files() {
+  local DEST="$1"
+  local RAW_BASE="https://raw.githubusercontent.com/fox-in-the-box-ai/fox-in-the-box/main/packages/scripts"
+  mkdir -p "$DEST"
+  for FILE in foxinthebox.service foxinthebox-updater.service foxinthebox-updater.path io.foxinthebox.plist; do
+    curl -fsSL "$RAW_BASE/$FILE" -o "$DEST/$FILE" 2>/dev/null || true
+  done
+}
+
+# Detect whether we were piped via curl (BASH_SOURCE empty or /dev/stdin)
+_SCRIPT_SRC="${BASH_SOURCE[0]:-}"
+if [[ -z "$_SCRIPT_SRC" || "$_SCRIPT_SRC" == "/dev/stdin" || ! -f "${_SCRIPT_SRC}" ]]; then
+  # curl-pipe path — download service files from GitHub
+  _SVC_TMPDIR="$(mktemp -d)"
+  trap 'rm -rf "$_SVC_TMPDIR"' EXIT
+  info "Downloading service files…"
+  _download_service_files "$_SVC_TMPDIR"
+  SCRIPT_DIR="$_SVC_TMPDIR"
+else
+  # Local bash install.sh path — sibling files are right next to the script
+  SCRIPT_DIR="$(cd "$(dirname "$_SCRIPT_SRC")" && pwd)"
+fi
 
 if [[ "$PLATFORM" == "linux" ]]; then
   info "Installing systemd units…"
