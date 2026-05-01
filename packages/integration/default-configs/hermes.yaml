@@ -13,3 +13,16 @@ server:
 logging:
   level: info
   file: /data/logs/hermes.log
+
+# ── MCP Servers ───────────────────────────────────────────────────────────────
+# Brave Search MCP — enables real-time web search and grounding.
+# Set BRAVE_API_KEY in /data/config/hermes.env to activate.
+# Free tier: 2,000 queries/month. Get a key at https://brave.com/search/api/
+mcp_servers:
+  brave:
+    command: "npx"
+    args: ["-y", "@brave/brave-search-mcp-server"]
+    env:
+      BRAVE_API_KEY: "${BRAVE_API_KEY}"
+    timeout: 30
+    connect_timeout: 20
