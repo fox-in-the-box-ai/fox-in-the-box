@@ -155,6 +155,14 @@ if [ -f "$HERMES_ENV" ]; then
     set +a
 fi
 
+# ── 5b. Patch hermes.yaml with runtime env vars ────────────────────────────────
+# Replace ${BRAVE_API_KEY} placeholder so Hermes MCP server gets the real key.
+HERMES_YAML="/data/config/hermes.yaml"
+if [ -f "$HERMES_YAML" ] && [ -n "${BRAVE_API_KEY:-}" ]; then
+    sed -i "s|\${BRAVE_API_KEY}|${BRAVE_API_KEY}|g" "$HERMES_YAML"
+    echo "[entrypoint] Patched BRAVE_API_KEY into $HERMES_YAML"
+fi
+
 # ── 6. Configure Tailscale Serve (if Tailscale state exists) ──────────────────
 # tailscale serve routes https://<machine>.tailnet.ts.net → http://localhost:8787
 # This is a no-op if Tailscale is not yet authenticated.
