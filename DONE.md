@@ -80,3 +80,41 @@ Added task documentation for graceful shutdown implementation across both forks:
 1. Monitor upstream branches for merge to `local-patches`
 2. Update submodule pointers when ready
 3. Run end-to-end test: gateway restart → CLI checkpoints cleanly → auto-resume works
+
+
+## Task 11: Version Sync & Dev Mode
+
+**Status:** Complete
+
+Implemented version synchronization system + dev mode for rapid testing:
+
+**Files added:**
+- `VERSION` — single source of truth for all version references
+- `DEV_MODE.md` — complete dev mode workflow documentation
+- `docs/tasks/11-version-sync-dev-mode.md` — task specification
+- `packages/integration/scripts/dev-init.sh` — bind mount validation
+
+**Changes:**
+- Updated `Dockerfile` to support `FITB_VERSION` and `FITB_DEV` build args
+- Updated `entrypoint.sh` to skip git clone when FITB_DEV=1
+- Added to `package.json`:
+  - `build:docker` — reads VERSION, tags prod image
+  - `build:docker:dev` — sets FITB_DEV=1, tags as :dev
+  - `dev:container` — runs with bind mounts for local dev
+
+**Usage:**
+```bash
+# One-time: build dev image
+pnpm build:docker:dev
+
+# Then: rapid iteration
+pnpm dev:container  # container starts with bind mounts
+cd forks/hermes-agent && git checkout feature/xyz
+# changes reflected immediately in container
+```
+
+**Benefits:**
+- ✅ Version synchronized across all places
+- ✅ Dev iteration cycle: seconds (not minutes)
+- ✅ Test feature branches without modifying Dockerfile
+- ✅ Backward compatible (prod mode unchanged)
