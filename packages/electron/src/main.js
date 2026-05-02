@@ -106,8 +106,8 @@ function closeProgress() {
 // ─── Docker setup (Windows) ──────────────────────────────────────────────────
 
 /**
- * Check if Docker Desktop is installed (but not running).
- * Returns the exe path or null.
+ * Check if Docker Desktop or Mirantis Docker Engine service is installed but not running.
+ * Returns the exe path (Desktop) or 'service' (Engine) or null.
  */
 async function findDockerDesktopExe() {
   const candidates = [
@@ -120,22 +120,32 @@ async function findDockerDesktopExe() {
       return c;
     } catch (_) { /* not here */ }
   }
+  // Check for Mirantis Docker Engine (installed as a Windows service, no GUI exe)
+  try {
+    await runCommand('sc query com.docker.service', { shell: true });
+    return 'service';
+  } catch (_) {}
   return null;
 }
 
 /**
- * Try to start Docker Desktop silently if installed but not running.
+ * Try to start Docker Desktop or Mirantis Engine if installed but not running.
  * Returns true if daemon came up within timeout.
  */
 async function tryStartDockerDesktop() {
   const exe = await findDockerDesktopExe();
   if (!exe) return false;
 
-  log.info('Docker Desktop found but not running — launching it silently');
-  showProgress('Starting Docker Desktop…');
-  spawn(exe, [], { detached: true, stdio: 'ignore', shell: true }).unref();
+  if (exe === 'service') {
+    log.info('Mirantis Docker Engine service found — starting it');
+    showProgress('Starting Docker Engine…');
+    await runCommand('net start com.docker.service', { shell: true }).catch(() => {});
+  } else {
+    log.info('Docker Desktop found but not running — launching it silently');
+    showProgress('Starting Docker Desktop…');
+    spawn(exe, [], { detached: true, stdio: 'ignore', shell: true }).unref();
+  }
 
-  // Docker Desktop takes ~30-60s to start
   return waitForDaemon(90_000);
 }
 
@@ -149,7 +159,7 @@ async function installDockerEngine() {
 
   // --silent suppresses all UI; --accept-* skips license prompts
   await runCommand(
-    'winget install --id Docker.DockerDesktop --silent --accept-source-agreements --accept-package-agreements',
+    'winget install --id Mirantis.DockerEngine --silent --accept-source-agreements --accept-package-agreements',
     { shell: true, timeout: 300_000 }
   ).catch(async () => {
     // winget may not be available on very old Windows 10 builds — fallback info
