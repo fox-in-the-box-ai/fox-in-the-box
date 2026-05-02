@@ -6,3 +6,7 @@
 	path = forks/hermes-webui
 	url = https://github.com/fox-in-the-box-ai/hermes-webui.git
 	branch = master
+[submodule "forks/figma-mcp"]
+	path = forks/figma-mcp
+	url = https://github.com/fox-in-the-box-ai/figma-mcp.git
+	branch = main
