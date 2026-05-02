@@ -205,25 +205,18 @@ async function tryStartDockerDesktop() {
  * winget installs: Docker CLI + Docker Engine (Mirantis container runtime).
  */
 async function installDockerEngine() {
-  log.info('Installing Docker Engine via winget (silent)');
-  showProgress('Installing Docker Engine… this takes about 2 minutes.');
+  log.info('Installing Docker Desktop via winget (silent)');
+  showProgress('Installing Docker Desktop… this takes a few minutes.');
 
-  // --silent suppresses all UI; --accept-* skips license prompts
   await runCommand(
-    'winget install --id Mirantis.DockerEngine --silent --accept-source-agreements --accept-package-agreements',
+    'winget install --id Docker.DockerDesktop --silent --accept-source-agreements --accept-package-agreements',
     { shell: true, timeout: 300_000 }
-  ).catch(async () => {
-    // winget may not be available on very old Windows 10 builds — fallback info
-    log.warn('winget failed, trying direct Docker Engine install');
-    showProgress('Installing Docker Engine via PowerShell…');
-    // Install Docker Engine directly (no Desktop GUI)
-    await runCommand(
-      'powershell -NoProfile -NonInteractive -Command "' +
-      'Invoke-WebRequest -UseBasicParsing https://get.docker.com/win/static/stable/x86_64/docker-24.0.9.zip -OutFile $env:TEMP\\docker.zip; ' +
-      'Expand-Archive $env:TEMP\\docker.zip -DestinationPath $env:ProgramFiles\\Docker -Force; ' +
-      '$env:Path += \';\' + $env:ProgramFiles + \'\\Docker\'; ' +
-      'dockerd --register-service; Start-Service docker"',
-      { shell: true, timeout: 300_000 }
+  ).catch(() => {
+    // winget unavailable or install failed — direct user to manual install
+    throw new Error(
+      'Could not install Docker Desktop automatically.\n\n' +
+      'Please install it manually from https://docker.com/products/docker-desktop,\n' +
+      'then reopen Fox in the Box.'
     );
   });
 }
