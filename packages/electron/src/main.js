@@ -103,6 +103,57 @@ function closeProgress() {
   if (_progressWin) { _progressWin.destroy(); _progressWin = null; }
 }
 
+/**
+ * Replace the progress window with a "please restart" screen.
+ * Shows a friendly message with a Restart Now button.
+ * App exits after restart is triggered (or user closes the window).
+ */
+function showRebootRequired() {
+  closeProgress();
+
+  const win = new BrowserWindow({
+    width: 480,
+    height: 220,
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    alwaysOnTop: true,
+    frame: true,
+    title: 'Fox in the Box — Restart required',
+    webPreferences: { nodeIntegration: true, contextIsolation: false },
+  });
+
+  const html = `<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<style>
+  body { font-family: "Segoe UI", sans-serif; margin: 0; display: flex;
+         align-items: center; justify-content: center; height: 100vh;
+         background: #fff; }
+  .wrap { text-align: center; padding: 32px; }
+  .logo { font-size: 32px; margin-bottom: 12px; }
+  h2 { font-size: 16px; margin: 0 0 8px; color: #111; }
+  p  { font-size: 13px; color: #555; margin: 0 0 20px; line-height: 1.5; }
+  button { background: #C8743A; color: #fff; border: none; padding: 10px 28px;
+           font-size: 14px; border-radius: 6px; cursor: pointer; }
+  button:hover { background: #A85A32; }
+</style></head>
+<body><div class="wrap">
+  <div class="logo">🦊</div>
+  <h2>One restart required</h2>
+  <p>Docker was just installed. A quick restart is needed<br>before Fox in the Box can run.</p>
+  <button onclick="require('electron').ipcRenderer.send('do-reboot')">Restart now</button>
+</div></body></html>`;
+
+  win.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
+  win.setMenu(null);
+
+  const { ipcMain } = require('electron');
+  ipcMain.once('do-reboot', () => {
+    require('child_process').exec('shutdown /r /t 3 /c "Restarting to finish Docker setup"');
+    setTimeout(() => app.quit(), 500);
+  });
+}
+
 // ─── Docker setup (Windows) ──────────────────────────────────────────────────
 
 /**
@@ -197,10 +248,8 @@ async function ensureDockerWindows() {
 
   const ready = await waitForDaemon(120_000);
   if (!ready) {
-    throw new Error(
-      'Docker Engine was installed but the daemon did not start within 2 minutes.\n' +
-      'Please restart your computer and reopen Fox in the Box.'
-    );
+    showRebootRequired();
+    return; // app stays open showing the reboot screen
   }
 }
 
@@ -225,10 +274,8 @@ async function main() {
 
     dockerRunning = await docker.isDaemonRunning();
     if (!dockerRunning) {
-      closeProgress();
-      throw new Error(
-        'Docker is not responding. Please restart your computer and reopen Fox in the Box.'
-      );
+      showRebootRequired();
+      return;
     }
   }
 
