@@ -65,11 +65,13 @@ jobs:
 
       - name: Build Electron app
         working-directory: packages/electron
+        shell: bash
         run: pnpm build
         env:
-          # Windows code signing (set in repo secrets)
-          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
-          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+          # No code signing cert for v0.1 — CSC_IDENTITY_AUTO_DISCOVERY=false tells
+          # electron-builder to skip signing entirely rather than error on missing/empty cert.
+          # Remove this line and set WIN_CSC_LINK + WIN_CSC_KEY_PASSWORD secrets when ready to sign.
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
           # macOS code signing (set in repo secrets)
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
