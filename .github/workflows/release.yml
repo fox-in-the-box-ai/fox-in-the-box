@@ -69,11 +69,22 @@ jobs:
           name: fox-macos
           path: release-artifacts/macos
 
+      - name: Extract release notes from CHANGELOG
+        id: changelog
+        run: |
+          VERSION="${{ steps.tag.outputs.version }}"
+          # Strip leading 'v' to match CHANGELOG format (e.g. v0.1.0 → 0.1.0)
+          VERSION_BARE="${VERSION#v}"
+          # Extract the section for this version between its header and the next
+          awk "/^## \[${VERSION_BARE}\]/{found=1; next} found && /^## \[/{exit} found{print}" CHANGELOG.md \
+            > /tmp/release_notes.md
+          echo "notes_path=/tmp/release_notes.md" >> "$GITHUB_OUTPUT"
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.tag.outputs.version }}
-          generate_release_notes: true
+          body_path: ${{ steps.changelog.outputs.notes_path }}
           files: |
             release-artifacts/windows/*.exe
             release-artifacts/macos/*.zip
