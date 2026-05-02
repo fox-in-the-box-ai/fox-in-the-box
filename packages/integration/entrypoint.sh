@@ -111,6 +111,7 @@ if [ "$FITB_DEV" = "1" ]; then
 fi
 
 # ── 3. Version migration ───────────────────────────────────────────────────────
+CURRENT_VERSION="0.0.0"
 if [ -f "$DATA_VERSION_FILE" ]; then
     CURRENT_VERSION=$(cat "$DATA_VERSION_FILE")
 fi

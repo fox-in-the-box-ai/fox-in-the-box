@@ -42,9 +42,17 @@ jobs:
 
       - name: Build Docker image
         run: |
+          # On tagged releases, pass the tag as FITB_VERSION so entrypoint clones
+          # the right hermes-agent/webui tag. On main branch dev builds, omit the
+          # arg so the Dockerfile default (v0.1.0) is used — entrypoint falls back
+          # to default branch when the tag doesn't exist yet, which is correct.
+          FITB_VERSION_ARG=""
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            FITB_VERSION_ARG="--build-arg FITB_VERSION=${{ github.ref_name }}"
+          fi
           docker build \
             --platform linux/amd64 \
-            --build-arg FITB_VERSION=${{ github.sha }} \
+            $FITB_VERSION_ARG \
             -t ghcr.io/fox-in-the-box-ai/cloud:${{ steps.meta.outputs.tag }} \
             -f packages/integration/Dockerfile \
             .
