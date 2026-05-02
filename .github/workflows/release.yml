@@ -87,6 +87,6 @@ jobs:
           body_path: ${{ steps.changelog.outputs.notes_path }}
           files: |
             release-artifacts/windows/*.exe
-            release-artifacts/macos/*.zip
+            release-artifacts/macos/*.dmg
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

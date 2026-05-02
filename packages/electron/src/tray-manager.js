@@ -1,9 +1,10 @@
 'use strict';
 
 const { app, Tray, Menu, shell, dialog } = require('electron');
-const path   = require('path');
-const log    = require('electron-log');
-const docker = require('./docker-manager');
+const path    = require('path');
+const log     = require('electron-log');
+const docker  = require('./docker-manager');
+const updater = require('./updater');
 
 const ICON_PATH = path.join(__dirname, '..', 'assets', 'icon.png');
 const APP_URL   = 'http://localhost:8787';
@@ -53,6 +54,11 @@ function buildMenu() {
           dialog.showErrorBox('Error', err.message);
         }
       },
+    },
+    { type: 'separator' },
+    {
+      label: 'Check for updates',
+      click: () => updater.checkForUpdatesManual(),
     },
     { type: 'separator' },
     {
