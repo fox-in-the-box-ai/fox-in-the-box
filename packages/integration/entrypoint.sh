@@ -173,6 +173,13 @@ if [ -f "/data/data/tailscale/tailscaled.state" ]; then
         echo "[entrypoint] WARNING: tailscale serve failed (daemon may not be ready yet — will retry at next restart)."
 fi
 
+# ── 6b. Patch supervisord.conf with runtime env vars ──────────────────────────
+# supervisord %(ENV_VAR)s expansion fails when the var is absent from the process
+# environment. Use a placeholder + sed to inject the value (or empty string) at
+# runtime so supervisord always starts cleanly.
+SUPERVISORD_CONF="/etc/supervisor/supervisord.conf"
+sed -i "s|__BRAVE_API_KEY__|${BRAVE_API_KEY:-}|g" "$SUPERVISORD_CONF"
+
 # ── 7. Hand off to supervisord ─────────────────────────────────────────────────
 echo "[entrypoint] Starting supervisord ..."
 exec /usr/local/bin/supervisord -c /etc/supervisor/supervisord.conf
