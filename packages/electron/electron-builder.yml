@@ -22,6 +22,8 @@ win:
       arch:
         - x64
   artifactName: "fox-in-the-box-setup-${version}-${arch}.exe"
+  # Code signing: set WIN_CSC_LINK (path/URL to .pfx) and WIN_CSC_KEY_PASSWORD in CI
+  # electron-builder picks these up automatically when present
 
 nsis:
   oneClick: true
@@ -31,11 +33,22 @@ nsis:
 
 mac:
   target:
-    - target: zip
+    - target: dmg
       arch:
         - x64
         - arm64
-  artifactName: "fox-in-the-box-${version}-${arch}-mac.zip"
-  identity: null   # unsigned build
+  artifactName: "fox-in-the-box-${version}-${arch}-mac.dmg"
+  # Code signing: set APPLE_TEAM_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_ID env vars in CI
+  # identity is auto-detected from keychain when env vars are present
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: assets/entitlements.mac.plist
+  entitlementsInherit: assets/entitlements.mac.plist
+dmg:
+  sign: false   # signing is done via notarytool after build
 
-publish: null      # no auto-update endpoint yet
+publish:
+  provider: github
+  owner: fox-in-the-box-ai
+  repo: fox-in-the-box
+  releaseType: release

@@ -22,7 +22,7 @@ jobs:
             artifact-path: packages/electron/dist/*.exe
           - os: macos-latest
             artifact-name: fox-macos
-            artifact-path: packages/electron/dist/*.zip
+            artifact-path: packages/electron/dist/*.dmg
 
     steps:
       - name: Checkout (with submodules)
@@ -66,6 +66,16 @@ jobs:
       - name: Build Electron app
         working-directory: packages/electron
         run: pnpm build
+        env:
+          # Windows code signing (set in repo secrets)
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+          # macOS code signing (set in repo secrets)
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # GitHub token for electron-updater publish config
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4

@@ -8,6 +8,8 @@ const docker           = require('./docker-manager');
 const { waitUntilHealthy } = require('./health-check');
 const { createTray, setRunning } = require('./tray-manager');
 const { shell }        = require('electron');
+const updater          = require('./updater');
+const updateWindow     = require('./update-window');
 
 // Prevent multiple instances
 if (!app.requestSingleInstanceLock()) {
@@ -253,6 +255,10 @@ async function main() {
   // 7. Create tray icon
   createTray(true);
   setRunning(true);
+
+  // 8. Initialise auto-updater (no BrowserWindow in tray-only mode — pass null)
+  updater.init(null);
+  updateWindow.init();
 }
 
 // ─── macOS Docker install (kept separate) ────────────────────────────────────
