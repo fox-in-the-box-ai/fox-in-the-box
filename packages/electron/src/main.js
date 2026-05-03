@@ -1,15 +1,19 @@
 'use strict';
 
 const { app, BrowserWindow, dialog } = require('electron');
-const { exec, spawn }  = require('child_process');
-const path             = require('path');
-const log              = require('electron-log');
-const docker           = require('./docker-manager');
-const { waitUntilHealthy } = require('./health-check');
-const { createTray, setRunning } = require('./tray-manager');
-const { shell }        = require('electron');
-const updater          = require('./updater');
-const updateWindow     = require('./update-window');
+const { spawn }                       = require('child_process');
+const path                            = require('path');
+const log                             = require('electron-log');
+const docker                          = require('./docker-manager');
+const { waitUntilHealthy }            = require('./health-check');
+const { createTray, setRunning }      = require('./tray-manager');
+const { shell }                       = require('electron');
+const updater                         = require('./updater');
+const updateWindow                    = require('./update-window');
+const {
+  waitForDaemon:          _waitForDaemon,
+  ensureDockerWindows:    _ensureDockerWindows,
+} = require('./startup');
 
 // Prevent multiple instances
 if (!app.requestSingleInstanceLock()) {
@@ -25,30 +29,6 @@ app.whenReady().then(main).catch((err) => {
   dialog.showErrorBox('Fox in the Box — startup error', err.message);
   app.quit();
 });
-
-// ─── Helpers ────────────────────────────────────────────────────────────────
-
-function runCommand(cmd, opts = {}) {
-  return new Promise((resolve, reject) => {
-    exec(cmd, opts, (error, stdout, stderr) => {
-      if (error) reject(new Error(stderr || error.message));
-      else resolve(stdout);
-    });
-  });
-}
-
-/**
- * Poll until the Docker daemon responds, up to timeoutMs.
- * Returns true if daemon came up, false on timeout.
- */
-async function waitForDaemon(timeoutMs = 120_000, intervalMs = 3_000) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    if (await docker.isDaemonRunning()) return true;
-    await new Promise((r) => setTimeout(r, intervalMs));
-  }
-  return false;
-}
 
 // ─── Progress window ─────────────────────────────────────────────────────────
 
@@ -155,95 +135,22 @@ function showRebootRequired() {
 }
 
 // ─── Docker setup (Windows) ──────────────────────────────────────────────────
+// Logic extracted to startup.js for testability.
+// main.js wires up the Electron-specific deps (showProgress, showRebootRequired, spawn).
 
-/**
- * Check if Docker Desktop or Mirantis Docker Engine service is installed but not running.
- * Returns the exe path (Desktop) or 'service' (Engine) or null.
- */
-async function findDockerDesktopExe() {
-  const candidates = [
-    '%PROGRAMFILES%\\Docker\\Docker\\Docker Desktop.exe',
-    '%LOCALAPPDATA%\\Programs\\Docker\\Docker\\Docker Desktop.exe',
-  ];
-  for (const c of candidates) {
-    try {
-      await runCommand(`if exist "${c}" (exit 0) else (exit 1)`, { shell: true });
-      return c;
-    } catch (_) { /* not here */ }
-  }
-  // Check for Mirantis Docker Engine (installed as a Windows service, no GUI exe)
-  try {
-    await runCommand('sc query com.docker.service', { shell: true });
-    return 'service';
-  } catch (_) {}
-  return null;
+function spawnDetached(exe) {
+  spawn(exe, [], { detached: true, stdio: 'ignore', shell: true }).unref();
 }
 
-/**
- * Try to start Docker Desktop or Mirantis Engine if installed but not running.
- * Returns true if daemon came up within timeout.
- */
-async function tryStartDockerDesktop() {
-  const exe = await findDockerDesktopExe();
-  if (!exe) return false;
-
-  if (exe === 'service') {
-    log.info('Mirantis Docker Engine service found — starting it');
-    showProgress('Starting Docker Engine…');
-    await runCommand('net start com.docker.service', { shell: true }).catch(() => {});
-  } else {
-    log.info('Docker Desktop found but not running — launching it silently');
-    showProgress('Starting Docker Desktop…');
-    spawn(exe, [], { detached: true, stdio: 'ignore', shell: true }).unref();
-  }
-
-  return waitForDaemon(90_000);
-}
-
-/**
- * Install Docker Engine (no GUI) via winget — silent, ~2 min, no restart needed.
- * winget installs: Docker CLI + Docker Engine (Mirantis container runtime).
- */
-async function installDockerEngine() {
-  log.info('Installing Docker Desktop via winget (silent)');
-  showProgress('Installing Docker Desktop… this takes a few minutes.');
-
-  await runCommand(
-    'winget install --id Docker.DockerDesktop --silent --accept-source-agreements --accept-package-agreements',
-    { shell: true, timeout: 300_000 }
-  ).catch(() => {
-    // winget unavailable or install failed — direct user to manual install
-    throw new Error(
-      'Could not install Docker Desktop automatically.\n\n' +
-      'Please install it manually from https://docker.com/products/docker-desktop,\n' +
-      'then reopen Fox in the Box.'
-    );
-  });
-}
-
-/**
- * Full Windows Docker setup — no user steps required.
- * 1. If Docker Desktop is installed but not running → start it, wait
- * 2. If nothing → install Docker Engine silently, wait for daemon
- */
 async function ensureDockerWindows() {
-  // Step 1: maybe Docker Desktop is just sleeping
-  const daemonUp = await tryStartDockerDesktop();
-  if (daemonUp) {
-    log.info('Docker Desktop started successfully');
-    return;
-  }
-
-  // Step 2: nothing running → install silently
-  showProgress('Docker not found — installing Docker Engine…');
-  await installDockerEngine();
-  showProgress('Waiting for Docker to start…');
-
-  const ready = await waitForDaemon(120_000);
-  if (!ready) {
-    showRebootRequired();
-    return; // app stays open showing the reboot screen
-  }
+  await _ensureDockerWindows({
+    isDaemonRunning:    () => docker.isDaemonRunning(),
+    waitForDaemon:      () => _waitForDaemon(() => docker.isDaemonRunning(), 90_000),
+    runCommand:         require('./startup').runCommand,
+    spawnDetached,
+    showProgress,
+    showRebootRequired,
+  });
 }
 
 // ─── Main startup sequence ───────────────────────────────────────────────────
