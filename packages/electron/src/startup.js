@@ -51,6 +51,14 @@ async function waitForDaemon(
  * @param {Function} [_run] - injectable runCommand for testing
  */
 async function findDockerDesktopExe(_run = runCommand) {
+  // First: check if Docker CLI is already in PATH — if so, daemon just needs starting
+  // (covers all install locations regardless of path)
+  try {
+    await _run('where docker', { shell: true });
+    return 'cli-in-path';
+  } catch (_) {}
+
+  // Fallback: known Docker Desktop install paths
   const candidates = [
     '%PROGRAMFILES%\\Docker\\Docker\\Docker Desktop.exe',
     '%LOCALAPPDATA%\\Programs\\Docker\\Docker\\Docker Desktop.exe',
@@ -61,13 +69,15 @@ async function findDockerDesktopExe(_run = runCommand) {
       return c;
     } catch (_) { /* not here */ }
   }
+
+  // Check for Mirantis Docker Engine (installed as a Windows service, no GUI exe)
   try {
     await _run('sc query com.docker.service', { shell: true });
     return 'service';
   } catch (_) {}
+
   return null;
 }
-
 /**
  * Determine what Windows Docker setup action is needed.
  *
@@ -85,6 +95,7 @@ async function detectWindowsDockerState(isDaemonRunning, _findExe = findDockerDe
   const exe = await _findExe();
   if (!exe)              return { action: 'install' };
   if (exe === 'service') return { action: 'start-service' };
+  if (exe === 'cli-in-path') return { action: 'start', exe: null }; // Docker in PATH, start via service
   return { action: 'start', exe };
 }
 
@@ -116,11 +127,14 @@ async function ensureDockerWindows(deps) {
   if (state.action === 'none') return { result: 'already-running' };
 
   if (state.action === 'start' || state.action === 'start-service') {
-    showProgress(state.action === 'service' ? 'Starting Docker Engine…' : 'Starting Docker Desktop…');
+    showProgress(state.action === 'start-service' ? 'Starting Docker Engine…' : 'Starting Docker Desktop…');
     if (state.action === 'start-service') {
       await _run('net start com.docker.service', { shell: true }).catch(() => {});
-    } else {
+    } else if (state.exe) {
       spawnDetached(state.exe);
+    } else {
+      // Docker in PATH but Desktop exe not at known path — try starting via Start Menu
+      await _run('start "" "Docker Desktop"', { shell: true }).catch(() => {});
     }
     const came_up = await _waitForDaemon();
     if (came_up) return { result: 'started' };
