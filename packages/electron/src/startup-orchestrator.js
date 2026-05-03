@@ -112,13 +112,17 @@ async function runStartup({
     docker.init();
   });
 
-  await runPhase(sessionId, 'docker_daemon_ready', async () => {
+  const daemonPhaseResult = await runPhase(sessionId, 'docker_daemon_ready', async () => {
     let dockerRunning = await docker.isDaemonRunning();
     if (dockerRunning) return;
 
     if (platform === 'win32') {
       daemonProgress('Setting up Docker…');
-      await ensureDockerWindows(daemonProgress);
+      const winDocker = await ensureDockerWindows(daemonProgress);
+      if (winDocker && winDocker.result === 'reboot-required') {
+        if (closeProgress) closeProgress();
+        return { outcome: 'reboot-required' };
+      }
       dockerRunning = await docker.isDaemonRunning();
     } else if (platform === 'darwin') {
       daemonProgress('Setting up Docker…');
@@ -137,6 +141,10 @@ async function runStartup({
       });
     }
   });
+
+  if (daemonPhaseResult && daemonPhaseResult.outcome === 'reboot-required') {
+    return { sessionId, outcome: 'reboot-required' };
+  }
 
   await runPhase(sessionId, 'image_ready', async () => {
     const present = await docker.isImagePresent();
