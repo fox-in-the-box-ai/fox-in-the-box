@@ -83,6 +83,19 @@ async function waitForDaemon(
 }
 
 /**
+ * Check if Docker Desktop process is actually running.
+ * Returns true/false. Used to detect silent spawn failures early.
+ */
+async function isDockerDesktopProcessRunning(_run = runCommand) {
+  try {
+    const out = await _run('tasklist /FI "IMAGENAME eq Docker Desktop.exe" /NH', { shell: true });
+    return out.includes('Docker Desktop.exe');
+  } catch (_) {
+    return false;
+  }
+}
+
+/**
  * Find Docker Desktop exe path, or 'service' for Mirantis Engine, or null.
  * @param {Function} [_run] - injectable runCommand for testing
  */
