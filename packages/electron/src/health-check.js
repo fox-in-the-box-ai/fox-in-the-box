@@ -79,7 +79,14 @@ async function waitUntilHealthy({
     } else if (lastError) {
       log.debug('Health check error (expected during startup):', lastError);
     }
-    await sleep(intervalMs);
+    const elapsedAfterFail = Date.now() - startedAt;
+    if (elapsedAfterFail >= timeoutMs) break;
+    // Poll faster while the stack is still coming up; back off to intervalMs after ~30s.
+    const fastCap = 30_000;
+    const baseWait =
+      elapsedAfterFail < fastCap ? Math.min(400, intervalMs) : intervalMs;
+    const remaining = timeoutMs - elapsedAfterFail;
+    await sleep(Math.min(baseWait, Math.max(0, remaining)));
   }
 
   const err = new Error(

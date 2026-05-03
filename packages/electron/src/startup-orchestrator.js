@@ -186,7 +186,7 @@ async function runStartup({
     try {
       await waitUntilHealthy({
         timeoutMs: 120_000,
-        intervalMs: 1000,
+        intervalMs: 500,
         requestTimeoutMs: 1500,
         showProgress: healthProgress,
         failFastCheck: async ({ attempts }) => {
@@ -256,7 +256,7 @@ async function ensureContainerHealthy({
   try {
     await waitUntilHealthy({
       timeoutMs: 120_000,
-      intervalMs: 1000,
+      intervalMs: 500,
       requestTimeoutMs: 1500,
       showProgress: healthProgress || showProgress,
       failFastCheck: async ({ attempts }) => {

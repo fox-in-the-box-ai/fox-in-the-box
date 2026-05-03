@@ -66,7 +66,7 @@ function runCommandVerbose(cmd, opts = {}, showProgress = null) {
 async function waitForDaemon(
   isDaemonRunning,
   timeoutMs = 120_000,
-  intervalMs = 3_000,
+  intervalMs = 1_000,
   _now   = () => Date.now(),
   _sleep = (ms) => new Promise((r) => setTimeout(r, ms)),
   showProgress = null
@@ -99,7 +99,7 @@ async function isDockerDesktopProcessRunning(_run = runCommand) {
 async function waitForDesktopProcessStart(
   isRunning,
   timeoutMs = 25_000,
-  intervalMs = 1_000,
+  intervalMs = 500,
   _sleep = (ms) => new Promise((r) => setTimeout(r, ms)),
   showProgress = null
 ) {
@@ -168,7 +168,7 @@ async function diagnoseWindowsDocker(_run = runCommand) {
   if (diagnostics.desktopProcessRunning && wslList && !/no installed distributions/i.test(wslList)) {
     let retries = 0;
     while (retries < 6 && !/docker-desktop/i.test(wslList)) {
-      await new Promise((r) => setTimeout(r, 2000));
+      await new Promise((r) => setTimeout(r, 1_000));
       retries++;
       try {
         wslListRaw = await _run('wsl -l -v', { shell: true });
@@ -446,7 +446,8 @@ async function ensureDockerWindows(deps) {
     let remainingMs = 180_000;
     let diagnostics = null;
     while (remainingMs > 0) {
-      const sliceMs = Math.min(30_000, remainingMs);
+      // Shorter slices re-run diagnosis sooner when the daemon is stuck (WSL / relaunch paths).
+      const sliceMs = Math.min(12_000, remainingMs);
       const cameUpSlice = await _waitForDaemon(sliceMs, showProgress);
       if (cameUpSlice) return { result: 'started' };
       remainingMs -= sliceMs;
