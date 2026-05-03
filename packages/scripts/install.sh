@@ -2,6 +2,8 @@
 # install.sh — Fox in the Box installer (Linux & macOS)
 # Usage: curl -fsSL https://raw.githubusercontent.com/.../install.sh | bash
 #   or:  bash install.sh
+#
+# Non-interactive (no /dev/tty): set FOX_ACCESS_MODE to 1, 2, or 3 instead of prompting.
 set -euo pipefail
 
 ##############################################################################
@@ -188,7 +190,20 @@ _prompt_access_mode() {
     echo "  [3] Both (port binding + Tailscale)"
     echo "  [?] What is Tailscale? Explain more"
     echo
-    read -rp "Enter 1, 2, 3 or ? [default: 1]: " ACCESS_MODE
+    # curl … | bash: stdin is the script pipe, not the keyboard — read would eat
+    # the next line of this file. Use stdin only when it is a real TTY.
+    if [[ -t 0 ]]; then
+      read -rp "Enter 1, 2, 3 or ? [default: 1]: " ACCESS_MODE
+    elif ! { read -rp "Enter 1, 2, 3 or ? [default: 1]: " ACCESS_MODE < /dev/tty; } 2>/dev/null; then
+      if [[ -n "${FOX_ACCESS_MODE:-}" ]]; then
+        ACCESS_MODE="$FOX_ACCESS_MODE"
+        info "Non-interactive install: FOX_ACCESS_MODE=$ACCESS_MODE"
+      else
+        ACCESS_MODE="1"
+        warn "No usable terminal for prompts — using [1] Port only."
+        warn "For automated installs set FOX_ACCESS_MODE=1|2|3 before running."
+      fi
+    fi
     ACCESS_MODE="${ACCESS_MODE:-1}"
 
     case "$ACCESS_MODE" in
