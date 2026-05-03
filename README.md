@@ -39,8 +39,7 @@ Or clone the repo and run `bash packages/scripts/install.sh`.
 
 - **Data directory (default):** Linux `~/.foxinthebox`; macOS `~/Library/Application Support/Fox in the Box`. Override with `FOX_DATA_DIR` / `FOX_WORKSPACE_DIR` if you need to.
 - **macOS:** If Docker is missing, the script installs **Docker Desktop** via Homebrew when `brew` is available, then exits so you can start Docker once and re-run the script.
-
-Open [http://localhost:8787](http://localhost:8787) after the container is up (unless you chose Tailscale-only access in the script prompts).
+- **Browser:** When install finishes, the script opens **http://localhost:8787** in your default browser (after a short delay). Set **`FOX_OPEN_BROWSER=0`** to skip. If the page errors, wait a few seconds and refresh — the container may still be starting Hermes.
 
 ### Option 2 — Docker one-liner (all platforms)
 

@@ -334,7 +334,7 @@ echo
 echo "  Workspace  : $WORKSPACE_DIR"
 echo "               (your files and projects — NOT inside the container)"
 echo
-if [[ "$ACCESS_MODE" == "1" || "$ACCESS_MODE" == "3" ]]; then
+if [[ "$ACCESS_MODE" == "1" || "$ACCESS_MODE" == "2" || "$ACCESS_MODE" == "3" ]]; then
   echo "  Web UI     : http://localhost:8787"
 fi
 if [[ "$USE_TAILSCALE" == "true" ]]; then
@@ -354,3 +354,19 @@ if [[ "$ACCESS_MODE" == "1" || "$ACCESS_MODE" == "3" ]]; then
   warn "rules only allow trusted hosts (e.g., 'ufw allow from 192.168.0.0/16 to any port 8787')."
 fi
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+# Open setup Web UI (localhost works for modes 1–3; set FOX_OPEN_BROWSER=0 to skip)
+if [[ "${FOX_OPEN_BROWSER:-1}" != "0" ]] && [[ "$ACCESS_MODE" == "1" || "$ACCESS_MODE" == "2" || "$ACCESS_MODE" == "3" ]]; then
+  sleep 3
+  _url="http://localhost:8787"
+  info "Opening $_url in your default browser…"
+  if [[ "$PLATFORM" == "macos" ]]; then
+    open "$_url" 2>/dev/null || warn "Could not open browser — visit $_url manually."
+  elif [[ "$PLATFORM" == "linux" ]]; then
+    if command -v xdg-open &>/dev/null; then
+      xdg-open "$_url" 2>/dev/null || warn "Could not open browser — visit $_url manually."
+    else
+      warn "Install xdg-utils for auto-open, or visit $_url manually."
+    fi
+  fi
+fi
