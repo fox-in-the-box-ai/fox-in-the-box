@@ -11,7 +11,7 @@
     "start": "electron .",
     "build": "electron-builder --publish never",
     "build:publish": "electron-builder",
-    "build:win": "electron-builder --win",
+    "build:win": "electron-builder --win --publish never",
     "build:mac": "electron-builder --mac",
     "test": "jest --testPathPattern=tests/electron"
   },
