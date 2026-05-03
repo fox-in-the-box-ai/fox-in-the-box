@@ -41,22 +41,17 @@ nsis:
   uninstallerIcon: assets/icon.ico
   include: build/installer.nsh
 
+# Unsigned .zip only — no DMG (avoids Apple notarization / cert gatekeeper issues).
+# Release installs for macOS use packages/scripts/install.sh (same as Linux).
 mac:
   icon: assets/icon.icns
   target:
-    - target: dmg
+    - target: zip
       arch:
         - x64
         - arm64
-  artifactName: "fox-in-the-box-${arch}-mac.dmg"
-  # Code signing: set APPLE_TEAM_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_ID env vars in CI
-  # identity is auto-detected from keychain when env vars are present
-  hardenedRuntime: true
-  gatekeeperAssess: false
-  entitlements: assets/entitlements.mac.plist
-  entitlementsInherit: assets/entitlements.mac.plist
-dmg:
-  sign: false   # signing is done via notarytool after build
+  artifactName: "fox-in-the-box-${arch}-mac.zip"
+  identity: null
 
 # Linux desktop installers (snap/AppImage) are not shipped; install.sh + Docker is the path.
 # Unpacked "dir" is enough to validate the app on Linux. Scoped package "name" still needs

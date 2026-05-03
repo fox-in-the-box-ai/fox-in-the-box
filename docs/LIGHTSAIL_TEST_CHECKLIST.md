@@ -117,7 +117,9 @@ docker stop fitb && docker rm fitb
 
 ---
 
-## macOS (13.x) — Installer
+## macOS (13.x) — `install.sh` + Docker
+
+GitHub Releases do **not** ship a macOS `.dmg`. Validate the same path as end users: **`packages/scripts/install.sh`** (curl from `main` or copy from the repo).
 
 ### Instance Details
 - **Instance:** fitb-test-macos-13
@@ -125,58 +127,35 @@ docker stop fitb && docker rm fitb
 - **Status:** ✅ Running
 
 ### Pre-Test
-- [ ] Download installer to local machine first (faster than from Lightsail)
-- [ ] Copy to Lightsail: `scp -i ~/.ssh/lightsail.pem fox-in-the-box-0.2.0.dmg ec2-user@<IP>:/tmp/`
+- [ ] **Docker Desktop** installed and running (script can install via Homebrew if `brew` is present; otherwise install manually first)
+- [ ] SSH session ready: `ssh -i ~/.ssh/lightsail.pem ec2-user@<IP>` (or your test user)
 
 ### Test Steps
 
-#### 1. DMG Mount & Install
+#### 1. Run installer (interactive)
 ```bash
 ssh -i ~/.ssh/lightsail.pem ec2-user@<IP>
 
-# Mount DMG
-hdiutil mount /tmp/fox-in-the-box-0.2.0.dmg
-# → /Volumes/fox-in-the-box-0.2.0
-
-# Copy app
-cp -r /Volumes/fox-in-the-box-0.2.0/"Fox in the Box.app" /Applications/
-
-# Unmount
-umount /Volumes/fox-in-the-box-0.2.0
+# Pipe from GitHub (default) or: bash /path/to/repo/packages/scripts/install.sh
+curl -fsSL https://raw.githubusercontent.com/fox-in-the-box-ai/fox-in-the-box/main/packages/scripts/install.sh | bash
 ```
 
-- [ ] DMG mounted successfully
-- [ ] App copied to /Applications/
-- [ ] DMG unmounted
+- [ ] Script completed without `die` / fatal error
+- [ ] Container `fox-in-the-box` running: `docker ps --filter name=fox-in-the-box`
 
-#### 2. App Launch
+#### 2. Health & port
 ```bash
-# Start app in background
-nohup /Applications/"Fox in the Box.app"/Contents/MacOS/"Fox in the Box" > /tmp/fitb.log 2>&1 &
-
-sleep 5
-
-# Check process
-ps aux | grep -i fox
+curl -f http://localhost:8787/health
+# If you chose Tailscale-only in the script, use the HTTPS URL from script output instead.
 ```
 
-- [ ] Process running: YES / NO
-- [ ] PID: `__________`
+- [ ] Health check: YES / NO
+- [ ] Port 8787 reachable (or Tailscale URL): YES / NO
 
-#### 3. Port Open
+#### 3. WebUI access
 ```bash
-netstat -tuln | grep 8787
-# Or: sudo lsof -i :8787
-```
-
-- [ ] Port 8787 open: YES / NO
-- [ ] App listening: YES / NO
-
-#### 4. WebUI Access
-```bash
-# On local machine:
-ssh -i ~/.ssh/lightsail.pem -L 8787:localhost:8787 ec2-user@<IP>
-# Then open http://localhost:8787
+# From the same Mac instance, open in browser or:
+curl -fsS -o /dev/null -w "%{http_code}" http://localhost:8787/
 ```
 
 - [ ] WebUI loaded
@@ -184,18 +163,16 @@ ssh -i ~/.ssh/lightsail.pem -L 8787:localhost:8787 ec2-user@<IP>
 - [ ] Send message: "Hello"
 - [ ] Response received
 
-#### 5. Gatekeeper Check
+#### 4. launchd (if script installed it)
 ```bash
-# Check for notarization status
-spctl -a -v /Applications/"Fox in the Box.app"
+launchctl list io.foxinthebox 2>/dev/null || echo "not loaded"
 ```
 
-- [ ] Status: ✅ Notarized / ⚠️ Unsigned warning / ❌ Blocked
+- [ ] Agent loaded: YES / NO / N/A (skipped)
 
-#### 6. Logs
+#### 5. Logs
 ```bash
-tail -50 ~/.hermes/logs/agent.log
-cat /tmp/fitb.log
+docker logs --tail 50 fox-in-the-box
 ```
 
 - [ ] Paste any errors below:
@@ -205,14 +182,15 @@ __________
 
 - [ ] Errors are expected: YES / NO
 
-#### 7. Cleanup
+#### 6. Cleanup
 ```bash
-kill %1  # or: killall "Fox in the Box"
-rm -rf /Applications/"Fox in the Box.app"
+docker stop fox-in-the-box && docker rm fox-in-the-box
+launchctl unload "$HOME/Library/LaunchAgents/io.foxinthebox.plist" 2>/dev/null || true
+# Optional: remove data dir used in test
 ```
 
-- [ ] App terminated
-- [ ] App removed
+- [ ] Container stopped/removed
+- [ ] launchd unloaded if it was installed
 
 ---
 
@@ -220,12 +198,11 @@ rm -rf /Applications/"Fox in the Box.app"
 
 | Check | Status | Notes |
 |-------|--------|-------|
-| DMG mount | ✅ / ⚠️ / ❌ | __________ |
-| App copy | ✅ / ⚠️ / ❌ | __________ |
-| App launch | ✅ / ⚠️ / ❌ | __________ |
-| Port open | ✅ / ⚠️ / ❌ | __________ |
+| install.sh | ✅ / ⚠️ / ❌ | __________ |
+| Docker / container | ✅ / ⚠️ / ❌ | __________ |
+| Health / port | ✅ / ⚠️ / ❌ | __________ |
 | WebUI access | ✅ / ⚠️ / ❌ | __________ |
-| Gatekeeper | ✅ / ⚠️ / ❌ | __________ |
+| launchd (optional) | ✅ / ⚠️ / ❌ | __________ |
 | Error-free logs | ✅ / ⚠️ / ❌ | __________ |
 
 **Overall:** ✅ PASS / ⚠️ WARN / ❌ FAIL

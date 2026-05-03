@@ -150,7 +150,7 @@ Each platform has a detailed checklist covering:
 - CLI test, error logs
 
 **macOS (Installer):**
-- DMG mount, app copy, launch
+- ~~DMG mount, app copy, launch~~ superseded: macOS uses `install.sh` + Docker (no release DMG)
 - Port open, WebUI access
 - Gatekeeper check, logs
 

@@ -267,7 +267,7 @@ command=tailscaled --state=/data/data/tailscale/tailscaled.state
 
 ### 3.5 Electron Desktop App
 
-Native desktop apps for Windows (.exe) and macOS (.dmg):
+Native desktop app for **Windows** (`.exe` on GitHub Releases). **macOS** uses the same **`install.sh` + Docker** flow as Linux (documented in the README); there is no signed `.dmg` in releases. Developers may build an **unsigned** macOS `.zip` locally with Electron Builder.
 
 **Responsibilities:**
 - Detect Docker Desktop, silently install if missing
@@ -1021,7 +1021,7 @@ Weeks 5-8: Stability period, bug fixes only
 |----------|------------------|
 | Docker image | GHCR (`ghcr.io/fox-in-the-box-ai/cloud:stable`) |
 | Windows installer (.exe) | GitHub Releases |
-| macOS installer (.dmg) | GitHub Releases |
+| macOS (`install.sh` + Docker, systemd/launchd) | README / raw script on `main` |
 | Source code | GitHub (`fox-in-the-box-ai` org, tagged release) |
 
 ### 9.3 Auto-Update Channels

@@ -123,7 +123,7 @@ git push origin v0.2.0    # triggers CI/CD
 ### Testing Framework
 Per-platform checklists for:
 - **Linux**: Docker start, health check, chat, restart resilience, logs
-- **macOS**: DMG install, app launch, WebUI access, Gatekeeper check
+- **macOS**: `install.sh` + Docker, WebUI access (no retail DMG in releases)
 - **Windows**: EXE install, app launch, port check, WebUI, taskbar, startup time
 
 **Cost:** ~$0.72 per release cycle (negligible with AWS credits)
