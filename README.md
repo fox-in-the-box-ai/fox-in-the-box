@@ -50,7 +50,13 @@ Download the installer for your platform from the [latest release](https://githu
 
 ### Option 3 — Build from source
 
-See [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md) for full build instructions.
+Initialize submodules (Hermes agent and webui are **copied into the image at build time** from `forks/`):
+
+```bash
+git submodule update --init --recursive
+```
+
+Then see [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md) for full build instructions (e.g. `pnpm build:docker` from the repo root).
 
 ---
 
@@ -78,6 +84,8 @@ Fox in the Box bundles the following components:
 | mem0\_oss + Qdrant | Persistent memory with local vector search |
 | Tailscale | VPN tunneling and automatic HTTPS |
 | supervisord | Process management inside the container |
+
+**Container vs. data:** The published Docker image includes Hermes agent and webui source (from the monorepo `forks/` submodules) installed at **build** time. On startup, the entrypoint links them under `/data/apps` so supervisord paths stay stable; the **`/data` volume** holds your config, databases, logs, and Tailscale state — not a fresh `git clone` of Hermes on every first run. Updating Hermes for end users means pulling a **newer image**, not waiting for the container to clone GitHub.
 
 ---
 
