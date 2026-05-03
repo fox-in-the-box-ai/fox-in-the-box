@@ -142,7 +142,7 @@ async function ensureDockerWindows(deps) {
   if (state.action === 'none') return { result: 'already-running' };
 
   if (state.action === 'start' || state.action === 'start-service') {
-    showProgress(state.action === 'start-service' ? 'Starting Docker Engine…' : 'Starting Docker Desktop…');
+    showProgress('Starting Docker Desktop… this can take up to 3 minutes on first launch.');
     if (state.action === 'start-service') {
       await _run('net start com.docker.service', { shell: true }).catch(() => {});
     } else if (state.exe) {
@@ -151,7 +151,7 @@ async function ensureDockerWindows(deps) {
       // Docker in PATH but Desktop exe not at known path — try starting via Start Menu
       await _run('start "" "Docker Desktop"', { shell: true }).catch(() => {});
     }
-    const came_up = await _waitForDaemon();
+    const came_up = await _waitForDaemon(180_000);
     if (came_up) return { result: 'started' };
     showRebootRequired();
     return { result: 'reboot-required' };
