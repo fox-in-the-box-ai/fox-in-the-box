@@ -161,13 +161,28 @@ if [ -f "$HERMES_YAML" ] && [ -n "${BRAVE_API_KEY:-}" ]; then
     echo "[entrypoint] Patched BRAVE_API_KEY into $HERMES_YAML"
 fi
 
-# ── 6. Configure Tailscale Serve (if Tailscale state exists) ──────────────────
-# tailscale serve routes https://<machine>.tailnet.ts.net → http://localhost:8787
-# This is a no-op if Tailscale is not yet authenticated.
+# ── 6. Tailscale Serve (deferred until WebUI answers /health) ─────────────────
+# Do not run `tailscale serve` before supervisord — nothing listens on :8787 yet.
+# A background loop waits for Hermes WebUI then runs `tailscale serve --bg` once.
 if [ -f "/data/data/tailscale/tailscaled.state" ]; then
-    echo "[entrypoint] Configuring Tailscale Serve..."
-    tailscale serve --bg / http://localhost:8787 2>/dev/null || \
-        echo "[entrypoint] WARNING: tailscale serve failed (daemon may not be ready yet — will retry at next restart)."
+    echo "[entrypoint] Tailscale state present — Serve will configure after WebUI is up (background)."
+    (
+        _ts_deadline=240
+        _ts_i=0
+        while [ "$_ts_i" -lt "$_ts_deadline" ]; do
+            if curl -fsS --connect-timeout 2 --max-time 6 "http://127.0.0.1:8787/health" >/dev/null 2>&1; then
+                if tailscale serve --bg / http://localhost:8787 2>/dev/null; then
+                    echo "[entrypoint] Tailscale Serve configured (https → localhost:8787)."
+                else
+                    echo "[entrypoint] WARNING: tailscale serve failed — will retry on next container restart."
+                fi
+                exit 0
+            fi
+            _ts_i=$((_ts_i + 2))
+            sleep 2
+        done
+        echo "[entrypoint] WARNING: Tailscale Serve skipped (WebUI /health not ready within ${_ts_deadline}s)."
+    ) &
 fi
 
 # ── 6b. Patch supervisord.conf with runtime env vars ──────────────────────────
