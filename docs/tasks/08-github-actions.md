@@ -180,9 +180,8 @@ jobs:
           - os: windows-latest
             artifact-name: fox-windows
             artifact-path: packages/electron/dist/*.exe
-          - os: macos-latest
-            artifact-name: fox-macos
-            artifact-path: packages/electron/dist/*.zip
+          # macOS: no CI artifact — releases use packages/scripts/install.sh (see README).
+          # Local unsigned zip: pnpm build --mac in packages/electron.
 
     steps:
       - name: Checkout (with submodules)
@@ -235,7 +234,7 @@ This workflow:
 - Waits for both `build-container.yml` and `build-electron.yml` to succeed on the same SHA.
 - Re-tags the Docker image `:latest` → `:[tag-name]` and `:stable`.
 - Creates a GitHub Release with auto-generated release notes from commits.
-- Attaches the Windows `.exe` and macOS `.zip` artifacts.
+- Attaches the Windows `.exe` (macOS users follow README `install.sh` + Docker).
 
 ```yaml
 # .github/workflows/release.yml
@@ -304,13 +303,6 @@ jobs:
           path: release-artifacts/windows
           run-id: ${{ github.run_id }}
 
-      - name: Download macOS artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: fox-macos
-          path: release-artifacts/macos
-          run-id: ${{ github.run_id }}
-
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -318,7 +310,6 @@ jobs:
           generate_release_notes: true
           files: |
             release-artifacts/windows/*.exe
-            release-artifacts/macos/*.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```

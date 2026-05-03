@@ -15,14 +15,13 @@ jobs:
 
     strategy:
       fail-fast: false
+      # macOS: no packaged build in CI/releases — use packages/scripts/install.sh
+      # (same curl|bash flow as Linux). Local unsigned zip: pnpm build --mac.
       matrix:
         include:
           - os: windows-latest
             artifact-name: fox-windows
             artifact-path: packages/electron/dist/*.exe
-          - os: macos-latest
-            artifact-name: fox-macos
-            artifact-path: packages/electron/dist/*.dmg
 
     steps:
       - name: Checkout (with submodules)
@@ -72,10 +71,6 @@ jobs:
           # electron-builder to skip signing entirely rather than error on missing/empty cert.
           # Remove this line and set WIN_CSC_LINK + WIN_CSC_KEY_PASSWORD secrets when ready to sign.
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
-          # macOS code signing (set in repo secrets)
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           # GitHub token for electron-updater publish config
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -92,15 +87,13 @@ jobs:
         shell: bash
         working-directory: packages/electron/dist
         run: |
-          # Rename to fixed filenames so website can link to /releases/latest/download/
+          # Rename to fixed filename so website can link to /releases/latest/download/
           if [[ "${{ runner.os }}" == "Windows" ]]; then
             mv *.exe fox-in-the-box-setup.exe
-          else
-            mv *.dmg fox-in-the-box.dmg
           fi
 
       - name: Upload to GitHub Release (tagged releases only)
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v') && runner.os == 'Windows'
         uses: softprops/action-gh-release@v2
         with:
           files: ${{ matrix.artifact-path }}

@@ -4,7 +4,7 @@
 
 > A self-hosted AI assistant that runs entirely on your machine — no subscriptions, no cloud dependencies, no data leaving your control.
 
-Fox in the Box packages a full AI assistant stack into a single Docker container with native desktop apps for Windows and macOS. Bring your own API key and you're up in minutes.
+Fox in the Box packages a full AI assistant stack into a single Docker container, with a native Windows desktop app and a one-command install script for **Linux and macOS** (Docker-based, same flow on both). Bring your own API key and you're up in minutes.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)](https://github.com/fox-in-the-box-ai/fox-in-the-box/releases)
@@ -20,35 +20,53 @@ Fox in the Box packages a full AI assistant stack into a single Docker container
 | Web-based setup | Browser onboarding wizard — no terminal required |
 | Persistent memory | Remembers context across sessions via local vector store |
 | Remote access | Built-in Tailscale VPN with automatic HTTPS |
-| Desktop apps | Native Electron wrapper for Windows and macOS |
+| Desktop app | Native Electron wrapper for Windows; macOS uses the install script or Docker |
 | Open source | MIT licensed, full source available |
 
 ---
 
 ## Installation
 
-### Option 1 — Docker (all platforms)
+### Option 1 — Install script (Linux and macOS)
+
+Same flow on both platforms: installs Docker if needed, pulls `ghcr.io/fox-in-the-box-ai/cloud:stable`, runs the container, and sets up **systemd** (Linux) or **launchd** (macOS) so the stack comes back after reboot.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/fox-in-the-box-ai/fox-in-the-box/main/packages/scripts/install.sh | bash
+```
+
+Or clone the repo and run `bash packages/scripts/install.sh`.
+
+- **Data directory (default):** Linux `~/.foxinthebox`; macOS `~/Library/Application Support/Fox in the Box`. Override with `FOX_DATA_DIR` / `FOX_WORKSPACE_DIR` if you need to.
+- **macOS:** If Docker is missing, the script installs **Docker Desktop** via Homebrew when `brew` is available, then exits so you can start Docker once and re-run the script.
+
+Open [http://localhost:8787](http://localhost:8787) after the container is up (unless you chose Tailscale-only access in the script prompts).
+
+### Option 2 — Docker one-liner (all platforms)
+
+Matches the integration smoke test (localhost binding, Tailscale-capable container):
 
 ```bash
 docker run -d \
   --name fox-in-the-box \
+  --restart unless-stopped \
   --cap-add=NET_ADMIN \
   --device /dev/net/tun \
-  -p 8787:8787 \
+  --sysctl net.ipv4.ip_forward=1 \
+  -p 127.0.0.1:8787:8787 \
   -v ~/.foxinthebox:/data \
   ghcr.io/fox-in-the-box-ai/cloud:stable
 ```
 
-Open [http://localhost:8787](http://localhost:8787) and follow the setup wizard.
+On macOS you can keep `-v ~/.foxinthebox:/data` or use a path under `~/Library/Application Support/Fox in the Box` for consistency with the install script.
 
-### Option 2 — Desktop app
+### Option 3 — Windows desktop app
 
-Download the installer for your platform from the [latest release](https://github.com/fox-in-the-box-ai/fox-in-the-box/releases/latest):
+Download the installer from the [latest release](https://github.com/fox-in-the-box-ai/fox-in-the-box/releases/latest): **`fox-in-the-box-setup.exe`** (stable name on tagged releases).
 
-- **Windows** — `fox-in-the-box-x.x.x-setup.exe`
-- **macOS** — `fox-in-the-box-x.x.x-mac.zip`
+There is **no** signed macOS `.dmg` in releases; use **Option 1** on Mac.
 
-### Option 3 — Build from source
+### Option 4 — Build from source
 
 Initialize submodules (Hermes agent and webui are **copied into the image at build time** from `forks/`):
 
@@ -87,12 +105,12 @@ Use this when you want a **new container**, fresh **on-disk data**, and optional
    - **Manual:** `docker rm -f fox-in-the-box`, delete `%APPDATA%\Fox in the box`, and optionally `docker rmi ghcr.io/fox-in-the-box-ai/cloud:stable`.
 4. **Reinstall** from the [latest release](https://github.com/fox-in-the-box-ai/fox-in-the-box/releases/latest) (or run your new installer / dev build), then start the app once so it recreates the container.
 
-### macOS
+### macOS (install script or Docker)
 
-1. Quit the app (menu bar).
-2. `docker rm -f fox-in-the-box`
-3. Delete the app’s user data directory (Electron **userData** for this app — typically under `~/Library/Application Support/` for the product name), and remove `~/Library/Caches/` entries for the app if you want caches cleared too.
-4. Optionally `docker rmi ghcr.io/fox-in-the-box-ai/cloud:stable`, then reinstall from the release zip.
+1. Stop the stack: `docker stop fox-in-the-box` (or `docker rm -f fox-in-the-box`).
+2. If you used **launchd** from the install script: `launchctl unload ~/Library/LaunchAgents/io.foxinthebox.plist` and remove that plist if you no longer want auto-start.
+3. Remove data under your chosen `FOX_DATA_DIR` (default: `~/Library/Application Support/Fox in the Box`).
+4. Optionally `docker rmi ghcr.io/fox-in-the-box-ai/cloud:stable`, then re-run the [install script](#option-1--install-script-linux-and-macos) or the Docker one-liner.
 
 ---
 

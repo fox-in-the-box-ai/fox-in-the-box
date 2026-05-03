@@ -52,7 +52,12 @@ WORKSPACE_DIR="${FOX_WORKSPACE_DIR:-$DEFAULT_WORKSPACE_DIR}"
 # 2. Check / install Docker
 ##############################################################################
 _docker_running() {
-  docker info >/dev/null 2>&1
+  # Honour DOCKER_CMD (e.g. "sudo docker" right after usermod -aG docker)
+  if [[ -n "${DOCKER_CMD:-}" ]]; then
+    $DOCKER_CMD info >/dev/null 2>&1
+  else
+    docker info >/dev/null 2>&1
+  fi
 }
 
 if ! command -v docker &>/dev/null || ! _docker_running; then

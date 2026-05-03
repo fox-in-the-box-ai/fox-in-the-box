@@ -63,12 +63,6 @@ jobs:
           name: fox-windows
           path: release-artifacts/windows
 
-      - name: Download macOS artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: fox-macos
-          path: release-artifacts/macos
-
       - name: Extract release notes from CHANGELOG
         id: changelog
         run: |
@@ -87,6 +81,5 @@ jobs:
           body_path: ${{ steps.changelog.outputs.notes_path }}
           files: |
             release-artifacts/windows/*.exe
-            release-artifacts/macos/*.dmg
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

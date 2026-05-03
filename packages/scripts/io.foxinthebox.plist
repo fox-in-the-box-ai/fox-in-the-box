@@ -16,6 +16,8 @@
     <string>--name</string>
     <string>fox-in-the-box</string>
     <string>--cap-add=NET_ADMIN</string>
+    <string>--device</string>
+    <string>/dev/net/tun</string>
     <string>--sysctl</string>
     <string>net.ipv4.ip_forward=1</string>
     <string>-v</string>

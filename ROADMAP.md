@@ -21,7 +21,7 @@ Goal: working product across all three platforms, clean onboarding, polished UX.
 - HTTPS via Tailscale Serve (PWA-ready)
 
 **Out:**
-- macOS .dmg (no Apple dev cert yet → script only)
+- macOS retail `.dmg` / notarized installer on GitHub Releases (no Apple dev cert yet → **`install.sh`** only, same as Linux)
 - Memos notes app
 - OAuth flows (OpenRouter API key entry is enough)
 - Electron auto-updater (tray menu item links to GitHub Releases page instead)
@@ -72,7 +72,7 @@ Goal: working product across all three platforms, clean onboarding, polished UX.
 
 #### Day 4 — CI/CD + polish
 - [ ] GitHub Actions: `build-container.yml` — build + push to `ghcr.io/fox-in-the-box-ai/cloud:latest` on push to main
-- [ ] GitHub Actions: `build-electron.yml` — build Windows .exe + macOS unsigned .zip, attach to GitHub Release
+- [ ] GitHub Actions: `build-electron.yml` — build Windows `.exe`, attach to GitHub Release (macOS: `install.sh`, not a release artifact)
 - [ ] UX pass on onboarding wizard (look + feel, error states, loading indicators)
 - [ ] README quickstart (30-second install instructions for all three platforms)
 
