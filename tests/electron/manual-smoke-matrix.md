@@ -12,7 +12,7 @@ This matrix validates that desktop users can reach web onboarding in one click.
 1. Docker absent:
    - Launch app.
    - Allow guided Docker setup.
-   - Verify browser opens `http://localhost:8787` without restarting the flow manually.
+   - Verify browser opens `http://127.0.0.1:8787/setup` (Fox setup wizard) without restarting the flow manually.
 2. Docker installed but stopped:
    - Stop Docker Desktop.
    - Launch app and verify daemon wait/recovery flow, then onboarding opens.
@@ -29,5 +29,5 @@ This matrix validates that desktop users can reach web onboarding in one click.
 
 ## One-Click Success Assertion
 
-- First run and subsequent run must open onboarding at `http://localhost:8787` within startup budget.
+- First run and subsequent run must open the Fox setup URL `http://127.0.0.1:8787/setup` within startup budget.
 - Collect `main.log` and diagnostics text for any failure.
