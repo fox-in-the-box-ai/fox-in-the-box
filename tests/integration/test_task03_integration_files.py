@@ -47,6 +47,17 @@ class TestDockerfile(unittest.TestCase):
         self.assertIn("COPY packages/integration/entrypoint.sh", self.df)
         self.assertIn("COPY packages/integration/scripts/", self.df)
 
+    def test_hermes_webui_post_body_patch_applied_at_build(self) -> None:
+        """POST routes must not double-read rfile (see hermes-webui server.py)."""
+        self.assertIn(
+            "patches/hermes-webui-do-post-double-read.patch",
+            self.df,
+        )
+        self.assertRegex(
+            self.df,
+            r"patch\s+-p0.*-d\s+/app/hermes-webui",
+        )
+
     def test_within_container_marker_for_webui(self) -> None:
         self.assertIn("/.within_container", self.df)
 
@@ -84,6 +95,14 @@ class TestSupervisordConf(unittest.TestCase):
     def test_webui_binds_all_interfaces_in_container(self) -> None:
         self.assertIn('HERMES_WEBUI_HOST="0.0.0.0"', self.ini)
         self.assertIn('HERMES_WEBUI_AGENT_DIR="/data/apps/hermes-agent"', self.ini)
+
+
+class TestHermesWebuiPostBodyPatch(unittest.TestCase):
+    def test_patch_file_present(self) -> None:
+        p = REPO_ROOT / "packages/integration/patches/hermes-webui-do-post-double-read.patch"
+        self.assertTrue(p.is_file(), msg="WebUI do_POST double-read patch must exist")
+        text = p.read_text(encoding="utf-8")
+        self.assertIn("read_body", text)
 
 
 class TestEntrypoint(unittest.TestCase):
