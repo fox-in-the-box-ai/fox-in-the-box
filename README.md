@@ -1,5 +1,7 @@
 # Fox in the Box
 
+[![GitHub Sponsors](https://img.shields.io/github/sponsors/bsgdigital?label=Sponsor&logo=githubsponsors&color=ea4aaa)](https://github.com/sponsors/bsgdigital)
+
 > A self-hosted AI assistant that runs entirely on your machine — no subscriptions, no cloud dependencies, no data leaving your control.
 
 Fox in the Box packages a full AI assistant stack into a single Docker container with native desktop apps for Windows and macOS. Bring your own API key and you're up in minutes.
