@@ -282,15 +282,22 @@ async function attemptRecoverWindowsDocker(_run = runCommand, showProgress = nul
       }
       const repairStartedAt = Date.now();
       let heartbeat = null;
+      let postUacHintTimer = null;
       if (showProgress) {
+        postUacHintTimer = setTimeout(() => {
+          showProgress(
+            'If you approved UAC, elevated DISM/WSL is running — a console window may stay minimized with no new text for several minutes.',
+          );
+        }, 5_000);
         heartbeat = setInterval(() => {
           const sec = Math.round((Date.now() - repairStartedAt) / 1000);
           showProgress(`WSL repair still running (elevated DISM/WSL)… ${sec}s`);
-        }, 20_000);
+        }, 10_000);
       }
       try {
         await _run(elevatedRepair, { shell: true, timeout: 10 * 60 * 1000 });
       } finally {
+        if (postUacHintTimer) clearTimeout(postUacHintTimer);
         if (heartbeat) clearInterval(heartbeat);
       }
       recovery.attempted = true;
