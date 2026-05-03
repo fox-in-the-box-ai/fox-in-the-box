@@ -8,6 +8,7 @@ DEFAULTS_DIR="/app/defaults"
 DATA_VERSION_FILE="/data/version.txt"
 APP_VERSION_FILE="/app/version.txt"
 APPS_DIR="/data/apps"
+REPO_SYNC_VERSION_FILE="$APPS_DIR/.repo-sync-version"
 FITB_VERSION=$(cat "$APP_VERSION_FILE" 2>/dev/null || echo "v0.1.0")
 FITB_DEV=${FITB_DEV:-0}  # Set by docker build --build-arg FITB_DEV=1
 
@@ -64,49 +65,98 @@ fi
 if [ "$FITB_DEV" = "1" ]; then
     echo "[entrypoint] Dev mode — skipping git clone, will use bind-mounted repos"
 else
-    _clone_app() {
+    _sync_app() {
         local APP="$1"
         local DEST="$APPS_DIR/$APP"
-        local NEED_CLONE=1
+        local STAGING="${DEST}.new"
+        local BACKUP="${DEST}.previous"
+        local CLONE_OK=0
 
-        if [ -d "$DEST/.git" ]; then
-            echo "[entrypoint] $APP already present at $DEST — skipping clone."
-            NEED_CLONE=0
-        fi
-
-        if [ "$NEED_CLONE" = "1" ]; then
-            echo "[entrypoint] Cloning $APP @ $FITB_VERSION ..."
-            # Remove any partial clone before retrying
-            rm -rf "$DEST"
-            if ! git clone --depth 1 \
-                    --branch "$FITB_VERSION" \
+        echo "[entrypoint] Syncing $APP @ $FITB_VERSION ..."
+        rm -rf "$STAGING"
+        if git clone --depth 1 \
+                --branch "$FITB_VERSION" \
+                "https://github.com/fox-in-the-box-ai/$APP" \
+                "$STAGING" 2>/dev/null; then
+            CLONE_OK=1
+        else
+            echo "[entrypoint] Tag $FITB_VERSION not found — falling back to default branch ..."
+            if git clone --depth 1 \
                     "https://github.com/fox-in-the-box-ai/$APP" \
-                    "$DEST" 2>/dev/null; then
-                echo "[entrypoint] Tag $FITB_VERSION not found — falling back to default branch ..."
-                if ! git clone --depth 1 \
-                        "https://github.com/fox-in-the-box-ai/$APP" \
-                        "$DEST"; then
-                    echo "[entrypoint] ERROR: Failed to clone $APP. Check network and try again."
-                    echo "[entrypoint] If offline, manually place a git repo at $DEST and restart."
-                    exit 1
-                fi
+                    "$STAGING"; then
+                CLONE_OK=1
             fi
         fi
 
-        # Always ensure dependencies are installed. Existing repos may come from a partial/old setup.
+        if [ "$CLONE_OK" != "1" ]; then
+            echo "[entrypoint] ERROR: Failed to sync $APP. Check network and try again."
+            if [ -d "$DEST/.git" ]; then
+                echo "[entrypoint] Using existing local copy at $DEST."
+            else
+                echo "[entrypoint] No existing copy found for $APP — cannot continue."
+                exit 1
+            fi
+        else
+            # Atomic-ish swap: always move existing repo away, then promote staged clone.
+            rm -rf "$BACKUP"
+            if [ -d "$DEST" ]; then
+                mv "$DEST" "$BACKUP"
+            fi
+            mv "$STAGING" "$DEST"
+        fi
+
         echo "[entrypoint] Installing $APP ..."
+        local INSTALL_OK=1
         if [ -f "$DEST/setup.py" ] || [ -f "$DEST/pyproject.toml" ]; then
-            pip install -e "$DEST" --quiet --no-cache-dir
+            if ! pip install -e "$DEST" --quiet --no-cache-dir; then
+                INSTALL_OK=0
+            fi
         elif [ -f "$DEST/requirements.txt" ]; then
-            pip install -r "$DEST/requirements.txt" --quiet --no-cache-dir
+            if ! pip install -r "$DEST/requirements.txt" --quiet --no-cache-dir; then
+                INSTALL_OK=0
+            fi
         else
             echo "[entrypoint] WARNING: No installable package or requirements.txt in $APP — skipping pip install."
         fi
+
+        if [ "$INSTALL_OK" != "1" ]; then
+            echo "[entrypoint] ERROR: Dependency install for $APP failed."
+            if [ -d "$BACKUP" ]; then
+                echo "[entrypoint] Restoring previous $APP from backup."
+                rm -rf "$DEST"
+                mv "$BACKUP" "$DEST"
+            fi
+            exit 1
+        fi
+
+        # Cleanup backup only after successful install.
+        rm -rf "$BACKUP"
         echo "[entrypoint] $APP ready."
     }
 
-    _clone_app hermes-agent
-    _clone_app hermes-webui
+    SHOULD_SYNC_REPOS=0
+    SYNC_REASON=""
+    SYNC_VERSION=$(cat "$REPO_SYNC_VERSION_FILE" 2>/dev/null || true)
+    if [ -z "$SYNC_VERSION" ]; then
+        SHOULD_SYNC_REPOS=1
+        SYNC_REASON="first repo sync"
+    elif [ "$SYNC_VERSION" != "$FITB_VERSION" ]; then
+        SHOULD_SYNC_REPOS=1
+        SYNC_REASON="version changed ($SYNC_VERSION -> $FITB_VERSION)"
+    elif [ ! -d "$APPS_DIR/hermes-agent/.git" ] || [ ! -d "$APPS_DIR/hermes-webui/.git" ]; then
+        SHOULD_SYNC_REPOS=1
+        SYNC_REASON="repo missing or incomplete"
+    fi
+
+    if [ "$SHOULD_SYNC_REPOS" = "1" ]; then
+        echo "[entrypoint] Repo sync required: $SYNC_REASON"
+        _sync_app hermes-agent
+        _sync_app hermes-webui
+        echo "$FITB_VERSION" > "$REPO_SYNC_VERSION_FILE"
+        echo "[entrypoint] Repo sync marker updated to $FITB_VERSION."
+    else
+        echo "[entrypoint] Repo sync not required (marker=$SYNC_VERSION)."
+    fi
 fi
 
 # ── 2b. Dev mode initialization (if FITB_DEV=1) ─────────────────────────────────
