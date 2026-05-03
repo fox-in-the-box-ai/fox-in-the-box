@@ -140,11 +140,12 @@ async function ensureDockerWindows(deps) {
       err.message.includes('No applicable upgrade') ||
       err.message.includes('0x8A150101')
     )) return;
-    throw new Error(
+    const msg =
       'Could not install Docker Desktop automatically.\n\n' +
       'Please install it manually from https://docker.com/products/docker-desktop,\n' +
-      'then reopen Fox in the Box.'
-    );
+      'then reopen Fox in the Box.';
+    if (deps.showError) { deps.showError(msg); return; }
+    throw new Error(msg);
   });
 
   showProgress('Waiting for Docker to start…');
