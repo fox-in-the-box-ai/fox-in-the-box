@@ -37,3 +37,7 @@ Smoke (this agent): `docker run -d -p 127.0.0.1:9876:8787 fitb:local`, wait ~20s
 ### Notes
 
 - If HTTP 500 persists after `tailscaled` stays up, inspect `/data/logs/hermes-gateway.err` in the container for gateway tracebacks.
+
+### Full clean reinstall (Windows desktop)
+
+- Documented in [README.md](README.md) section **Full reset (desktop app)**; helper script [packages/scripts/clean-windows-desktop.ps1](packages/scripts/clean-windows-desktop.ps1).
