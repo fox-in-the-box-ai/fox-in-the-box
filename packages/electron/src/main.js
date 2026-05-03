@@ -15,6 +15,7 @@ const {
   runCommandVerbose: _runCommandVerbose,
 } = require('./startup');
 const { runStartup, ensureContainerHealthy, StartupPhaseError } = require('./startup-orchestrator');
+const { registerWindowsRunOnceResume } = require('./windows-run-once');
 
 const APP_URL = 'http://localhost:8787';
 const APP_ICON = process.platform === 'win32'
@@ -318,6 +319,7 @@ async function showDaemonRecoveryRequired(platform) {
   closeProgress();
 
   if (platform === 'win32') {
+    await registerWindowsRunOnceResume(app.getPath('exe'));
     const { response } = await dialog.showMessageBox({
       type: 'warning',
       title: 'Restart required',
