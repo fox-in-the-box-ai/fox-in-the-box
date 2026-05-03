@@ -47,6 +47,15 @@ mac:
 dmg:
   sign: false   # signing is done via notarytool after build
 
+# Linux desktop installers (snap/AppImage) are not shipped; install.sh + Docker is the path.
+# Unpacked "dir" is enough to validate the app on Linux. Scoped package "name" still needs
+# explicit executableName for a sane binary in dist/linux-unpacked.
+linux:
+  category: Utility
+  executableName: fox-in-the-box
+  target:
+    - dir
+
 publish:
   provider: github
   owner: fox-in-the-box-ai
