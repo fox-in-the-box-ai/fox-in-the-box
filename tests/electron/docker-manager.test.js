@@ -177,6 +177,23 @@ test('extractSetupStatusFromLogs parses cloning progress and install messages', 
   expect(parsed.status).toBe('Installing hermes-agent dependencies…');
 });
 
+test('extractSetupStatusFromLogs treats Syncing like Cloning', () => {
+  const lines = `
+2026-05-03 15:12:16.621 | [entrypoint] Syncing hermes-webui @ v0.1.0 ...
+`;
+  const parsed = extractSetupStatusFromLogs(lines, { currentApp: null });
+  expect(parsed.currentApp).toBe('hermes-webui');
+  expect(parsed.status).toBe('Cloning hermes-webui repository…');
+});
+
+test('extractSetupStatusFromLogs shows image link phase', () => {
+  const lines = `
+2026-05-03 15:12:16.621 | [entrypoint] Hermes apps from container image (symlinks under /data/apps)
+`;
+  const parsed = extractSetupStatusFromLogs(lines, { currentApp: null });
+  expect(parsed.status).toBe('Linking Hermes apps from image…');
+});
+
 test('extractSetupStatusFromLogs handles branch fallback message', () => {
   const lines = `
 2026-05-03 15:12:16.621 | [entrypoint] Cloning hermes-webui @ v0.1.0 ...

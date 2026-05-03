@@ -41,6 +41,8 @@ class TestDockerfile(unittest.TestCase):
 
     def test_supervisor_and_paths_copied(self) -> None:
         self.assertIn("pip install --no-cache-dir supervisor", self.df)
+        self.assertIn("COPY forks/hermes-agent", self.df)
+        self.assertIn("COPY forks/hermes-webui", self.df)
         self.assertIn("COPY packages/integration/supervisord.conf", self.df)
         self.assertIn("COPY packages/integration/entrypoint.sh", self.df)
         self.assertIn("COPY packages/integration/scripts/", self.df)
@@ -74,7 +76,7 @@ class TestSupervisordConf(unittest.TestCase):
                 self.assertIn("user=foxinthebox", block)
 
     def test_data_paths(self) -> None:
-        self.assertIn("command=/app/qdrant/qdrant --storage-path /data/data/mem0", self.ini)
+        self.assertIn("command=/app/qdrant/qdrant --config-path /data/config/qdrant.yaml", self.ini)
         self.assertIn("tailscaled --state=/data/data/tailscale/tailscaled.state", self.ini)
         self.assertIn('PYTHONPATH="/data/apps/hermes-agent"', self.ini)
         self.assertIn('PYTHONPATH="/data/apps/hermes-webui"', self.ini)
@@ -88,15 +90,16 @@ class TestEntrypoint(unittest.TestCase):
     def setUp(self) -> None:
         self.sh = _read("packages/integration/entrypoint.sh")
 
-    def test_clone_and_supervisord_exec(self) -> None:
+    def test_symlink_hermes_and_supervisord_exec(self) -> None:
         self.assertIn("set -euo pipefail", self.sh)
         self.assertIn("/data/apps", self.sh)
-        self.assertIn("fox-in-the-box-ai", self.sh)
+        self.assertIn("_link_hermes_app", self.sh)
+        self.assertIn("/app/hermes-agent", self.sh)
         self.assertIn("exec /usr/local/bin/supervisord", self.sh)
 
-    def test_install_hermes_webui_via_requirements_when_no_pyproject(self) -> None:
+    def test_dev_mode_pip_installs_webui_when_present(self) -> None:
         self.assertIn("requirements.txt", self.sh)
-        self.assertIn("install_app_dependencies", self.sh)
+        self.assertIn("hermes-webui", self.sh)
 
 
 if __name__ == "__main__":
