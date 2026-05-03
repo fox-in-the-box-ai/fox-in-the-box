@@ -1,0 +1,2 @@
+# Linux container entrypoints and scripts must use LF (CRLF breaks shebang in Docker).
+packages/integration/**/*.sh text eol=lf

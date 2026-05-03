@@ -42,7 +42,14 @@ function extractSetupStatusFromLogs(logText, context = {}) {
       continue;
     }
 
-    const cloneMatch = line.match(/\[entrypoint\]\s+Cloning\s+(hermes-agent|hermes-webui)/i);
+    if (line.includes('[entrypoint] Hermes apps from container image')) {
+      latestStatus = 'Linking Hermes apps from image…';
+      continue;
+    }
+
+    const cloneMatch = line.match(
+      /\[entrypoint\]\s+(?:Cloning|Syncing)\s+(hermes-agent|hermes-webui)/i,
+    );
     if (cloneMatch) {
       currentApp = cloneMatch[1];
       latestStatus = `Cloning ${currentApp} repository…`;
@@ -57,6 +64,11 @@ function extractSetupStatusFromLogs(logText, context = {}) {
     const updatingMatch = line.match(/Updating files:\s+(\d+)%/i);
     if (updatingMatch && currentApp) {
       latestStatus = `Cloning ${currentApp} repository… ${updatingMatch[1]}%`;
+      continue;
+    }
+
+    if (line.includes('[entrypoint] Installing Hermes packages from bind mounts')) {
+      latestStatus = 'Installing Hermes from dev mounts…';
       continue;
     }
 

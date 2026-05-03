@@ -8,9 +8,8 @@ DEFAULTS_DIR="/app/defaults"
 DATA_VERSION_FILE="/data/version.txt"
 APP_VERSION_FILE="/app/version.txt"
 APPS_DIR="/data/apps"
-REPO_SYNC_VERSION_FILE="$APPS_DIR/.repo-sync-version"
 FITB_VERSION=$(cat "$APP_VERSION_FILE" 2>/dev/null || echo "v0.1.0")
-FITB_DEV=${FITB_DEV:-0}  # Set by docker build --build-arg FITB_DEV=1
+FITB_DEV=${FITB_DEV:-0}  # 1 = bind mounts at /root/.hermes/* (see dev-init.sh)
 
 # ── 1. First-run detection ─────────────────────────────────────────────────────
 if [ ! -f "$ONBOARDING_FLAG" ]; then
@@ -58,115 +57,54 @@ else
     fi
 fi
 
-# ── 2. App code bootstrap (git-in-volume model) ────────────────────────────────
-# hermes-agent and hermes-webui live as git repos on the /data volume.
-# Clone on first run, skip if already present. Updates happen separately.
-# If FITB_DEV=1, skip cloning and use bind-mounted repos instead.
-if [ "$FITB_DEV" = "1" ]; then
-    echo "[entrypoint] Dev mode — skipping git clone, will use bind-mounted repos"
-else
-    _sync_app() {
-        local APP="$1"
-        local DEST="$APPS_DIR/$APP"
-        local STAGING="${DEST}.new"
-        local BACKUP="${DEST}.previous"
-        local CLONE_OK=0
+# ── 2. Hermes app trees under /data/apps (supervisord paths) ───────────────────
+# Production: repos are baked into the image at /app/hermes-* ; entrypoint places
+# symlinks at /data/apps/hermes-* so the /data volume stays user state only.
+# Dev (FITB_DEV=1): symlinks point at bind mounts under /root/.hermes/
+_link_hermes_app() {
+    local name="$1"
+    local src="$2"
+    local dest="$APPS_DIR/$name"
 
-        echo "[entrypoint] Syncing $APP @ $FITB_VERSION ..."
-        rm -rf "$STAGING"
-        if git clone --depth 1 \
-                --branch "$FITB_VERSION" \
-                "https://github.com/fox-in-the-box-ai/$APP" \
-                "$STAGING" 2>/dev/null; then
-            CLONE_OK=1
-        else
-            echo "[entrypoint] Tag $FITB_VERSION not found — falling back to default branch ..."
-            if git clone --depth 1 \
-                    "https://github.com/fox-in-the-box-ai/$APP" \
-                    "$STAGING"; then
-                CLONE_OK=1
-            fi
-        fi
-
-        if [ "$CLONE_OK" != "1" ]; then
-            echo "[entrypoint] ERROR: Failed to sync $APP. Check network and try again."
-            if [ -d "$DEST/.git" ]; then
-                echo "[entrypoint] Using existing local copy at $DEST."
-            else
-                echo "[entrypoint] No existing copy found for $APP — cannot continue."
-                exit 1
-            fi
-        else
-            # Atomic-ish swap: always move existing repo away, then promote staged clone.
-            rm -rf "$BACKUP"
-            if [ -d "$DEST" ]; then
-                mv "$DEST" "$BACKUP"
-            fi
-            mv "$STAGING" "$DEST"
-        fi
-
-        echo "[entrypoint] Installing $APP ..."
-        local INSTALL_OK=1
-        if [ -f "$DEST/setup.py" ] || [ -f "$DEST/pyproject.toml" ]; then
-            if ! pip install -e "$DEST" --quiet --no-cache-dir; then
-                INSTALL_OK=0
-            fi
-        elif [ -f "$DEST/requirements.txt" ]; then
-            if ! pip install -r "$DEST/requirements.txt" --quiet --no-cache-dir; then
-                INSTALL_OK=0
-            fi
-        else
-            echo "[entrypoint] WARNING: No installable package or requirements.txt in $APP — skipping pip install."
-        fi
-
-        if [ "$INSTALL_OK" != "1" ]; then
-            echo "[entrypoint] ERROR: Dependency install for $APP failed."
-            if [ -d "$BACKUP" ]; then
-                echo "[entrypoint] Restoring previous $APP from backup."
-                rm -rf "$DEST"
-                mv "$BACKUP" "$DEST"
-            fi
-            exit 1
-        fi
-
-        # Cleanup backup only after successful install.
-        rm -rf "$BACKUP"
-        echo "[entrypoint] $APP ready."
-    }
-
-    SHOULD_SYNC_REPOS=0
-    SYNC_REASON=""
-    SYNC_VERSION=$(cat "$REPO_SYNC_VERSION_FILE" 2>/dev/null || true)
-    if [ -z "$SYNC_VERSION" ]; then
-        SHOULD_SYNC_REPOS=1
-        SYNC_REASON="first repo sync"
-    elif [ "$SYNC_VERSION" != "$FITB_VERSION" ]; then
-        SHOULD_SYNC_REPOS=1
-        SYNC_REASON="version changed ($SYNC_VERSION -> $FITB_VERSION)"
-    elif [ ! -d "$APPS_DIR/hermes-agent/.git" ] || [ ! -d "$APPS_DIR/hermes-webui/.git" ]; then
-        SHOULD_SYNC_REPOS=1
-        SYNC_REASON="repo missing or incomplete"
+    mkdir -p "$APPS_DIR"
+    if [ -L "$dest" ] && [ "$(readlink -f "$dest" 2>/dev/null || true)" = "$(readlink -f "$src" 2>/dev/null || true)" ]; then
+        echo "[entrypoint] $name already linked -> $src"
+        return 0
     fi
-
-    if [ "$SHOULD_SYNC_REPOS" = "1" ]; then
-        echo "[entrypoint] Repo sync required: $SYNC_REASON"
-        _sync_app hermes-agent
-        _sync_app hermes-webui
-        echo "$FITB_VERSION" > "$REPO_SYNC_VERSION_FILE"
-        echo "[entrypoint] Repo sync marker updated to $FITB_VERSION."
-    else
-        echo "[entrypoint] Repo sync not required (marker=$SYNC_VERSION)."
+    if [ -e "$dest" ]; then
+        echo "[entrypoint] Replacing $dest with symlink -> $src"
+        rm -rf "$dest"
     fi
-fi
+    ln -sfn "$src" "$dest"
+    echo "[entrypoint] Linked $name -> $src"
+}
 
-# ── 2b. Dev mode initialization (if FITB_DEV=1) ─────────────────────────────────
 if [ "$FITB_DEV" = "1" ]; then
-    echo "[entrypoint] Dev mode detected (FITB_DEV=1) — using bind-mounted repos"
+    echo "[entrypoint] Dev mode — Hermes repos from bind mounts (/root/.hermes/)"
     if [ -x "/app/scripts/dev-init.sh" ]; then
         /app/scripts/dev-init.sh
     else
         echo "[entrypoint] WARNING: /app/scripts/dev-init.sh not found"
     fi
+    _link_hermes_app hermes-agent "/root/.hermes/hermes-agent"
+    _link_hermes_app hermes-webui "/root/.hermes/hermes-webui"
+    echo "[entrypoint] Installing Hermes packages from bind mounts (editable) ..."
+    pip install -e "$APPS_DIR/hermes-agent" --quiet --no-cache-dir
+    if [ -f "$APPS_DIR/hermes-webui/pyproject.toml" ] || [ -f "$APPS_DIR/hermes-webui/setup.py" ]; then
+        pip install -e "$APPS_DIR/hermes-webui" --quiet --no-cache-dir
+    elif [ -f "$APPS_DIR/hermes-webui/requirements.txt" ]; then
+        pip install -r "$APPS_DIR/hermes-webui/requirements.txt" --quiet --no-cache-dir
+    else
+        echo "[entrypoint] WARNING: hermes-webui has no pyproject.toml, setup.py, or requirements.txt — skipping pip."
+    fi
+else
+    echo "[entrypoint] Hermes apps from container image (symlinks under $APPS_DIR)"
+    if [ ! -d "/app/hermes-agent" ] || [ ! -d "/app/hermes-webui" ]; then
+        echo "[entrypoint] ERROR: Baked Hermes trees missing under /app/ — image build is broken."
+        exit 1
+    fi
+    _link_hermes_app hermes-agent "/app/hermes-agent"
+    _link_hermes_app hermes-webui "/app/hermes-webui"
 fi
 
 # ── 3. Version migration ───────────────────────────────────────────────────────
