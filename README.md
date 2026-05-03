@@ -123,8 +123,6 @@ Fox in the Box bundles the following components:
 
 **Container vs. data:** The published Docker image includes Hermes agent and webui source (from the monorepo `forks/` submodules) installed at **build** time. On startup, the entrypoint links them under `/data/apps` so supervisord paths stay stable; the **`/data` volume** holds your config, databases, logs, and Tailscale state — not a fresh `git clone` of Hermes on every first run. Updating Hermes for end users means pulling a **newer image**, not waiting for the container to clone GitHub.
 
-**WebUI POST timeouts (fixed at image build):** A bug in upstream Hermes WebUI caused `do_POST` to read the entire request body before routing, while `handle_post` then tried to read the same body again — the second read blocked until the 30s socket timeout, surfacing as **HTTP 500** on routes such as `POST /api/providers` and `POST /api/session/new`. The integration [Dockerfile](packages/integration/Dockerfile) applies [this patch](packages/integration/patches/hermes-webui-do-post-double-read.patch) during `docker build`. Rebuild or pull an image that includes that step if you still see those symptoms on an older tag.
-
 ---
 
 ## Documentation

@@ -38,11 +38,6 @@ Smoke (this agent): `docker run -d -p 127.0.0.1:9876:8787 fitb:local`, wait ~20s
 
 - If HTTP 500 persists after `tailscaled` stays up, inspect `/data/logs/hermes-gateway.err` in the container for gateway tracebacks.
 
-### Hermes WebUI POST 500 (~30s) — root cause and fix
-
-- **Cause:** Upstream `hermes-webui` `server.py` `do_POST` read the full POST body for every request, then `handle_post` → `read_body` read again; empty socket → **TimeoutError** after **Handler.timeout** (30s) → logged as 500 on `/api/providers`, `/api/session/new`, etc.
-- **Fix in this repo:** [packages/integration/patches/hermes-webui-do-post-double-read.patch](packages/integration/patches/hermes-webui-do-post-double-read.patch) applied in [packages/integration/Dockerfile](packages/integration/Dockerfile) at build time. Upstream `fox-in-the-box-ai/hermes-webui` should merge an equivalent change so the patch can be dropped later.
-
 ### Full clean reinstall (Windows desktop)
 
 - Documented in [README.md](README.md) section **Full reset (desktop app)**; helper script [packages/scripts/clean-windows-desktop.ps1](packages/scripts/clean-windows-desktop.ps1).

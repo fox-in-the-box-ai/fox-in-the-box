@@ -81,15 +81,6 @@ RUN chmod +x /app/scripts/*.sh
 # ── Hermes app source (git submodules — init before build) ─────────────────────
 COPY forks/hermes-agent /app/hermes-agent
 COPY forks/hermes-webui /app/hermes-webui
-# Work around hermes-webui bug: do_POST read the full POST body before routing,
-# then handle_post/read_body tried to read again -> 30s timeout and HTTP 500 on
-# /api/providers, /api/session/new, etc. Upstream should fix; patch at build.
-COPY packages/integration/patches/hermes-webui-do-post-double-read.patch /tmp/webui-do-post.patch
-RUN apt-get update && apt-get install -y --no-install-recommends patch \
-    && patch -p0 --fuzz=0 -d /app/hermes-webui -i /tmp/webui-do-post.patch \
-    && rm -f /tmp/webui-do-post.patch \
-    && apt-get purge -y patch \
-    && rm -rf /var/lib/apt/lists/*
 RUN set -eux; \
     pip install -e /app/hermes-agent --quiet --no-cache-dir; \
     if [ -f /app/hermes-webui/pyproject.toml ] || [ -f /app/hermes-webui/setup.py ]; then \
