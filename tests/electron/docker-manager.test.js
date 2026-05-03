@@ -89,6 +89,25 @@ test('startContainer falls back to homedir path when FOX_DATA_DIR unset', async 
   expect(call.HostConfig.Binds[0]).toMatch(/.*:\/data$/);
 });
 
+test('startContainer passes Tailscale-friendly HostConfig (NET_ADMIN, tun, sysctl)', async () => {
+  delete process.env.FOX_DATA_DIR;
+  const mockContainer = { start: jest.fn().mockResolvedValue({}) };
+  mockDockerInstance.createContainer.mockResolvedValue(mockContainer);
+
+  await docker.startContainer();
+
+  const hc = mockDockerInstance.createContainer.mock.calls[0][0].HostConfig;
+  expect(hc.CapAdd).toEqual(['NET_ADMIN']);
+  expect(hc.Sysctls).toEqual({ 'net.ipv4.ip_forward': '1' });
+  expect(hc.Devices).toEqual([
+    {
+      PathOnHost: '/dev/net/tun',
+      PathInContainer: '/dev/net/tun',
+      CgroupPermissions: 'rwm',
+    },
+  ]);
+});
+
 test('startContainer reuses existing stopped container when present', async () => {
   mockDockerInstance.listContainers.mockResolvedValueOnce([
     { Id: 'abc', State: 'exited', Names: ['/fox-in-the-box'] },
