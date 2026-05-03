@@ -46,9 +46,18 @@ describe('waitForDaemon', () => {
 // ─── findDockerDesktopExe ─────────────────────────────────────────────────────
 
 describe('findDockerDesktopExe', () => {
+  test('returns exe from registry when registry key exists', async () => {
+    const run = jest.fn().mockResolvedValueOnce(
+      '    InstallPath    REG_SZ    C:\\Program Files\\Docker\\Docker'
+    );
+    const result = await findDockerDesktopExe(run);
+    expect(result).toBe('C:\\Program Files\\Docker\\Docker\\Docker Desktop.exe');
+    expect(run).toHaveBeenCalledTimes(1);
+  });
+
   test('returns exe path when first candidate exists', async () => {
     const run = jest.fn()
-      .mockRejectedValueOnce(new Error('not found'))   // where docker — not in PATH
+      .mockRejectedValueOnce(new Error('not found'))   // registry
       .mockResolvedValueOnce('');                       // first candidate found
     const result = await findDockerDesktopExe(run);
     expect(result).toContain('Docker Desktop.exe');
@@ -57,27 +66,41 @@ describe('findDockerDesktopExe', () => {
 
   test('tries second candidate when first is missing', async () => {
     const run = jest.fn()
-      .mockRejectedValueOnce(new Error('not found'))   // where docker
-      .mockRejectedValueOnce(new Error('not found'))   // first candidate missing
+      .mockRejectedValueOnce(new Error('not found'))   // registry
+      .mockRejectedValueOnce(new Error('not found'))   // first candidate
       .mockResolvedValueOnce('');                       // second candidate found
     const result = await findDockerDesktopExe(run);
     expect(result).toContain('Docker Desktop.exe');
     expect(run).toHaveBeenCalledTimes(3);
   });
 
-  test('returns "cli-in-path" when docker is in PATH', async () => {
-    const run = jest.fn().mockResolvedValueOnce('C:\\Program Files\\Docker\\Docker\\resources\\bin\\docker.exe');
+  test('returns "cli-in-path" when docker is in PATH but path does not match pattern', async () => {
+    const run = jest.fn()
+      .mockRejectedValueOnce(new Error('not found'))   // registry
+      .mockRejectedValueOnce(new Error('not found'))   // first candidate
+      .mockRejectedValueOnce(new Error('not found'))   // second candidate
+      .mockResolvedValueOnce('C:\\custom\\docker.exe'); // where docker
     const result = await findDockerDesktopExe(run);
     expect(result).toBe('cli-in-path');
-    expect(run).toHaveBeenCalledTimes(1);
+  });
+
+  test('derives Desktop exe from docker CLI path', async () => {
+    const run = jest.fn()
+      .mockRejectedValueOnce(new Error('not found'))   // registry
+      .mockRejectedValueOnce(new Error('not found'))   // first candidate
+      .mockRejectedValueOnce(new Error('not found'))   // second candidate
+      .mockResolvedValueOnce('C:\\Program Files\\Docker\\Docker\\resources\\bin\\docker.exe');
+    const result = await findDockerDesktopExe(run);
+    expect(result).toBe('C:\\Program Files\\Docker\\Docker\\Docker Desktop.exe');
   });
 
   test('returns "service" when no exe found but Mirantis service exists', async () => {
     const run = jest.fn()
-      .mockRejectedValueOnce(new Error('not found'))   // where docker
+      .mockRejectedValueOnce(new Error('not found'))   // registry
       .mockRejectedValueOnce(new Error('not found'))   // first exe
       .mockRejectedValueOnce(new Error('not found'))   // second exe
-      .mockResolvedValueOnce('SERVICE_NAME: com.docker.service'); // sc query
+      .mockRejectedValueOnce(new Error('not found'))   // where docker
+      .mockResolvedValueOnce('SERVICE_NAME: com.docker.service');
     const result = await findDockerDesktopExe(run);
     expect(result).toBe('service');
   });

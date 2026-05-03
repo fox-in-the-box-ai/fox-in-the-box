@@ -47,11 +47,16 @@ function showProgress(message) {
     resizable: false,
     minimizable: false,
     maximizable: false,
-    closable: false,
+    closable: true,
     alwaysOnTop: true,
     frame: true,
     title: 'Fox in the Box — Setting up',
     webPreferences: { nodeIntegration: false, contextIsolation: true },
+  });
+
+  _progressWin.on('closed', () => {
+    _progressWin = null;
+    app.quit();
   });
 
   const html = `<!DOCTYPE html>

@@ -51,14 +51,20 @@ async function waitForDaemon(
  * @param {Function} [_run] - injectable runCommand for testing
  */
 async function findDockerDesktopExe(_run = runCommand) {
-  // First: check if Docker CLI is already in PATH — if so, daemon just needs starting
-  // (covers all install locations regardless of path)
+  // Check registry for Docker Desktop install path — most reliable
   try {
-    await _run('where docker', { shell: true });
-    return 'cli-in-path';
+    const out = await _run(
+      'reg query "HKLM\\SOFTWARE\\Docker Inc.\\Docker Desktop" /v "InstallPath"',
+      { shell: true }
+    );
+    const match = out.match(/InstallPath\s+REG_SZ\s+(.+)/);
+    if (match) {
+      const exePath = match[1].trim() + '\\Docker Desktop.exe';
+      return exePath;
+    }
   } catch (_) {}
 
-  // Fallback: known Docker Desktop install paths
+  // Fallback: known install paths
   const candidates = [
     '%PROGRAMFILES%\\Docker\\Docker\\Docker Desktop.exe',
     '%LOCALAPPDATA%\\Programs\\Docker\\Docker\\Docker Desktop.exe',
@@ -70,7 +76,16 @@ async function findDockerDesktopExe(_run = runCommand) {
     } catch (_) { /* not here */ }
   }
 
-  // Check for Mirantis Docker Engine (installed as a Windows service, no GUI exe)
+  // Check if docker CLI is in PATH — means Desktop is installed somewhere
+  try {
+    const dockerPath = (await _run('where docker', { shell: true })).trim().split('\n')[0];
+    // Derive Desktop exe: docker.exe is usually in <install>\resources\bin\docker.exe
+    const derived = dockerPath.replace(/\\resources\\bin\\docker\.exe$/i, '\\Docker Desktop.exe');
+    if (derived !== dockerPath) return derived;
+    return 'cli-in-path'; // fallback if path doesn't match pattern
+  } catch (_) {}
+
+  // Check for Mirantis Docker Engine (Windows service)
   try {
     await _run('sc query com.docker.service', { shell: true });
     return 'service';
