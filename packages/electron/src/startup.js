@@ -162,13 +162,10 @@ async function ensureDockerWindows(deps) {
     throw new Error(msg);
   });
 
-  showProgress('Waiting for Docker to start…');
-  const ready = await _waitForDaemon();
-  if (!ready) {
-    showRebootRequired();
-    return { result: 'reboot-required' };
-  }
-  return { result: 'installed' };
+  // Docker Desktop always requires a reboot after fresh install on Windows.
+  // No point polling — show the reboot screen immediately.
+  showRebootRequired();
+  return { result: 'reboot-required' };
 }
 
 module.exports = {
