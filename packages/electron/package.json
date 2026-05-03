@@ -1,8 +1,8 @@
 {
   "name": "@fox-in-the-box/electron",
   "version": "0.1.0",
-  "description": "Fox in the Box desktop app",
-  "author": "Fox in the Box AI",
+  "description": "Fox in the box desktop app",
+  "author": "Vulpy, Inc.",
   "main": "src/main.js",
   "engines": {
     "node": ">=20"
