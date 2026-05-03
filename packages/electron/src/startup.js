@@ -275,8 +275,24 @@ async function attemptRecoverWindowsDocker(_run = runCommand, showProgress = nul
   if (!backendReady) {
     const elevatedRepair = `powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Process cmd -Verb RunAs -Wait -ArgumentList '/c dism /online /enable-feature /featurename:Microsoft-Windows-Subsystem-Linux /all /norestart && dism /online /enable-feature /featurename:VirtualMachinePlatform /all /norestart && wsl --install --no-distribution && wsl --update && wsl --set-default-version 2'"`;
     try {
-      if (showProgress) showProgress('Requesting administrator permission for WSL repair…');
-      await _run(elevatedRepair, { shell: true, timeout: 10 * 60 * 1000 });
+      if (showProgress) {
+        showProgress(
+          'Requesting administrator permission for WSL repair… After UAC, DISM/WSL can take several minutes with no further output.',
+        );
+      }
+      const repairStartedAt = Date.now();
+      let heartbeat = null;
+      if (showProgress) {
+        heartbeat = setInterval(() => {
+          const sec = Math.round((Date.now() - repairStartedAt) / 1000);
+          showProgress(`WSL repair still running (elevated DISM/WSL)… ${sec}s`);
+        }, 20_000);
+      }
+      try {
+        await _run(elevatedRepair, { shell: true, timeout: 10 * 60 * 1000 });
+      } finally {
+        if (heartbeat) clearInterval(heartbeat);
+      }
       recovery.attempted = true;
       recovery.steps.push('Elevated WSL repair');
       backendReady = await waitForBackend(90_000, 2_000);
@@ -376,7 +392,7 @@ async function detectWindowsDockerState(isDaemonRunning, _findExe = findDockerDe
  * @param {Function} deps.runCommand
  * @param {Function} deps.spawnDetached     - (exe) => void
  * @param {Function} deps.showProgress
- * @param {Function} deps.showRebootRequired
+ * @param {Function} deps.showRebootRequired  May return a Promise (must be awaited).
  * @param {Function} [deps._findExe]
  */
 async function ensureDockerWindows(deps) {
@@ -493,7 +509,7 @@ async function ensureDockerWindows(deps) {
       desktopErr.meta = { diagnostics };
       throw desktopErr;
     }
-    showRebootRequired();
+    await Promise.resolve(showRebootRequired());
     return { result: 'reboot-required' };
   }
 
@@ -520,7 +536,7 @@ async function ensureDockerWindows(deps) {
 
   // Docker Desktop always requires a reboot after fresh install on Windows.
   // No point polling — show the reboot screen immediately.
-  showRebootRequired();
+  await Promise.resolve(showRebootRequired());
   return { result: 'reboot-required' };
 }
 
