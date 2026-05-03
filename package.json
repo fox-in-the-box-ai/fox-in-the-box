@@ -9,6 +9,7 @@
   },
   "packageManager": "pnpm@9.0.0",
   "scripts": {
+    "postinstall": "node scripts/link-electron-desktop-deps.mjs",
     "install:all": "pnpm install --recursive",
     "build": "pnpm --recursive run build",
     "build:docker": "docker build -f packages/integration/Dockerfile -t fox-in-the-box:$(cat VERSION) .",
