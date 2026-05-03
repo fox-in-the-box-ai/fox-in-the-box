@@ -139,7 +139,8 @@ chown -R foxinthebox:foxinthebox \
     /data/data/memos \
     /data/cache \
     /data/logs
-# /data/run is kept root-owned so supervisord can write its pidfile.
+# /data/run is kept root-owned (reserved for future use; supervisord pid/socket are
+# under /run/fitb so bind-mounted /data from Docker Desktop does not break AF_UNIX).
 # /data/data/tailscale is kept root-owned so tailscaled can write state.
 chown root:root /data/run /data/data/tailscale
 
@@ -191,6 +192,10 @@ fi
 # runtime so supervisord always starts cleanly.
 SUPERVISORD_CONF="/etc/supervisor/supervisord.conf"
 sed -i "s|__BRAVE_API_KEY__|${BRAVE_API_KEY:-}|g" "$SUPERVISORD_CONF"
+
+# ── 6c. Supervisord RPC socket directory (must not be on a host bind-mounted /data)
+mkdir -p /run/fitb
+chmod 755 /run/fitb
 
 # ── 7. Hand off to supervisord ─────────────────────────────────────────────────
 echo "[entrypoint] Starting supervisord ..."
