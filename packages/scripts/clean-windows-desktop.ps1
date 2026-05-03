@@ -27,7 +27,9 @@ param(
   [switch] $RemoveFoxintheboxDir
 )
 
-$ErrorActionPreference = 'Stop'
+# Native `docker` writes to stderr even for benign cases (e.g. missing container).
+# Do not use Stop globally or PowerShell treats that as a terminating error.
+$ErrorActionPreference = 'Continue'
 $containerName = 'fox-in-the-box'
 $imageRef = 'ghcr.io/fox-in-the-box-ai/cloud:stable'
 
@@ -39,14 +41,14 @@ Write-Host 'Ensure the Fox in the box app is fully quit (system tray).' -Foregro
 Write-Host ''
 
 if ($PSCmdlet.ShouldProcess($containerName, 'docker rm -f')) {
-  docker rm -f $containerName 2>$null
+  docker rm -f $containerName 2>&1 | Out-Null
   if ($LASTEXITCODE -eq 0) { Write-Host "Removed container: $containerName" }
   else { Write-Host "Container $containerName not running or already removed." }
 }
 
 if ($RemoveImage) {
   if ($PSCmdlet.ShouldProcess($imageRef, 'docker rmi')) {
-    docker rmi $imageRef 2>$null
+    docker rmi $imageRef 2>&1 | Out-Null
     if ($LASTEXITCODE -eq 0) { Write-Host "Removed image: $imageRef" }
     else { Write-Host "Image $imageRef not present or in use." }
   }
@@ -54,7 +56,7 @@ if ($RemoveImage) {
 
 if (Test-Path -LiteralPath $electronData) {
   if ($PSCmdlet.ShouldProcess($electronData, 'Remove-Item -Recurse -Force')) {
-    Remove-Item -LiteralPath $electronData -Recurse -Force
+    Remove-Item -LiteralPath $electronData -Recurse -Force -ErrorAction Stop
     Write-Host "Removed Electron user data: $electronData"
   }
 }
@@ -66,7 +68,7 @@ if ($RemoveFoxintheboxDir) {
   $legacy = Join-Path $env:USERPROFILE '.foxinthebox'
   if (Test-Path -LiteralPath $legacy) {
     if ($PSCmdlet.ShouldProcess($legacy, 'Remove-Item -Recurse -Force')) {
-      Remove-Item -LiteralPath $legacy -Recurse -Force
+      Remove-Item -LiteralPath $legacy -Recurse -Force -ErrorAction Stop
       Write-Host "Removed: $legacy"
     }
   }
