@@ -202,8 +202,8 @@ function spawnDetached(exe) {
 async function ensureDockerWindows() {
   await _ensureDockerWindows({
     isDaemonRunning:     () => docker.isDaemonRunning(),
-    waitForDaemon:       () => _waitForDaemon(() => docker.isDaemonRunning(), 90_000),
-    runCommand:          require('./startup').runCommand,
+    waitForDaemon:       (ms, sp) => _waitForDaemon(() => docker.isDaemonRunning(), ms || 90_000, 3_000, Date.now, (t) => new Promise(r => setTimeout(r, t)), sp || showProgress),
+    runCommand:          (cmd, opts) => require('./startup').runCommandVerbose(cmd, opts, showProgress),
     spawnDetached,
     showProgress,
     showRebootRequired,

@@ -7,7 +7,7 @@
  * so they can be unit-tested without Electron or a real Docker daemon.
  */
 
-const { exec, spawn } = require('child_process');
+const { exec, execFile, spawn } = require('child_process');
 const log = require('electron-log');
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -22,25 +22,61 @@ function runCommand(cmd, opts = {}) {
 }
 
 /**
+ * Run a command and stream stdout/stderr lines to showProgress.
+ * Resolves with full stdout, rejects on non-zero exit.
+ */
+function runCommandVerbose(cmd, opts = {}, showProgress = null) {
+  return new Promise((resolve, reject) => {
+    const child = exec(cmd, { ...opts, windowsHide: true });
+    let stdout = '';
+    let lastLine = '';
+
+    const onData = (data) => {
+      stdout += data;
+      const lines = data.toString().split(/\r?\n/).filter(l => l.trim());
+      if (lines.length && showProgress) {
+        lastLine = lines[lines.length - 1].trim();
+        // Trim winget progress bars and long lines
+        const display = lastLine.replace(/[█▌▐▓░]+/g, '').trim().slice(0, 80);
+        if (display) showProgress(display);
+      }
+    };
+
+    child.stdout && child.stdout.on('data', onData);
+    child.stderr && child.stderr.on('data', onData);
+
+    child.on('close', (code) => {
+      if (code !== 0) reject(new Error(lastLine || `exited with code ${code}`));
+      else resolve(stdout);
+    });
+  });
+}
+
+/**
  * Poll until the Docker daemon responds, up to timeoutMs.
  * Returns true if daemon came up, false on timeout.
  *
  * @param {Function} isDaemonRunning - injectable for testing
  * @param {number}   timeoutMs
  * @param {number}   intervalMs
- * @param {Function} [_now]   - injectable clock (Date.now) for testing
- * @param {Function} [_sleep] - injectable sleep for testing
+ * @param {Function} [_now]         - injectable clock (Date.now) for testing
+ * @param {Function} [_sleep]       - injectable sleep for testing
+ * @param {Function} [showProgress] - optional progress callback for elapsed time
  */
 async function waitForDaemon(
   isDaemonRunning,
   timeoutMs = 120_000,
   intervalMs = 3_000,
   _now   = () => Date.now(),
-  _sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+  _sleep = (ms) => new Promise((r) => setTimeout(r, ms)),
+  showProgress = null
 ) {
   const deadline = _now() + timeoutMs;
+  const start = _now();
   while (_now() < deadline) {
     if (await isDaemonRunning()) return true;
+    const elapsed = Math.round((_now() - start) / 1000);
+    if (showProgress) showProgress(`Starting Docker Desktop… ${elapsed}s`);
     await _sleep(intervalMs);
   }
   return false;
@@ -148,10 +184,9 @@ async function ensureDockerWindows(deps) {
     } else if (state.exe) {
       spawnDetached(state.exe);
     } else {
-      // Docker in PATH but Desktop exe not at known path — try starting via Start Menu
       await _run('start "" "Docker Desktop"', { shell: true }).catch(() => {});
     }
-    const came_up = await _waitForDaemon(180_000);
+    const came_up = await _waitForDaemon(180_000, showProgress);
     if (came_up) return { result: 'started' };
     showRebootRequired();
     return { result: 'reboot-required' };
@@ -161,7 +196,7 @@ async function ensureDockerWindows(deps) {
   showProgress('Docker not found — installing Docker Desktop…');
   await _run(
     'winget install --id Docker.DockerDesktop --silent --accept-source-agreements --accept-package-agreements',
-    { shell: true, timeout: 300_000 }
+    { shell: true, timeout: 300_000 },
   ).catch((err) => {
     // winget exits non-zero when already installed — not an error
     if (err.message && (
@@ -185,6 +220,7 @@ async function ensureDockerWindows(deps) {
 
 module.exports = {
   runCommand,
+  runCommandVerbose,
   waitForDaemon,
   findDockerDesktopExe,
   detectWindowsDockerState,
