@@ -84,7 +84,11 @@ function showProgress(message) {
 }
 
 function closeProgress() {
-  if (_progressWin) { _progressWin.destroy(); _progressWin = null; }
+  if (_progressWin) {
+    _progressWin.removeAllListeners('closed');
+    _progressWin.destroy();
+    _progressWin = null;
+  }
 }
 
 /**
