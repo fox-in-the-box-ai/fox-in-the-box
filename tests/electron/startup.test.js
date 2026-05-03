@@ -10,6 +10,7 @@ const {
   findDockerDesktopExe,
   detectWindowsDockerState,
   ensureDockerWindows,
+  diagnoseWindowsDocker,
 } = require('../../packages/electron/src/startup');
 
 // ─── waitForDaemon ────────────────────────────────────────────────────────────
@@ -182,6 +183,36 @@ function makeDeps(overrides = {}) {
     ...overrides,
   };
 }
+
+describe('diagnoseWindowsDocker', () => {
+  test('retries wsl -l -v when Desktop is running until docker-desktop appears', async () => {
+    jest.useFakeTimers();
+    try {
+      const wslNo = '  NAME      STATE   VERSION\n* Ubuntu    Running 2\n';
+      const wslYes = `${wslNo}  docker-desktop Stopped 2\n`;
+      let wslCalls = 0;
+      const run = jest.fn(async (cmd) => {
+        const c = String(cmd);
+        if (c.includes('tasklist')) return 'Docker Desktop.exe';
+        if (c.includes('sc query com.docker')) return 'STATE : 4  RUNNING';
+        if (c.includes('wsl --status')) return 'Default Version: 2';
+        if (c.includes('wsl -l -v')) {
+          wslCalls++;
+          return wslCalls >= 2 ? wslYes : wslNo;
+        }
+        if (c.includes('docker context')) return 'desktop-linux';
+        throw new Error(`unexpected cmd: ${c}`);
+      });
+      const pending = diagnoseWindowsDocker(run);
+      await jest.runAllTimersAsync();
+      const d = await pending;
+      expect(d.issueCode).toBe('DAEMON_NOT_READY');
+      expect(wslCalls).toBeGreaterThanOrEqual(2);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+});
 
 describe('ensureDockerWindows', () => {
   test('returns "already-running" when daemon is up from the start', async () => {
