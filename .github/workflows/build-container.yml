@@ -8,6 +8,8 @@ on:
   pull_request:
     branches:
       - main
+  # Manual rebuild (uses submodules at the checked-out ref — bump forks/ in main first).
+  workflow_dispatch:
 
 jobs:
   build-and-push:
@@ -60,7 +62,7 @@ jobs:
           docker push ghcr.io/fox-in-the-box-ai/cloud:${{ steps.meta.outputs.tag }}
 
       - name: Tag and push :stable
-        if: github.event_name == 'push'
+        if: github.event_name != 'pull_request'
         run: |
           docker tag ghcr.io/fox-in-the-box-ai/cloud:latest ghcr.io/fox-in-the-box-ai/cloud:stable
           docker push ghcr.io/fox-in-the-box-ai/cloud:stable
