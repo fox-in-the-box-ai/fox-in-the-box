@@ -166,29 +166,24 @@ describe('ensureDockerWindows', () => {
     expect(result).toEqual({ result: 'reboot-required' });
   });
 
-  test('runs winget install when nothing is found', async () => {
+  test('runs winget install and immediately shows reboot screen', async () => {
     const deps = makeDeps();
     const result = await ensureDockerWindows(deps);
     expect(deps.runCommand).toHaveBeenCalledWith(
       expect.stringContaining('Docker.DockerDesktop'),
       expect.objectContaining({ shell: true })
     );
-    expect(result).toEqual({ result: 'installed' });
-  });
-
-  test('shows reboot screen after install when daemon never starts', async () => {
-    const deps = makeDeps({ waitForDaemon: jest.fn().mockResolvedValue(false) });
-    const result = await ensureDockerWindows(deps);
     expect(deps.showRebootRequired).toHaveBeenCalledTimes(1);
     expect(result).toEqual({ result: 'reboot-required' });
   });
 
-  test('does not throw when winget reports already installed', async () => {
+  test('shows reboot screen after install even when winget reports already installed', async () => {
     const deps = makeDeps({
       runCommand: jest.fn().mockRejectedValue(new Error('already installed')),
     });
     const result = await ensureDockerWindows(deps);
-    expect(result).toEqual({ result: 'installed' });
+    expect(deps.showRebootRequired).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({ result: 'reboot-required' });
   });
 
   test('throws user-friendly error when winget fails', async () => {
