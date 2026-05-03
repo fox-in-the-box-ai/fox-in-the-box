@@ -356,7 +356,7 @@ async function getDiagnostics() {
 }
 
 function monitorContainerSetupLogs(showProgress, {
-  pollIntervalMs = 1500,
+  pollIntervalMs = 1_000,
   tailLines = 400,
 } = {}) {
   if (typeof showProgress !== 'function') return () => {};

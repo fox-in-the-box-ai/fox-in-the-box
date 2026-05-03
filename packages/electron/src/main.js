@@ -247,7 +247,7 @@ async function ensureDockerWindows(progressCb = showProgress) {
     waitForDaemon: (ms, sp) => _waitForDaemon(
       () => docker.isDaemonRunning(),
       ms || 90_000,
-      3_000,
+      1_000,
       Date.now,
       (t) => new Promise((r) => setTimeout(r, t)),
       sp || progressCb
@@ -446,7 +446,7 @@ async function main() {
       waitForDaemon: (ms, sp) => _waitForDaemon(
         () => docker.isDaemonRunning(),
         ms || 180_000,
-        3_000,
+        1_000,
         Date.now,
         (t) => new Promise((r) => setTimeout(r, t)),
         sp || showProgress
