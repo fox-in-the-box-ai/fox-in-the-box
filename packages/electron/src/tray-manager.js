@@ -14,6 +14,7 @@ const APP_URL   = 'http://localhost:8787';
 let tray       = null;
 let isRunning  = false;
 let startFlow  = null;
+let openApp    = null;
 
 function setRunning(state) {
   isRunning = state;
@@ -28,7 +29,10 @@ function buildMenu() {
     { type: 'separator' },
     {
       label: 'Open Fox',
-      click: () => shell.openExternal(APP_URL),
+      click: () => {
+        if (openApp) openApp();
+        else shell.openExternal(APP_URL);
+      },
     },
     {
       label: 'Restart Fox',
@@ -90,6 +94,7 @@ function createTray(running, options = {}) {
   tray      = new Tray(ICON_PATH);
   isRunning = running;
   startFlow = options.startFlow || null;
+  openApp = options.openApp || null;
 
   tray.setToolTip('Fox in the box');
   buildMenu();
