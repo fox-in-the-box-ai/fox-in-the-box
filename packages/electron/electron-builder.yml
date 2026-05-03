@@ -36,6 +36,9 @@ nsis:
   deleteAppDataOnUninstall: false
   uninstallDisplayName: Fox in the box
   shortcutName: Fox in the box
+  # Explicit icons — Start menu / Add/Remove can show the default Electron icon if these are omitted.
+  installerIcon: assets/icon.ico
+  uninstallerIcon: assets/icon.ico
   include: build/installer.nsh
 
 mac:

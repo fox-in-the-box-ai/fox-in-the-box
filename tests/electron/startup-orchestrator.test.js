@@ -29,7 +29,7 @@ function makeDeps(overrides = {}) {
 }
 
 describe('runStartup', () => {
-  test('runs through all phases and opens onboarding', async () => {
+  test('runs through all phases and opens setup wizard URL', async () => {
     const deps = makeDeps();
     const result = await runStartup(deps);
 

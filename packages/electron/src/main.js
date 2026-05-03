@@ -16,8 +16,7 @@ const {
 } = require('./startup');
 const { runStartup, ensureContainerHealthy, StartupPhaseError } = require('./startup-orchestrator');
 const { registerWindowsRunOnceResume } = require('./windows-run-once');
-
-const APP_URL = 'http://localhost:8787';
+const { APP_SETUP_URL, APP_HOME_URL } = require('./app-urls');
 const APP_ICON = process.platform === 'win32'
   ? path.join(__dirname, '..', 'assets', 'icon.ico')
   : path.join(__dirname, '..', 'assets', 'icon.png');
@@ -397,7 +396,7 @@ async function startFromTray() {
       docker,
       waitUntilHealthy,
       showProgress,
-      openOnboarding: () => shell.openExternal(APP_URL),
+      openOnboarding: () => shell.openExternal(APP_SETUP_URL),
     });
   } finally {
     closeProgress();
@@ -455,7 +454,7 @@ async function main() {
       ),
       showProgress,
       closeProgress,
-      openOnboarding: () => shell.openExternal(APP_URL),
+      openOnboarding: () => shell.openExternal(APP_SETUP_URL),
       onDaemonNotReady: ({ platform }) => showDaemonRecoveryRequired(platform),
       platform: process.platform,
     });
@@ -468,7 +467,10 @@ async function main() {
     return;
   }
 
-  createTray(true, { startFlow: startFromTray });
+  createTray(true, {
+    startFlow: startFromTray,
+    openApp: () => shell.openExternal(APP_HOME_URL),
+  });
   setRunning(true);
 
   updater.init(null);
