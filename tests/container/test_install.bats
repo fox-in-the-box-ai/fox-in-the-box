@@ -191,6 +191,32 @@ SCRIPT
 }
 
 # ---------------------------------------------------------------------------
+# Test 5c — curl|bash: stdin is not the keyboard; FOX_ACCESS_MODE when no tty prompt
+# ---------------------------------------------------------------------------
+@test "access-mode prompt uses FOX_ACCESS_MODE when /dev/tty is unusable" {
+  # setsid(1) drops the controlling terminal so read </dev/tty fails quickly
+  # (mirrors headless / broken tty); matches install.sh fallback branch.
+  if ! command -v setsid >/dev/null 2>&1; then
+    skip "setsid not available"
+  fi
+  run setsid env FOX_ACCESS_MODE=3 bash -c '
+    set -euo pipefail
+    if [[ -t 0 ]]; then echo "unexpected tty"; exit 2; fi
+    if ! { read -rp "Enter: " ACCESS_MODE < /dev/tty; } 2>/dev/null; then
+      if [[ -n "${FOX_ACCESS_MODE:-}" ]]; then
+        ACCESS_MODE="$FOX_ACCESS_MODE"
+      else
+        ACCESS_MODE="1"
+      fi
+    fi
+    ACCESS_MODE="${ACCESS_MODE:-1}"
+    echo "ACCESS_MODE=$ACCESS_MODE"
+  ' </dev/null
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"ACCESS_MODE=3"* ]]
+}
+
+# ---------------------------------------------------------------------------
 # Test 6 — Docker install failure exits 1 with error message
 # ---------------------------------------------------------------------------
 @test "exits 1 with error when Docker install script fails" {
