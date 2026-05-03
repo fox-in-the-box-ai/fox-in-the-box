@@ -238,6 +238,13 @@ async function createAndStartContainer() {
       HostConfig: {
         AutoRemove: true,
         CapAdd: ['NET_ADMIN'],
+        Devices: [
+          {
+            PathOnHost: '/dev/net/tun',
+            PathInContainer: '/dev/net/tun',
+            CgroupPermissions: 'rwm',
+          },
+        ],
         Sysctls: { 'net.ipv4.ip_forward': '1' },
         PortBindings: {
           [PORT]: [{ HostIp: '127.0.0.1', HostPort: '8787' }],

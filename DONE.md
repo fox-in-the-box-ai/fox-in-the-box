@@ -24,3 +24,16 @@ Smoke (this agent): `docker run -d -p 127.0.0.1:9876:8787 fitb:local`, wait ~20s
 ## Supervisor
 
 - Submodule pins in `forks/` flow into the image at build time; no fork edits in this change.
+
+---
+
+## Addendum — Electron: `/dev/net/tun` for tailscaled (Windows Docker)
+
+### Implemented
+
+- **`packages/electron/src/docker-manager.js`**: `HostConfig.Devices` maps `/dev/net/tun` (with existing `NET_ADMIN` + `net.ipv4.ip_forward` sysctl) so supervisord `tailscaled` matches AGENTS.md / `install.sh` expectations.
+- **`tests/electron/docker-manager.test.js`**: Asserts the Tailscale-friendly `HostConfig` shape.
+
+### Notes
+
+- If HTTP 500 persists after `tailscaled` stays up, inspect `/data/logs/hermes-gateway.err` in the container for gateway tracebacks.
