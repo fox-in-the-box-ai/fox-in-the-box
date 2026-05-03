@@ -42,10 +42,8 @@ jobs:
 
       - name: Build Docker image
         run: |
-          # On tagged releases, pass the tag as FITB_VERSION so entrypoint clones
-          # the right hermes-agent/webui tag. On main branch dev builds, omit the
-          # arg so the Dockerfile default (v0.1.0) is used — entrypoint falls back
-          # to default branch when the tag doesn't exist yet, which is correct.
+          # FITB_VERSION is written to /app/version.txt (migrations / display).
+          # Hermes repos are baked from forks/ at image build time (submodules).
           FITB_VERSION_ARG=""
           if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
             FITB_VERSION_ARG="--build-arg FITB_VERSION=${{ github.ref_name }}"
@@ -78,9 +76,8 @@ jobs:
             ghcr.io/fox-in-the-box-ai/cloud:${{ steps.meta.outputs.tag }}
 
       - name: Smoke test — wait for container to be healthy
-        # Poll instead of blind sleep: first boot clones git repos + pip install,
-        # which takes 30–90 seconds on a cold CI runner. sleep 10 is not enough.
-        # Retry for up to 3 minutes (36 × 5s). Fail fast if container exits.
+        # Poll instead of blind sleep: first boot still runs migrations / chown /
+        # service startup; allow up to 3 minutes (36 × 5s). Fail fast if container exits.
         run: |
           for i in $(seq 1 36); do
             if curl -sf http://localhost:8787/health -o /dev/null 2>/dev/null; then
