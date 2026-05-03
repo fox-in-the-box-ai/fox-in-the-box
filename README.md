@@ -60,6 +60,42 @@ Then see [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md) for full build instr
 
 ---
 
+## Full reset (desktop app, “clean install”)
+
+Use this when you want a **new container**, fresh **on-disk data**, and optionally a **fresh image** (for example after changing Docker options such as `/dev/net/tun`).
+
+### Windows
+
+1. **Quit** Fox in the box completely (including the system tray icon).
+2. **Uninstall** the application from **Settings → Apps → Installed apps** if you also want the program files removed. The installer does **not** delete your data folder by default.
+3. Remove the container and app data — either:
+   - **Script (recommended):** in PowerShell, from the repo (or copy the file elsewhere):
+
+     ```powershell
+     cd packages\scripts
+     .\clean-windows-desktop.ps1
+     ```
+
+     To also delete the published Linux image (next app start will `docker pull` again):
+
+     ```powershell
+     .\clean-windows-desktop.ps1 -RemoveImage
+     ```
+
+     If you ever used the **CLI** flow with `-v ~/.foxinthebox:/data` from this README, add `-RemoveFoxintheboxDir` to remove `%USERPROFILE%\.foxinthebox` as well.
+
+   - **Manual:** `docker rm -f fox-in-the-box`, delete `%APPDATA%\Fox in the box`, and optionally `docker rmi ghcr.io/fox-in-the-box-ai/cloud:stable`.
+4. **Reinstall** from the [latest release](https://github.com/fox-in-the-box-ai/fox-in-the-box/releases/latest) (or run your new installer / dev build), then start the app once so it recreates the container.
+
+### macOS
+
+1. Quit the app (menu bar).
+2. `docker rm -f fox-in-the-box`
+3. Delete the app’s user data directory (Electron **userData** for this app — typically under `~/Library/Application Support/` for the product name), and remove `~/Library/Caches/` entries for the app if you want caches cleared too.
+4. Optionally `docker rmi ghcr.io/fox-in-the-box-ai/cloud:stable`, then reinstall from the release zip.
+
+---
+
 ## Requirements
 
 | Platform | Requirement |
