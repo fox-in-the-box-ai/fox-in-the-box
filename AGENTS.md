@@ -47,6 +47,10 @@ Submodules are in `forks/`. Do not modify submodule content directly.
 If you need to change `hermes-agent` or `hermes-webui`, say so explicitly in your output —
 the Supervisor will handle the fork workflow.
 
+**Docker image:** `packages/integration/Dockerfile` **COPY**s `forks/hermes-agent` and `forks/hermes-webui` into the image and runs `pip install` at **build** time. That is normal integration work (not “editing forks” in place). A local `docker build` **fails** if submodules are not checked out — run `git submodule update --init --recursive` first (CI already uses recursive submodules). Runtime entrypoint **does not** clone those repos from GitHub for production containers.
+
+**Line endings:** `.gitattributes` keeps `packages/integration/**/*.sh` as **LF** so Windows checkouts do not break Linux shebangs inside Docker.
+
 ---
 
 ## 3. Git Worktrees
@@ -130,12 +134,14 @@ cd tests/container && bats test_install.bats
 
 ### Container smoke test
 ```bash
+git submodule update --init --recursive
 docker build -f packages/integration/Dockerfile -t fitb:test .
 docker run -d --name fitb-test --cap-add=NET_ADMIN --device /dev/net/tun -p 127.0.0.1:8787:8787 fitb:test
-sleep 15
-curl -f http://localhost:8787/
+sleep 20
+curl -f http://localhost:8787/health
 docker stop fitb-test && docker rm fitb-test
 ```
+(First `/health` may take a few tens of seconds on a slow machine; Hermes is already in the image, so clone/pip-on-start is not the bottleneck.)
 
 Coverage bar: every acceptance criterion from the task doc must have an automated test.
 If a criterion is genuinely untestable automatically (UI layout, Tailscale auth), note it
