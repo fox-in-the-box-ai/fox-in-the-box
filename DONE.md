@@ -38,6 +38,11 @@ Smoke (this agent): `docker run -d -p 127.0.0.1:9876:8787 fitb:local`, wait ~20s
 
 - If HTTP 500 persists after `tailscaled` stays up, inspect `/data/logs/hermes-gateway.err` in the container for gateway tracebacks.
 
+### Hermes WebUI — `do_POST` double body read (POST 500)
+
+- **Fix:** Implemented in `forks/hermes-webui/server.py` (read body only inside `/api/setup/openrouter` and `/api/setup/complete`). Docker image no longer uses a build-time patch; rebuild picks up the submodule.
+- **Submodule:** Push `hermes-webui` `master` to the fork remote so CI and other clones see the commit.
+
 ### Full clean reinstall (Windows desktop)
 
 - Documented in [README.md](README.md) section **Full reset (desktop app)**; helper script [packages/scripts/clean-windows-desktop.ps1](packages/scripts/clean-windows-desktop.ps1).
