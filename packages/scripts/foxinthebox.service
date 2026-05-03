@@ -15,6 +15,7 @@ ExecStart=/usr/bin/docker run \
   --rm \
   --name fox-in-the-box \
   --cap-add=NET_ADMIN \
+  --device /dev/net/tun \
   --sysctl net.ipv4.ip_forward=1 \
   -v __DATA_DIR__:/data \
   -p 0.0.0.0:8787:8787 \

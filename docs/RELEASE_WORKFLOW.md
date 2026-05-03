@@ -230,32 +230,28 @@ docker stop fitb && docker rm fitb
 
 #### macOS (13.x)
 
+Releases do **not** ship a `.dmg`. Use the same **`install.sh`** path as Linux (Docker + optional launchd):
+
 ```bash
-# 1. Download installer
-aws s3 cp s3://fitb-releases/fox-in-the-box-0.2.0.dmg ./
+# 1. Install Docker Desktop if needed, pull image, run container (interactive prompts)
+curl -fsSL https://raw.githubusercontent.com/fox-in-the-box-ai/fox-in-the-box/main/packages/scripts/install.sh | bash
 
-# 2. Install
-hdiutil mount fox-in-the-box-0.2.0.dmg
-cp -r /Volumes/*/Fox\ in\ the\ Box.app /Applications/
-umount /Volumes/fox-in-the-box-0.2.0
+# 2. Wait for health (adjust URL if you chose Tailscale-only in the script)
+sleep 15
+curl -f http://localhost:8787/health || echo "FAILED"
 
-# 3. Run
-open /Applications/Fox\ in\ the\ Box.app
-
-# 4. Wait for UI
-sleep 10
-
-# 5. User workflow (same as Linux)
-# - Check app launched
+# 3. User workflow (same as Linux)
+# - Open WebUI at http://localhost:8787 (or Tailscale URL from script output)
 # - Create chat session
 # - Send message
 # - Verify response
 
-# 6. Check logs
-tail -50 ~/.hermes/logs/agent.log | grep -i error || echo "No errors"
+# 4. Check logs
+docker logs fox-in-the-box 2>&1 | tail -50
 
-# 7. Quit
-killall "Fox in the Box"
+# 5. Cleanup (optional)
+docker stop fox-in-the-box && docker rm fox-in-the-box
+launchctl unload "$HOME/Library/LaunchAgents/io.foxinthebox.plist" 2>/dev/null || true
 ```
 
 #### Windows (Server 2022)
@@ -298,7 +294,7 @@ taskkill /IM "Fox in the Box.exe"
 | Platform | Status | Notes | Tested By |
 |----------|--------|-------|-----------|
 | Linux (Ubuntu 24.04) | ✅ PASS | Docker start OK, chat responsive | Stan |
-| macOS (13.6) | ✅ PASS | Installer works, no Gatekeeper issues | Stan |
+| macOS (13.6) | ✅ PASS | `install.sh` + Docker, WebUI OK | Stan |
 | Windows (Server 2022) | ⚠️ WARN | Slow startup (Docker Desktop busy), but works | Stan |
 
 ### Issues Found
@@ -323,7 +319,7 @@ taskkill /IM "Fox in the Box.exe"
 docker pull ghcr.io/fox-in-the-box-ai/cloud:v0.2.0
 docker pull ghcr.io/fox-in-the-box-ai/cloud:latest
 
-# Installers on releases page
+# Windows installer on releases page (macOS: use install.sh from README)
 # https://github.com/fox-in-the-box-ai/fox-in-the-box/releases/tag/v0.2.0
 ```
 
@@ -357,7 +353,7 @@ cat >> CHANGELOG.md << 'EOF'
 
 ### Testing
 - ✅ Linux: Docker
-- ✅ macOS: Installer
+- ✅ macOS: install.sh + Docker
 - ✅ Windows: Installer
 
 ### Contributors
