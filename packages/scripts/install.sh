@@ -51,6 +51,25 @@ WORKSPACE_DIR="${FOX_WORKSPACE_DIR:-$DEFAULT_WORKSPACE_DIR}"
 ##############################################################################
 # 2. Check / install Docker
 ##############################################################################
+# Docker Desktop on macOS often installs the CLI outside a minimal PATH (e.g. curl|bash).
+_docker_prepath_macos() {
+  if [[ "$PLATFORM" != "macos" ]]; then
+    return 0
+  fi
+  local _d
+  for _d in \
+    "/Applications/Docker.app/Contents/Resources/bin" \
+    "/usr/local/bin" \
+    "/opt/homebrew/bin"; do
+    if [[ -d "$_d" ]]; then
+      PATH="$_d:${PATH:-}"
+    fi
+  done
+  export PATH
+}
+
+_docker_prepath_macos
+
 _docker_running() {
   # Honour DOCKER_CMD (e.g. "sudo docker" right after usermod -aG docker)
   if [[ -n "${DOCKER_CMD:-}" ]]; then
@@ -60,8 +79,9 @@ _docker_running() {
   fi
 }
 
-if ! command -v docker &>/dev/null || ! _docker_running; then
-  warn "Docker not found or not running — installing…"
+# ── A) No docker CLI: install (Linux) or offer install / instructions (macOS)
+if ! command -v docker &>/dev/null; then
+  warn "Docker CLI not found — installing…"
 
   if [[ "$PLATFORM" == "linux" ]]; then
     curl -fsSL https://get.docker.com | sh \
@@ -79,16 +99,15 @@ if ! command -v docker &>/dev/null || ! _docker_running; then
     if command -v brew &>/dev/null; then
       brew install --cask docker \
         || die "Homebrew failed to install Docker Desktop."
-      info "Docker Desktop installed. Please launch it from /Applications, then re-run this installer."
+      info "Docker Desktop installed. Open Docker from Applications, wait until it says running, then re-run this installer."
       exit 1
     else
-      die "Docker is not installed and Homebrew is not available.\n\
-Please install Docker Desktop manually from https://docs.docker.com/desktop/mac/install/\n\
-then re-run this installer."
+      die "Docker CLI not on PATH and Homebrew is not installed.\n\
+Install Docker Desktop from https://docs.docker.com/desktop/mac/install/\n\
+then open it once from Applications, wait until it is running, and re-run this installer."
     fi
   fi
 
-  # Final check — retry up to 5 times (1s apart) to let the daemon finish starting
   _DOCKER_READY=false
   for _i in 1 2 3 4 5; do
     if _docker_running; then
@@ -97,7 +116,25 @@ then re-run this installer."
     fi
     sleep 1
   done
-  $_DOCKER_READY || die "Docker installed but daemon is still not responding after 5s. Start Docker and re-run."
+  $_DOCKER_READY || die "Docker installed but daemon is still not responding after ~5s. Start Docker and re-run."
+fi
+
+# ── B) CLI present but engine not ready (typical right after opening Docker Desktop on macOS)
+if ! _docker_running; then
+  warn "Docker is installed but the engine is not responding yet — waiting…"
+  _DOCKER_READY=false
+  _max=15
+  [[ "$PLATFORM" == "macos" ]] && _max=60
+  for ((_i = 1; _i <= _max; _i++)); do
+    if _docker_running; then
+      _DOCKER_READY=true
+      break
+    fi
+    sleep 2
+  done
+  if ! $_DOCKER_READY; then
+    die "Docker engine still not reachable. On macOS: open Docker from Applications, wait until the engine is running, then run this script again. Tip: use Terminal.app; if 'docker version' works there, re-run this script from the same window."
+  fi
 fi
 
 DOCKER_CMD="${DOCKER_CMD:-docker}"
