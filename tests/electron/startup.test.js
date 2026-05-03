@@ -6,6 +6,7 @@ jest.mock('electron-log', () => ({
 
 const {
   waitForDaemon,
+  waitForDesktopProcessStart,
   findDockerDesktopExe,
   detectWindowsDockerState,
   ensureDockerWindows,
@@ -39,6 +40,26 @@ describe('waitForDaemon', () => {
     const now = () => (tick++ === 0 ? 0 : 99999);
     const sleep = jest.fn().mockResolvedValue(undefined);
     const result = await waitForDaemon(isDaemonRunning, 1000, 100, now, sleep);
+    expect(result).toBe(false);
+  });
+});
+
+describe('waitForDesktopProcessStart', () => {
+  test('returns true when desktop process appears during grace window', async () => {
+    const isRunning = jest.fn()
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(true);
+    const sleep = jest.fn().mockResolvedValue(undefined);
+    const result = await waitForDesktopProcessStart(isRunning, 5000, 10, sleep);
+    expect(result).toBe(true);
+    expect(isRunning).toHaveBeenCalledTimes(3);
+  });
+
+  test('returns false when desktop process never appears', async () => {
+    const isRunning = jest.fn().mockResolvedValue(false);
+    const sleep = jest.fn().mockResolvedValue(undefined);
+    const result = await waitForDesktopProcessStart(isRunning, 5, 1, sleep);
     expect(result).toBe(false);
   });
 });
@@ -151,6 +172,10 @@ function makeDeps(overrides = {}) {
     waitForDaemon:     jest.fn().mockResolvedValue(true),
     runCommand:        jest.fn().mockResolvedValue(''),
     spawnDetached:     jest.fn(),
+    isDesktopProcessRunning: jest.fn().mockResolvedValue(true),
+    waitForDesktopStart: jest.fn().mockResolvedValue(true),
+    diagnoseDocker:    jest.fn().mockResolvedValue({ issueCode: 'UNKNOWN' }),
+    attemptRecover:    jest.fn().mockResolvedValue({ attempted: false, errors: [] }),
     showProgress:      jest.fn(),
     showRebootRequired: jest.fn(),
     _findExe:          jest.fn().mockResolvedValue(null),
@@ -228,5 +253,43 @@ describe('ensureDockerWindows', () => {
       expect.objectContaining({ shell: true })
     );
     expect(result).toEqual({ result: 'started' });
+  });
+
+  test('fails fast when Docker Desktop process does not launch', async () => {
+    const deps = makeDeps({
+      _findExe: jest.fn().mockResolvedValue('C:\\Docker\\Docker Desktop.exe'),
+      waitForDesktopStart: jest.fn().mockResolvedValue(false),
+      waitForDaemon: jest.fn().mockResolvedValue(false),
+    });
+    await expect(ensureDockerWindows(deps)).rejects.toMatchObject({
+      code: 'DOCKER_DESKTOP_LAUNCH_FAILED',
+    });
+  });
+
+  test('diagnoses missing WSL backend and throws specific error', async () => {
+    const deps = makeDeps({
+      _findExe: jest.fn().mockResolvedValue('C:\\Docker\\Docker Desktop.exe'),
+      waitForDaemon: jest.fn().mockResolvedValue(false),
+      diagnoseDocker: jest.fn().mockResolvedValue({ issueCode: 'WSL_NOT_INITIALIZED' }),
+      attemptRecover: jest.fn().mockResolvedValue({ attempted: false, errors: ['wsl failed'] }),
+    });
+    await expect(ensureDockerWindows(deps)).rejects.toMatchObject({
+      code: 'WSL_NOT_INITIALIZED',
+    });
+  });
+
+  test('retries daemon wait after recovery attempt', async () => {
+    const deps = makeDeps({
+      _findExe: jest.fn().mockResolvedValue('C:\\Docker\\Docker Desktop.exe'),
+      waitForDaemon: jest
+        .fn()
+        .mockResolvedValueOnce(false)
+        .mockResolvedValueOnce(true),
+      diagnoseDocker: jest.fn().mockResolvedValue({ issueCode: 'WSL_BACKEND_MISSING' }),
+      attemptRecover: jest.fn().mockResolvedValue({ attempted: true, backendReady: true, errors: [] }),
+    });
+    const result = await ensureDockerWindows(deps);
+    expect(result).toEqual({ result: 'started-after-recovery' });
+    expect(deps.waitForDaemon).toHaveBeenCalledTimes(2);
   });
 });

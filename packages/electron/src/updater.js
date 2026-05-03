@@ -142,7 +142,7 @@ async function checkForUpdatesManual() {
       _checking = false;
       dialog.showMessageBox({
         type: 'info',
-        title: 'Fox in the Box',
+        title: 'Fox in the box',
         message: 'You are running the latest version.',
       });
     }

@@ -1,6 +1,7 @@
 appId: io.foxinthebox.desktop
-productName: Fox in the Box
-copyright: "Copyright © 2024 Fox in the Box AI"
+productName: Fox in the box
+executableName: FoxInTheBox
+copyright: "Copyright © 2024 Vulpy, Inc."
 
 # Skip native module rebuild — no native modules need rebuilding for the target platform
 # (cpu-features via ssh2/dockerode fails on Windows with pnpm due to .cjs invocation issue)
@@ -17,13 +18,13 @@ files:
 icon: assets/icon.png
 
 win:
+  icon: assets/icon.ico
+  publisherName: Vulpy, Inc.
   target:
     - target: nsis
       arch:
         - x64
-  artifactName: "fox-in-the-box-setup-${version}-${arch}.exe"
-  # Avoid winCodeSign extract on machines without symlink privilege (dylib symlinks in cache).
-  # Release builds with a cert should omit this or set WIN_CSC_* and sign as usual.
+  artifactName: "fox-in-the-box-setup-${arch}.exe"
   signAndEditExecutable: false
   # Code signing: set WIN_CSC_LINK (path/URL to .pfx) and WIN_CSC_KEY_PASSWORD in CI
   # electron-builder picks these up automatically when present
@@ -33,14 +34,18 @@ nsis:
   perMachine: false
   allowToChangeInstallationDirectory: false
   deleteAppDataOnUninstall: false
+  uninstallDisplayName: Fox in the box
+  shortcutName: Fox in the box
+  include: build/installer.nsh
 
 mac:
+  icon: assets/icon.icns
   target:
     - target: dmg
       arch:
         - x64
         - arm64
-  artifactName: "fox-in-the-box-${version}-${arch}-mac.dmg"
+  artifactName: "fox-in-the-box-${arch}-mac.dmg"
   # Code signing: set APPLE_TEAM_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_ID env vars in CI
   # identity is auto-detected from keychain when env vars are present
   hardenedRuntime: true

@@ -35,7 +35,7 @@ function show({ version, releaseNotes }) {
     minimizable: false,
     maximizable: false,
     alwaysOnTop: true,
-    title: 'Fox in the Box — Update available',
+    title: 'Fox in the box — Update available',
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -58,7 +58,7 @@ function showDownloaded({ version }) {
     minimizable: false,
     maximizable: false,
     alwaysOnTop: true,
-    title: 'Fox in the Box — Ready to install',
+    title: 'Fox in the box — Ready to install',
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -198,7 +198,7 @@ function buildReadyHtml(version) {
 </head>
 <body>
 <h2>Ready to install</h2>
-<p>Version <span class="version">${version}</span> has been downloaded. Restart Fox in the Box to apply the update.</p>
+<p>Version <span class="version">${version}</span> has been downloaded. Restart Fox in the box to apply the update.</p>
 <div class="actions">
   <button class="secondary" id="btn-later">Restart later</button>
   <button class="primary"   id="btn-install">Restart and install</button>
