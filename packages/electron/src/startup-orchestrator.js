@@ -16,7 +16,7 @@ const STEP_LABELS = {
   image_ready: 'Ensure container image',
   container_ready: 'Prepare container',
   http_healthy: 'Wait for services',
-  onboarding_opened: 'Open onboarding',
+  onboarding_opened: 'Open setup wizard',
 };
 
 class StartupPhaseError extends Error {

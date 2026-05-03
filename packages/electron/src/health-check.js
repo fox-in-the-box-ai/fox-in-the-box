@@ -2,10 +2,7 @@
 
 const http = require('http');
 const log  = require('electron-log');
-
-// Use IPv4 loopback explicitly because container port mapping is bound to 127.0.0.1.
-// On some Windows setups, localhost resolves to ::1 first, causing false ECONNREFUSED.
-const HEALTH_URL    = 'http://127.0.0.1:8787/health';
+const { HEALTH_URL } = require('./app-urls');
 const INTERVAL_MS   = 1000;
 const REQUEST_TIMEOUT_MS = 1500;
 const HEALTH_TIMEOUT_MS = 120_000;

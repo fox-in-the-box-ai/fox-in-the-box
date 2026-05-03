@@ -5,11 +5,11 @@ const path    = require('path');
 const log     = require('electron-log');
 const docker  = require('./docker-manager');
 const updater = require('./updater');
+const { APP_HOME_URL } = require('./app-urls');
 
 const ICON_PATH = process.platform === 'win32'
   ? path.join(__dirname, '..', 'assets', 'icon.ico')
   : path.join(__dirname, '..', 'assets', 'icon.png');
-const APP_URL   = 'http://localhost:8787';
 
 let tray       = null;
 let isRunning  = false;
@@ -31,7 +31,7 @@ function buildMenu() {
       label: 'Open Fox',
       click: () => {
         if (openApp) openApp();
-        else shell.openExternal(APP_URL);
+        else shell.openExternal(APP_HOME_URL);
       },
     },
     {
