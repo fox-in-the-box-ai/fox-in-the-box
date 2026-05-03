@@ -82,6 +82,25 @@ describe('runStartup', () => {
     expect(deps.onDaemonNotReady).toHaveBeenCalledTimes(1);
   });
 
+  test('Windows reboot-required skips second daemon prompt and ends startup cleanly', async () => {
+    const deps = makeDeps({
+      platform: 'win32',
+      docker: {
+        init: jest.fn(),
+        isDaemonRunning: jest.fn().mockResolvedValue(false),
+        isImagePresent: jest.fn().mockResolvedValue(true),
+        pullImage: jest.fn().mockResolvedValue(undefined),
+        ensureContainerRunning: jest.fn().mockResolvedValue(undefined),
+      },
+      ensureDockerWindows: jest.fn().mockResolvedValue({ result: 'reboot-required' }),
+    });
+
+    const out = await runStartup(deps);
+    expect(out).toMatchObject({ outcome: 'reboot-required' });
+    expect(deps.onDaemonNotReady).not.toHaveBeenCalled();
+    expect(deps.closeProgress).toHaveBeenCalled();
+  });
+
   test('shows explicit message when container already running', async () => {
     const deps = makeDeps({
       docker: {
