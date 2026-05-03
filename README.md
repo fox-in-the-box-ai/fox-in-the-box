@@ -39,7 +39,7 @@ Or clone the repo and run `bash packages/scripts/install.sh`.
 
 - **Data directory (default):** Linux `~/.foxinthebox`; macOS `~/Library/Application Support/Fox in the Box`. Override with `FOX_DATA_DIR` / `FOX_WORKSPACE_DIR` if you need to.
 - **macOS:** If Docker is missing, the script installs **Docker Desktop** via Homebrew when `brew` is available, then exits so you can start Docker once and re-run the script.
-- **Browser:** When install finishes, the script opens **http://localhost:8787** in your default browser (after a short delay). Set **`FOX_OPEN_BROWSER=0`** to skip. If the page errors, wait a few seconds and refresh — the container may still be starting Hermes.
+- **Browser:** The script waits until **`http://127.0.0.1:8787/health`** responds (up to **240s** on first boot), then opens **http://localhost:8787**. Set **`FOX_OPEN_BROWSER=0`** to skip opening; **`FOX_HEALTH_WAIT_SEC`** overrides the wait cap. If the tab still loads slowly, refresh once Hermes has finished starting (`docker logs -f fox-in-the-box`).
 
 ### Option 2 — Docker one-liner (all platforms)
 

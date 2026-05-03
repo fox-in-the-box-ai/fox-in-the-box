@@ -392,10 +392,36 @@ if [[ "$ACCESS_MODE" == "1" || "$ACCESS_MODE" == "3" ]]; then
 fi
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
+# Wait for Web UI before opening browser (Hermes/Qdrant first boot can take 1–3+ minutes)
+_wait_web_health_host() {
+  local _hp="${FOX_HEALTH_PORT:-8787}"
+  local _url="http://127.0.0.1:${_hp}/health"
+  local _max="${FOX_HEALTH_WAIT_SEC:-240}"
+  local _i
+  if ! command -v curl &>/dev/null; then
+    warn "curl not found — waiting 25s then opening browser (first start may still be loading)…"
+    sleep 25
+    return 0
+  fi
+  info "Waiting for Web UI (${_url}, up to ${_max}s — first start can be slow)…"
+  for ((_i = 1; _i <= _max; _i++)); do
+    if curl -fsS --connect-timeout 2 --max-time 6 "$_url" >/dev/null 2>&1; then
+      success "Web UI is ready."
+      return 0
+    fi
+    if ((_i % 15 == 0)); then
+      info "Still starting… (${_i}s) — check: docker logs -f $CONTAINER"
+    fi
+    sleep 1
+  done
+  warn "Web UI did not respond on /health within ${_max}s — open http://localhost:${_hp} manually when ready."
+  return 1
+}
+
 # Open setup Web UI (localhost works for modes 1–3; set FOX_OPEN_BROWSER=0 to skip)
 if [[ "${FOX_OPEN_BROWSER:-1}" != "0" ]] && [[ "$ACCESS_MODE" == "1" || "$ACCESS_MODE" == "2" || "$ACCESS_MODE" == "3" ]]; then
-  sleep 3
   _url="http://localhost:8787"
+  _wait_web_health_host || true
   info "Opening $_url in your default browser…"
   if [[ "$PLATFORM" == "macos" ]]; then
     open "$_url" 2>/dev/null || warn "Could not open browser — visit $_url manually."
