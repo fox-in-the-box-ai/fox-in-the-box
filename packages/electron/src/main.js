@@ -242,7 +242,7 @@ function spawnDetached(exe) {
 }
 
 async function ensureDockerWindows(progressCb = showProgress) {
-  await _ensureDockerWindows({
+  return _ensureDockerWindows({
     isDaemonRunning: () => docker.isDaemonRunning(),
     waitForDaemon: (ms, sp) => _waitForDaemon(
       () => docker.isDaemonRunning(),
@@ -313,6 +313,10 @@ async function installDockerMac(progressCb = showProgress) {
 }
 
 async function showDaemonRecoveryRequired(platform) {
+  // Native message boxes are not parented to our always-on-top progress window;
+  // close it first so the prompt is visible and not stacked underneath.
+  closeProgress();
+
   if (platform === 'win32') {
     const { response } = await dialog.showMessageBox({
       type: 'warning',
@@ -434,7 +438,7 @@ async function main() {
   log.info('Fox in the box starting up');
 
   try {
-    await runStartup({
+    const startupOutcome = await runStartup({
       docker,
       waitUntilHealthy,
       ensureDockerWindows,
@@ -453,6 +457,10 @@ async function main() {
       onDaemonNotReady: ({ platform }) => showDaemonRecoveryRequired(platform),
       platform: process.platform,
     });
+    if (startupOutcome && startupOutcome.outcome === 'reboot-required') {
+      app.quit();
+      return;
+    }
   } catch (err) {
     await handleStartupError(err);
     return;
