@@ -148,8 +148,9 @@ async function diagnoseWindowsDocker(_run = runCommand) {
     diagnostics.errors.push(`wsl-status: ${err.message}`);
   }
 
+  let wslListRaw = null;
   try {
-    diagnostics.wslList = await _run('wsl -l -v', { shell: true });
+    wslListRaw = await _run('wsl -l -v', { shell: true });
   } catch (err) {
     diagnostics.errors.push(`wsl-list: ${err.message}`);
   }
@@ -160,13 +161,33 @@ async function diagnoseWindowsDocker(_run = runCommand) {
     diagnostics.errors.push(`docker-context: ${err.message}`);
   }
 
-  const wslList = diagnostics.wslList || '';
+  // Docker Desktop registers docker-desktop / docker-desktop-data shortly after the
+  // process starts; `wsl -l -v` can omit them for a few seconds and falsely trigger
+  // WSL_BACKEND_MISSING while the Linux engine is already coming up.
+  let wslList = (wslListRaw || '').trim();
+  if (diagnostics.desktopProcessRunning && wslList && !/no installed distributions/i.test(wslList)) {
+    let retries = 0;
+    while (retries < 6 && !/docker-desktop/i.test(wslList)) {
+      await new Promise((r) => setTimeout(r, 2000));
+      retries++;
+      try {
+        wslListRaw = await _run('wsl -l -v', { shell: true });
+        wslList = (wslListRaw || '').trim();
+      } catch (err) {
+        diagnostics.errors.push(`wsl-list-retry-${retries}: ${err.message}`);
+        break;
+      }
+    }
+  }
+  diagnostics.wslList = wslListRaw;
+
   if (/no installed distributions/i.test(wslList)) {
     diagnostics.issueCode = 'WSL_NOT_INITIALIZED';
     diagnostics.message = 'WSL backend is not initialized (no installed distributions).';
     return diagnostics;
   }
-  if (wslList && !/docker-desktop/i.test(wslList)) {
+  // Ignore too-short output (transient / encoding glitches) — fall through to generic daemon wait.
+  if (wslList.length >= 12 && !/docker-desktop/i.test(wslList)) {
     diagnostics.issueCode = 'WSL_BACKEND_MISSING';
     diagnostics.message = 'Docker Desktop WSL backend distro is missing.';
     return diagnostics;
@@ -443,18 +464,21 @@ async function ensureDockerWindows(deps) {
       }
 
       if (diagnostics.issueCode === 'WSL_NOT_INITIALIZED' || diagnostics.issueCode === 'WSL_BACKEND_MISSING') {
+        if (await isDaemonRunning()) return { result: 'started' };
         break;
       }
     }
 
     diagnostics = diagnostics || await diagnoseDocker();
     if (diagnostics.issueCode === 'WSL_NOT_INITIALIZED' || diagnostics.issueCode === 'WSL_BACKEND_MISSING') {
+      if (await isDaemonRunning()) return { result: 'started' };
       const recovery = await attemptRecover(showProgress);
       if (recovery.attempted && recovery.backendReady) {
         showProgress('WSL repaired — retrying Docker daemon startup…');
         const recovered = await _waitForDaemon(120_000, showProgress);
         if (recovered) return { result: 'started-after-recovery' };
       }
+      if (await isDaemonRunning()) return { result: 'started-after-recovery' };
       const wslErr = new Error(
         'Docker backend (WSL) is not initialized. Run WSL setup, reboot if prompted, then open Docker Desktop and retry.'
       );
