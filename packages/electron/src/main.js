@@ -26,8 +26,7 @@ app.on('window-all-closed', (e) => e.preventDefault());
 
 app.whenReady().then(main).catch((err) => {
   log.error('Fatal startup error:', err);
-  dialog.showErrorBox('Fox in the Box — startup error', err.message);
-  app.quit();
+  showError(err.message || String(err));
 });
 
 // ─── Progress window ─────────────────────────────────────────────────────────
@@ -81,6 +80,55 @@ function showProgress(message) {
 
 function closeProgress() {
   if (_progressWin) { _progressWin.destroy(); _progressWin = null; }
+}
+
+/**
+ * Replace the progress window with an error screen.
+ * Window is closable so the user is never stuck.
+ */
+function showError(message) {
+  closeProgress();
+
+  const win = new BrowserWindow({
+    width: 480,
+    height: 240,
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    closable: true,
+    alwaysOnTop: true,
+    frame: true,
+    title: 'Fox in the Box — Error',
+    webPreferences: { nodeIntegration: false, contextIsolation: true },
+  });
+
+  const escaped = message
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/\n/g, '<br>');
+
+  const html = `<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<style>
+  body { font-family: "Segoe UI", sans-serif; margin: 0; display: flex;
+         align-items: center; justify-content: center; height: 100vh;
+         background: #fff; }
+  .wrap { text-align: center; padding: 32px; max-width: 400px; }
+  .logo { font-size: 32px; margin-bottom: 12px; }
+  h2 { font-size: 15px; margin: 0 0 10px; color: #c0392b; }
+  p  { font-size: 13px; color: #555; margin: 0 0 20px; line-height: 1.6; text-align: left; }
+  button { background: #444; color: #fff; border: none; padding: 8px 24px;
+           font-size: 13px; border-radius: 6px; cursor: pointer; }
+  button:hover { background: #222; }
+</style></head>
+<body><div class="wrap">
+  <div class="logo">🦊</div>
+  <h2>Something went wrong</h2>
+  <p>${escaped}</p>
+  <button onclick="window.close()">Close</button>
+</div></body></html>`;
+
+  win.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
+  win.setMenu(null);
 }
 
 /**
@@ -144,12 +192,13 @@ function spawnDetached(exe) {
 
 async function ensureDockerWindows() {
   await _ensureDockerWindows({
-    isDaemonRunning:    () => docker.isDaemonRunning(),
-    waitForDaemon:      () => _waitForDaemon(() => docker.isDaemonRunning(), 90_000),
-    runCommand:         require('./startup').runCommand,
+    isDaemonRunning:     () => docker.isDaemonRunning(),
+    waitForDaemon:       () => _waitForDaemon(() => docker.isDaemonRunning(), 90_000),
+    runCommand:          require('./startup').runCommand,
     spawnDetached,
     showProgress,
     showRebootRequired,
+    showError,
   });
 }
 
