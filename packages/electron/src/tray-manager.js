@@ -6,11 +6,14 @@ const log     = require('electron-log');
 const docker  = require('./docker-manager');
 const updater = require('./updater');
 
-const ICON_PATH = path.join(__dirname, '..', 'assets', 'icon.png');
+const ICON_PATH = process.platform === 'win32'
+  ? path.join(__dirname, '..', 'assets', 'icon.ico')
+  : path.join(__dirname, '..', 'assets', 'icon.png');
 const APP_URL   = 'http://localhost:8787';
 
 let tray       = null;
 let isRunning  = false;
+let startFlow  = null;
 
 function setRunning(state) {
   isRunning = state;
@@ -46,7 +49,8 @@ function buildMenu() {
             await docker.stopContainer();
             setRunning(false);
           } else {
-            await docker.startContainer();
+            if (startFlow) await startFlow();
+            else await docker.startContainer();
             setRunning(true);
           }
         } catch (err) {
@@ -82,11 +86,12 @@ function buildMenu() {
  * Create the system tray icon and initial menu.
  * @param {boolean} running  Initial running state.
  */
-function createTray(running) {
+function createTray(running, options = {}) {
   tray      = new Tray(ICON_PATH);
   isRunning = running;
+  startFlow = options.startFlow || null;
 
-  tray.setToolTip('Fox in the Box');
+  tray.setToolTip('Fox in the box');
   buildMenu();
 
   log.info('Tray created');

@@ -50,6 +50,11 @@ else
         /data/cache \
         /data/logs \
         /data/run
+
+    # Self-heal: if a previous install was partial, backfill any missing default configs.
+    if [ -d "$DEFAULTS_DIR" ]; then
+        cp -n "$DEFAULTS_DIR"/* /data/config/ 2>/dev/null || true
+    fi
 fi
 
 # ── 2. App code bootstrap (git-in-volume model) ────────────────────────────────
@@ -62,29 +67,33 @@ else
     _clone_app() {
         local APP="$1"
         local DEST="$APPS_DIR/$APP"
+        local NEED_CLONE=1
 
         if [ -d "$DEST/.git" ]; then
             echo "[entrypoint] $APP already present at $DEST — skipping clone."
-            return 0
+            NEED_CLONE=0
         fi
 
-        echo "[entrypoint] Cloning $APP @ $FITB_VERSION ..."
-        # Remove any partial clone before retrying
-        rm -rf "$DEST"
-        if ! git clone --depth 1 \
-                --branch "$FITB_VERSION" \
-                "https://github.com/fox-in-the-box-ai/$APP" \
-                "$DEST" 2>/dev/null; then
-            echo "[entrypoint] Tag $FITB_VERSION not found — falling back to default branch ..."
+        if [ "$NEED_CLONE" = "1" ]; then
+            echo "[entrypoint] Cloning $APP @ $FITB_VERSION ..."
+            # Remove any partial clone before retrying
+            rm -rf "$DEST"
             if ! git clone --depth 1 \
+                    --branch "$FITB_VERSION" \
                     "https://github.com/fox-in-the-box-ai/$APP" \
-                    "$DEST"; then
-                echo "[entrypoint] ERROR: Failed to clone $APP. Check network and try again."
-                echo "[entrypoint] If offline, manually place a git repo at $DEST and restart."
-                exit 1
+                    "$DEST" 2>/dev/null; then
+                echo "[entrypoint] Tag $FITB_VERSION not found — falling back to default branch ..."
+                if ! git clone --depth 1 \
+                        "https://github.com/fox-in-the-box-ai/$APP" \
+                        "$DEST"; then
+                    echo "[entrypoint] ERROR: Failed to clone $APP. Check network and try again."
+                    echo "[entrypoint] If offline, manually place a git repo at $DEST and restart."
+                    exit 1
+                fi
             fi
         fi
 
+        # Always ensure dependencies are installed. Existing repos may come from a partial/old setup.
         echo "[entrypoint] Installing $APP ..."
         if [ -f "$DEST/setup.py" ] || [ -f "$DEST/pyproject.toml" ]; then
             pip install -e "$DEST" --quiet --no-cache-dir
