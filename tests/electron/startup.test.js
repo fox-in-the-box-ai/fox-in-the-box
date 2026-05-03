@@ -172,6 +172,14 @@ describe('ensureDockerWindows', () => {
     expect(result).toEqual({ result: 'reboot-required' });
   });
 
+  test('does not throw when winget reports already installed', async () => {
+    const deps = makeDeps({
+      runCommand: jest.fn().mockRejectedValue(new Error('already installed')),
+    });
+    const result = await ensureDockerWindows(deps);
+    expect(result).toEqual({ result: 'installed' });
+  });
+
   test('throws user-friendly error when winget fails', async () => {
     const deps = makeDeps({
       runCommand: jest.fn().mockRejectedValue(new Error('winget not found')),

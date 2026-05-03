@@ -133,7 +133,13 @@ async function ensureDockerWindows(deps) {
   await _run(
     'winget install --id Docker.DockerDesktop --silent --accept-source-agreements --accept-package-agreements',
     { shell: true, timeout: 300_000 }
-  ).catch(() => {
+  ).catch((err) => {
+    // winget exits non-zero when already installed — not an error
+    if (err.message && (
+      err.message.includes('already installed') ||
+      err.message.includes('No applicable upgrade') ||
+      err.message.includes('0x8A150101')
+    )) return;
     throw new Error(
       'Could not install Docker Desktop automatically.\n\n' +
       'Please install it manually from https://docker.com/products/docker-desktop,\n' +
