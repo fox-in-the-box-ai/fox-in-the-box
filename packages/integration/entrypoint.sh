@@ -162,6 +162,19 @@ if [ -f "$HERMES_YAML" ] && [ -n "${BRAVE_API_KEY:-}" ]; then
     echo "[entrypoint] Patched BRAVE_API_KEY into $HERMES_YAML"
 fi
 
+# ── 5c. Ensure skills block is present in hermes.yaml ─────────────────────────
+# Guard for existing installs that pre-date the skills config addition.
+if [ -f "$HERMES_YAML" ] && ! grep -q "^skills:" "$HERMES_YAML"; then
+    echo "[entrypoint] Adding missing skills.external_dirs to $HERMES_YAML ..."
+    cat >> "$HERMES_YAML" << 'EOF'
+
+# ── Skills ────────────────────────────────────────────────────────────────────
+skills:
+  external_dirs:
+    - /data/apps/hermes-agent/skills
+EOF
+fi
+
 # ── 6. Tailscale Serve (deferred until WebUI answers /health) ─────────────────
 # Do not run `tailscale serve` before supervisord — nothing listens on :8787 yet.
 # A background loop waits for Hermes WebUI then runs `tailscale serve --bg` once.
