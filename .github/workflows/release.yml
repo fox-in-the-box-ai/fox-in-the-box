@@ -19,7 +19,7 @@ jobs:
     name: Wait — build-electron.yml
     uses: ./.github/workflows/build-electron.yml
     permissions:
-      contents: read
+      contents: write
       packages: write
 
   # ── Retag Docker image and create GitHub Release ───────────────────────────
