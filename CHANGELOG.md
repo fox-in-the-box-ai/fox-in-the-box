@@ -7,6 +7,33 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.1.1] - 2026-05-04
+
+### Fixed
+
+- First-run chat unusable due to missing onboarding endpoint — wizard now writes the OpenRouter API key to `hermes.env` and marks onboarding complete (#28, #34)
+- Wizard "Open Fox" button now actually applies the new key without a container restart — `hermes-gateway` and `hermes-webui` are wrapped in a script that re-sources `hermes.env` on every supervisord restart (#35)
+- Product name now consistently rendered as "Fox in the Box" across the UI
+
+### Added
+
+- Manual `workflow_dispatch` trigger on `build-electron.yml` for on-demand smoke testing of Windows and macOS builds (#25)
+
+[0.1.1]: https://github.com/fox-in-the-box-ai/fox-in-the-box/releases/tag/v0.1.1
+
+## [0.1.0] - 2026-05-04
+
+### Added
+
+- Signed macOS DMG build in the Electron CI pipeline (#31)
+- macOS DMG and ZIP artifacts included in GitHub Releases alongside Windows installer (#32)
+
+### Fixed
+
+- macOS notarization: `APPLE_TEAM_ID` is now passed explicitly to `@electron/notarize` instead of relying on env-var forwarding (#33)
+
+[0.1.0]: https://github.com/fox-in-the-box-ai/fox-in-the-box/releases/tag/v0.1.0
+
 ## [0.0.2] - 2026-05-04
 
 ### Fixed
