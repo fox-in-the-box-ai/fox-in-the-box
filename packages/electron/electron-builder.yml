@@ -52,7 +52,8 @@ mac:
   gatekeeperAssess: false
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
-  notarize: true
+  notarize:
+    teamId: Z6J8AVT9QK
 
 linux:
   category: Utility
