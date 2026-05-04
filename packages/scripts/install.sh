@@ -5,6 +5,8 @@
 #
 # Non-interactive (no /dev/tty): set FOX_ACCESS_MODE to 1, 2, or 3 instead of prompting.
 # Tailscale: optional — FOX_TAILSCALE_WAIT_READY_SEC (default 120), FOX_TAILSCALE_URL_POLL_SEC (default 180)
+# Headless Tailscale (no browser): set FOX_TAILSCALE_AUTHKEY to a reusable install auth key from
+# https://login.tailscale.com/admin/settings/keys — install.sh runs `tailscale up` with TS_AUTHKEY.
 set -euo pipefail
 
 ##############################################################################
@@ -290,18 +292,20 @@ _extract_tailscale_login_url() {
   echo "$LOG_LINE" | grep -oE 'https://login\.tailscale\.com/a/[A-Za-z0-9]+' | head -1 || true
 }
 
-# Wait until /dev/net/tun exists and tailscale CLI responds (supervisord may start tailscaled late).
+# Wait until /dev/net/tun exists, CLI works, and `tailscale status` talks to tailscaled (not just the binary).
 _wait_tailscale_cli_ready() {
   local waited=0 max_wait="${FOX_TAILSCALE_WAIT_READY_SEC:-120}"
   while [[ "$waited" -lt "$max_wait" ]]; do
     if $DOCKER_CMD exec "$CONTAINER" sh -c 'test -c /dev/net/tun' >/dev/null 2>&1 \
-      && $DOCKER_CMD exec "$CONTAINER" tailscale version >/dev/null 2>&1; then
+      && $DOCKER_CMD exec "$CONTAINER" tailscale version >/dev/null 2>&1 \
+      && $DOCKER_CMD exec "$CONTAINER" tailscale status >/dev/null 2>&1; then
       return 0
     fi
     sleep 2
     waited=$((waited + 2))
   done
   warn "Tailscale CLI not ready within ${max_wait}s — check: $DOCKER_CMD exec $CONTAINER ls -l /dev/net/tun"
+  warn "Daemon logs: $DOCKER_CMD exec $CONTAINER tail -80 /data/logs/tailscaled.err"
   return 1
 }
 
@@ -366,72 +370,101 @@ _tailscale_backend_state() {
     2>/dev/null | tr -d '\r\n'
 }
 
-if [[ "$USE_TAILSCALE" == "true" ]]; then
-  LOGIN_URL=""
-  set +e
-  _obtain_tailscale_login_url
-  _ts_url_rc=$?
-  LOGIN_URL="$FITB_TAILSCALE_URL"
-  set -e
+# Poll until BackendState is Running (shared by browser auth and auth-key paths).
+_tailscale_poll_until_running() {
+  local CONNECTED=false
+  local DEADLINE=$(( $(date +%s) + 300 ))
+  local _poll_n=0
+  info "Waiting for Tailscale backend (Running)…"
+  while [[ $(date +%s) -lt $DEADLINE ]]; do
+    local BACKEND_STATE="$(_tailscale_backend_state)"
+    if [[ "$BACKEND_STATE" == "Running" ]]; then
+      CONNECTED=true
+      break
+    fi
+    _poll_n=$((_poll_n + 1))
+    if [[ "$_poll_n" -eq 15 ]]; then
+      info "Nudging tailscale up (tunnel may have stayed down after auth)…"
+      $DOCKER_CMD exec "$CONTAINER" tailscale up --timeout=120 >/dev/null 2>&1 || true
+    fi
+    sleep 3
+  done
 
-  if [[ "$_ts_url_rc" -ne 0 || -z "$LOGIN_URL" ]]; then
-    warn "Tailscale login URL not discovered automatically after polling."
-    warn "Check:  $DOCKER_CMD exec $CONTAINER tail -80 /data/logs/tailscaled.log"
-    warn "Or run:  $DOCKER_CMD exec -it $CONTAINER tailscale up"
+  if [[ "$CONNECTED" == "true" ]]; then
+    local TAILNET_URL="$($DOCKER_CMD exec "$CONTAINER" tailscale status --json 2>/dev/null \
+                   | grep -oE '"DNSName":"[^"]+"' | head -1 \
+                   | grep -oE '"[^"]+$' | tr -d '"' || true)"
+    if [[ -n "$TAILNET_URL" ]]; then
+      success "Tailscale connected! Access Fox at:  https://${TAILNET_URL%\.}"
+    else
+      success "Tailscale connected!"
+    fi
   else
-    echo
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "  Tailscale login URL:"
-    echo "  $LOGIN_URL"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    if command -v qrencode &>/dev/null; then
-      info "QR code (scan with Tailscale mobile app):"
-      qrencode -t ANSIUTF8 "$LOGIN_URL"
+    warn "Tailscale not yet confirmed Running. Check: $DOCKER_CMD exec $CONTAINER tailscale status"
+    warn "Daemon stderr log: $DOCKER_CMD exec $CONTAINER tail -80 /data/logs/tailscaled.err"
+    warn "On AWS, allow outbound UDP (WireGuard). Container needs NET_ADMIN + /dev/net/tun."
+  fi
+}
+
+if [[ "$USE_TAILSCALE" == "true" ]]; then
+  _wait_tailscale_cli_ready || true
+
+  # ── Headless: reusable install auth key (no browser, stable for automation) ──
+  if [[ -n "${FOX_TAILSCALE_AUTHKEY:-}" ]]; then
+    _ak_log="${TMPDIR:-/tmp}/fitb-tailscale-authkey.$$.$RANDOM.log"
+    info "Tailscale: joining with FOX_TAILSCALE_AUTHKEY (no browser URL)…"
+    set +e
+    # TS_AUTHKEY is read by tailscale up; never echo the key.
+    $DOCKER_CMD exec -e "TS_AUTHKEY=${FOX_TAILSCALE_AUTHKEY}" "$CONTAINER" \
+      tailscale up --timeout=600 >>"$_ak_log" 2>&1
+    _ts_ak_rc=$?
+    set -e
+    if [[ "$_ts_ak_rc" -ne 0 ]]; then
+      warn "tailscale up (auth key) exited $_ts_ak_rc — see: $_ak_log"
+    fi
+    _tailscale_poll_until_running
+  else
+    # ── Interactive: background tailscale up + URL + wait on PID (no $(...) subshell) ──
+    LOGIN_URL=""
+    set +e
+    _obtain_tailscale_login_url
+    _ts_url_rc=$?
+    LOGIN_URL="$FITB_TAILSCALE_URL"
+    set -e
+
+    if [[ "$_ts_url_rc" -ne 0 || -z "$LOGIN_URL" ]]; then
+      warn "Tailscale login URL not discovered automatically after polling."
+      warn "Daemon stderr: $DOCKER_CMD exec $CONTAINER tail -80 /data/logs/tailscaled.err"
+      warn "Host capture: ls -t ${TMPDIR:-/tmp}/fitb-tailscale-login.* 2>/dev/null | head -1"
     else
-      info "(Install 'qrencode' to display a QR code here.)"
-    fi
-
-    # Wait for the background `tailscale up` (must not run inside `$(...)` or subshell kills it).
-    if [[ -n "${FITB_TS_UP_PID:-}" ]] && kill -0 "$FITB_TS_UP_PID" 2>/dev/null; then
-      info "Waiting for Tailscale to finish (complete browser login — tunnel connects when this step exits)…"
-      wait "$FITB_TS_UP_PID" 2>/dev/null || true
-    fi
-    FITB_TS_UP_PID=""
-
-    # Poll until authenticated + tunnel up (`tailscale up` sets WantRunning; login alone does not).
-    info "Waiting for Tailscale backend…"
-    CONNECTED=false
-    DEADLINE=$(( $(date +%s) + 300 ))
-    _poll_n=0
-    while [[ $(date +%s) -lt $DEADLINE ]]; do
-      BACKEND_STATE="$(_tailscale_backend_state)"
-      if [[ "$BACKEND_STATE" == "Running" ]]; then
-        CONNECTED=true
-        break
-      fi
-      _poll_n=$((_poll_n + 1))
-      # If OAuth finished but the tunnel never came up, nudge `tailscale up` once (~45s in).
-      if [[ "$_poll_n" -eq 15 ]]; then
-        info "Nudging tailscale up (tunnel may have stayed down after browser auth)…"
-        $DOCKER_CMD exec "$CONTAINER" tailscale up --timeout=120 >/dev/null 2>&1 || true
-      fi
-      sleep 3
-    done
-
-    if [[ "$CONNECTED" == "true" ]]; then
-      TAILNET_URL="$($DOCKER_CMD exec "$CONTAINER" tailscale status --json 2>/dev/null \
-                     | grep -oE '"DNSName":"[^"]+"' | head -1 \
-                     | grep -oE '"[^"]+$' | tr -d '"' || true)"
-      if [[ -n "$TAILNET_URL" ]]; then
-        success "Tailscale connected! Access Fox at:  https://${TAILNET_URL%\.}"
+      echo
+      echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+      echo "  Tailscale login URL:"
+      echo "  $LOGIN_URL"
+      echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+      if command -v qrencode &>/dev/null; then
+        info "QR code (scan with Tailscale mobile app):"
+        qrencode -t ANSIUTF8 "$LOGIN_URL"
       else
-        success "Tailscale connected!"
+        info "(Install 'qrencode' to display a QR code here.)"
       fi
-    else
-      warn "Tailscale not yet confirmed running. Try: docker exec $CONTAINER tailscale status"
-      warn "Then bring the tunnel up: docker exec $CONTAINER tailscale up"
-      warn "On AWS, ensure outbound UDP is allowed (WireGuard) and the container has NET_ADMIN + /dev/net/tun."
+
+      if [[ -n "${FITB_TS_UP_PID:-}" ]] && kill -0 "$FITB_TS_UP_PID" 2>/dev/null; then
+        info "Waiting for Tailscale to finish (complete browser login — this step exits when the tunnel is up)…"
+        wait "$FITB_TS_UP_PID" 2>/dev/null || true
+      fi
+      FITB_TS_UP_PID=""
+
+      # If the first `tailscale up` exited before Running (race / user slow), retry once in foreground.
+      if [[ "$(_tailscale_backend_state)" != "Running" ]]; then
+        info "Retrying tailscale up once to stabilize the tunnel…"
+        set +e
+        $DOCKER_CMD exec "$CONTAINER" tailscale up --timeout=300 >/dev/null 2>&1
+        set -e
+      fi
     fi
+
+    _tailscale_poll_until_running
   fi
 fi
 
