@@ -26,3 +26,10 @@ mcp_servers:
       BRAVE_API_KEY: "${BRAVE_API_KEY}"
     timeout: 30
     connect_timeout: 20
+
+# ── Skills ────────────────────────────────────────────────────────────────────
+# Point at the skills bundled inside the cloned hermes-agent repo.
+# external_dirs are loaded in addition to the built-in skills/ dir.
+skills:
+  external_dirs:
+    - /data/apps/hermes-agent/skills
