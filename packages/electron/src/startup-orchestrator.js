@@ -162,6 +162,9 @@ async function runStartup({
 
   await runPhase(sessionId, 'container_ready', async () => {
     containerProgress('Preparing Fox in the box container…');
+    if (typeof docker.ensureDockerAccessModeChosen === 'function') {
+      await docker.ensureDockerAccessModeChosen();
+    }
     const result = await docker.ensureContainerRunning();
     if (!result || !result.reason) return;
     if (result.reason === 'already-running') {

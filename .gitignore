@@ -5,3 +5,6 @@
 node_modules/
 packages/electron/dist/
 packages/electron/node_modules/
+
+__pycache__/
+*.py[cod]
