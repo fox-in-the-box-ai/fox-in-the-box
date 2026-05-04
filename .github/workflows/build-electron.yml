@@ -9,9 +9,6 @@ on:
       - "v*"
   # Called by release.yml
   workflow_call:
-    permissions:
-      contents: read
-      packages: write
 
 jobs:
   build:

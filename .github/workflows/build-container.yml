@@ -12,9 +12,6 @@ on:
   workflow_dispatch:
   # Called by release.yml
   workflow_call:
-    permissions:
-      contents: read
-      packages: write
 
 jobs:
   build-and-push:
