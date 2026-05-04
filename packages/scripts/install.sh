@@ -81,6 +81,23 @@ _docker_running() {
   fi
 }
 
+# Linux: pre-installed Docker often works as root but not for this user until they
+# join the docker group and start a new session. The "install Docker" branch sets
+# DOCKER_CMD=sudo in that case; mirror it here when the CLI exists but the socket
+# is not accessible without sudo (typical on cloud images with passwordless sudo).
+_docker_linux_use_sudo_if_needed() {
+  [[ "$PLATFORM" == "linux" ]] || return 0
+  [[ -z "${DOCKER_CMD:-}" ]] || return 0
+  command -v sudo &>/dev/null || return 0
+  if _docker_running; then
+    return 0
+  fi
+  if sudo -n docker info >/dev/null 2>&1; then
+    DOCKER_CMD="sudo docker"
+    warn "Docker daemon is reachable via sudo only. To use Docker without sudo, run: sudo usermod -aG docker \"$(id -un)\" then log out and back in (or newgrp docker)."
+  fi
+}
+
 # ── A) No docker CLI: install (Linux) or offer install / instructions (macOS)
 if ! command -v docker &>/dev/null; then
   warn "Docker CLI not found — installing…"
@@ -121,13 +138,16 @@ then open it once from Applications, wait until it is running, and re-run this i
   $_DOCKER_READY || die "Docker installed but daemon is still not responding after ~5s. Start Docker and re-run."
 fi
 
-# ── B) CLI present but engine not ready (typical right after opening Docker Desktop on macOS)
+# ── B) CLI present but engine not ready (Linux: socket permission vs sudo; macOS: Docker Desktop starting)
+_docker_linux_use_sudo_if_needed
+
 if ! _docker_running; then
   warn "Docker is installed but the engine is not responding yet — waiting…"
   _DOCKER_READY=false
   _max=15
   [[ "$PLATFORM" == "macos" ]] && _max=60
   for ((_i = 1; _i <= _max; _i++)); do
+    _docker_linux_use_sudo_if_needed
     if _docker_running; then
       _DOCKER_READY=true
       break
@@ -135,7 +155,11 @@ if ! _docker_running; then
     sleep 2
   done
   if ! $_DOCKER_READY; then
-    die "Docker engine still not reachable. On macOS: open Docker from Applications, wait until the engine is running, then run this script again. Tip: use Terminal.app; if 'docker version' works there, re-run this script from the same window."
+    if [[ "$PLATFORM" == "linux" ]]; then
+      die "Docker engine still not reachable. On Linux: start the daemon (sudo systemctl start docker), fix socket access (sudo usermod -aG docker \"$(id -un)\" then log out and back in, or use newgrp docker), or confirm with 'docker info' / 'sudo docker info' in this shell."
+    else
+      die "Docker engine still not reachable. On macOS: open Docker from Applications, wait until the engine is running, then run this script again. Tip: use Terminal.app; if 'docker version' works there, re-run this script from the same window."
+    fi
   fi
 fi
 

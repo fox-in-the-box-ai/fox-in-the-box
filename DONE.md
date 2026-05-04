@@ -1,16 +1,17 @@
+# Done — Linux Docker detection in `install.sh`
+
 ## What changed
 
-Supervisord’s Unix RPC socket and pidfile were moved from `/data/run/` to `/run/fitb/` so the container starts when `/data` is **bind-mounted from the host** (Docker Desktop on macOS or Windows). On those setups, creating an AF_UNIX socket on the shared mount fails with `errno.EINVAL (22)`, which supervisord reports as **“Cannot open an HTTP server”**, then the container exits and restart policies loop.
+- **Cause:** With Docker already installed, the script skipped the branch that sets `DOCKER_CMD="sudo docker"` after `usermod -aG docker`. If the daemon was healthy but the current user could not use `/var/run/docker.sock` (not in `docker` group yet), `docker info` failed and the installer waited until timeout, then showed a macOS-only error.
+- **Fix:** On Linux, before (and during) the wait loop, call `_docker_linux_use_sudo_if_needed`: if `docker info` fails but `sudo -n docker info` succeeds, set `DOCKER_CMD="sudo docker"` and continue. Linux failure message now mentions `systemctl`, `docker` group, and `sudo docker info`.
+- **Tests:** New bats case with stubs for `sudo -n docker info` (must handle `-n` like real sudo).
 
 ## How to verify
 
 ```bash
-python -m pytest tests/integration/test_task03_integration_files.py -v
+cd tests/container && bats test_install.bats
 ```
 
-Rebuild the image and run with your usual `-v ~/…:/data` mount; supervisord should stay up.
+## Notes
 
-## Notes for Supervisor
-
-- Task docs under `docs/tasks/` still mention `/data/run` for the supervisord socket in a few places; update if you want docs aligned with `/run/fitb/`.
-- No submodule or fork changes.
+- Requires **passwordless** `sudo` for the `sudo -n` probe (typical on Ubuntu cloud images). If `sudo` needs a password, the script still cannot proceed non-interactively; the new Linux error text points to group membership and `sudo docker info`.
