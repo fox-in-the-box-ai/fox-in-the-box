@@ -1,6 +1,6 @@
 {
   "name": "@fox-in-the-box/electron",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Fox in the box desktop app",
   "author": "Vulpy, Inc.",
   "main": "src/main.js",
