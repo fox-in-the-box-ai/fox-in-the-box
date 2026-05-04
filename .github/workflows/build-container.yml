@@ -10,8 +10,13 @@ on:
       - main
   # Manual rebuild (uses submodules at the checked-out ref — bump forks/ in main first).
   workflow_dispatch:
-  # Called by release.yml
+  # Called by release.yml. The digest output lets the caller pin the released
+  # image to the exact bytes this run pushed (closes the `:latest` race in #41).
   workflow_call:
+    outputs:
+      digest:
+        description: "Content digest of the pushed image (e.g. sha256:abc...)."
+        value: ${{ jobs.build-and-push.outputs.digest }}
 
 jobs:
   build-and-push:
@@ -21,6 +26,9 @@ jobs:
     permissions:
       contents: read
       packages: write   # required to push to GHCR
+
+    outputs:
+      digest: ${{ steps.push.outputs.digest }}
 
     steps:
       - name: Checkout (with submodules)
@@ -60,8 +68,17 @@ jobs:
             .
 
       - name: Push Docker image to GHCR
+        id: push
         run: |
-          docker push ghcr.io/fox-in-the-box-ai/cloud:${{ steps.meta.outputs.tag }}
+          set -euo pipefail
+          IMAGE="ghcr.io/fox-in-the-box-ai/cloud:${{ steps.meta.outputs.tag }}"
+          docker push "$IMAGE"
+          # `RepoDigests` is `[name@sha256:...]` once the image has been pushed
+          # to the registry. Strip the `name@` prefix to get the bare digest so
+          # callers can compose `name@<digest>` for any tag they want.
+          DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "$IMAGE" | cut -d'@' -f2)
+          echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
+          echo "Pushed $IMAGE @ $DIGEST"
 
       - name: Tag and push :stable
         if: github.event_name != 'pull_request'
