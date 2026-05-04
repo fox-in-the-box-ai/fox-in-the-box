@@ -60,7 +60,8 @@ RUN set -eux; \
 # ── non-root user ─────────────────────────────────────────────────────────────
 RUN useradd -r -s /bin/bash -d /app foxinthebox \
     && mkdir -p /data \
-    && chown -R foxinthebox:foxinthebox /app /data
+    && chown -R foxinthebox:foxinthebox /app /data \
+    && (getent group tailscale >/dev/null && usermod -aG tailscale foxinthebox || true)
 
 # Marker for Hermes WebUI: bind behavior / container hints (see hermes-webui server.py)
 RUN printf '1\n' > /.within_container

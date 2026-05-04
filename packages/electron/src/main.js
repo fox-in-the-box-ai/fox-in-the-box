@@ -386,12 +386,16 @@ function getRemediationForCode(code, platform) {
   }
   if (code === 'IMAGE_PULL_TIMEOUT') return 'Check network connectivity and retry. Corporate proxies/firewalls can block container pulls.';
   if (code === 'HEALTH_TIMEOUT') return 'Container started but app is not healthy yet. Wait a bit longer or restart Docker and try again.';
+  if (code === 'ACCESS_MODE_CANCELLED') return 'Relaunch Fox in the box and pick a network option, or set FOX_ACCESS_MODE=1|2|3 before starting.';
   return 'Check diagnostics and logs, then retry.';
 }
 
 async function startFromTray() {
   showProgress('Starting Fox in the box…');
   try {
+    if (typeof docker.ensureDockerAccessModeChosen === 'function') {
+      await docker.ensureDockerAccessModeChosen();
+    }
     await ensureContainerHealthy({
       docker,
       waitUntilHealthy,

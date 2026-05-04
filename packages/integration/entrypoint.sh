@@ -162,29 +162,51 @@ if [ -f "$HERMES_YAML" ] && [ -n "${BRAVE_API_KEY:-}" ]; then
     echo "[entrypoint] Patched BRAVE_API_KEY into $HERMES_YAML"
 fi
 
-# ── 6. Tailscale Serve (deferred until WebUI answers /health) ─────────────────
+# ── 6. Tailscale Serve (background: after WebUI + Tailscale login) ─────────────
 # Do not run `tailscale serve` before supervisord — nothing listens on :8787 yet.
-# A background loop waits for Hermes WebUI then runs `tailscale serve --bg` once.
-if [ -f "/data/data/tailscale/tailscaled.state" ]; then
-    echo "[entrypoint] Tailscale state present — Serve will configure after WebUI is up (background)."
-    (
-        _ts_deadline=240
-        _ts_i=0
-        while [ "$_ts_i" -lt "$_ts_deadline" ]; do
-            if curl -fsS --connect-timeout 2 --max-time 6 "http://127.0.0.1:8787/health" >/dev/null 2>&1; then
-                if tailscale serve --bg / http://localhost:8787 2>/dev/null; then
-                    echo "[entrypoint] Tailscale Serve configured (https → localhost:8787)."
-                else
-                    echo "[entrypoint] WARNING: tailscale serve failed — will retry on next container restart."
-                fi
-                exit 0
+# Wizard / install.sh complete Tailscale *after* first boot, so we must not require
+# tailscaled.state at entrypoint start. Parent process execs supervisord below;
+# this subshell survives, waits for /health, then polls until BackendState=Running.
+(
+    sleep 10
+    _health_dead=240
+    _hi=0
+    while [ "$_hi" -lt "$_health_dead" ]; do
+        if curl -fsS --connect-timeout 2 --max-time 6 "http://127.0.0.1:8787/health" >/dev/null 2>&1; then
+            echo "[entrypoint] WebUI healthy — configuring Tailscale Serve after login (background)…"
+            break
+        fi
+        _hi=$((_hi + 2))
+        sleep 2
+    done
+    if [ "$_hi" -ge "$_health_dead" ]; then
+        echo "[entrypoint] Tailscale Serve helper: WebUI /health not ready within ${_health_dead}s."
+        exit 0
+    fi
+    # Up to ~15 min for user to finish Tailscale auth (wizard or manual).
+    _ts_iters=450
+    _ti=0
+    while [ "$_ti" -lt "$_ts_iters" ]; do
+        if tailscale status --json 2>/dev/null | python3 -c "
+import json, sys
+try:
+    d = json.load(sys.stdin)
+    sys.exit(0 if d.get('BackendState') == 'Running' else 1)
+except Exception:
+    sys.exit(1)
+" 2>/dev/null; then
+            if tailscale serve --bg / http://localhost:8787 2>/dev/null; then
+                echo "[entrypoint] Tailscale Serve configured (https → localhost:8787)."
+            else
+                echo "[entrypoint] WARNING: tailscale serve failed — will retry on next container restart."
             fi
-            _ts_i=$((_ts_i + 2))
-            sleep 2
-        done
-        echo "[entrypoint] WARNING: Tailscale Serve skipped (WebUI /health not ready within ${_ts_deadline}s)."
-    ) &
-fi
+            exit 0
+        fi
+        _ti=$((_ti + 1))
+        sleep 2
+    done
+    echo "[entrypoint] Tailscale Serve not configured (no Running backend within timeout — OK for port-only)."
+) &
 
 # ── 6b. Patch supervisord.conf with runtime env vars ──────────────────────────
 # supervisord %(ENV_VAR)s expansion fails when the var is absent from the process

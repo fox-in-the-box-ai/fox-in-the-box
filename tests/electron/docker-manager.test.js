@@ -12,6 +12,7 @@ let mockDockerInstance;
 
 beforeEach(() => {
   jest.clearAllMocks();
+  delete process.env.FOX_ACCESS_MODE;
   mockDockerInstance = {
     ping:          jest.fn(),
     listImages:    jest.fn(),
@@ -106,6 +107,28 @@ test('startContainer passes Tailscale-friendly HostConfig (NET_ADMIN, tun, sysct
       CgroupPermissions: 'rwm',
     },
   ]);
+  expect(hc.PortBindings['8787/tcp'][0].HostIp).toBe('127.0.0.1');
+});
+
+test('startContainer port-only mode omits caps and binds 0.0.0.0', async () => {
+  process.env.FOX_ACCESS_MODE = '1';
+  delete process.env.FOX_DATA_DIR;
+  const mockContainer = { start: jest.fn().mockResolvedValue({}) };
+  mockDockerInstance.createContainer.mockResolvedValue(mockContainer);
+
+  await docker.startContainer();
+
+  const hc = mockDockerInstance.createContainer.mock.calls[0][0].HostConfig;
+  expect(hc.CapAdd).toBeUndefined();
+  expect(hc.Devices).toBeUndefined();
+  expect(hc.Sysctls).toBeUndefined();
+  expect(hc.PortBindings['8787/tcp'][0].HostIp).toBe('0.0.0.0');
+});
+
+test('buildContainerCreateOptions both mode uses LAN bind and Tailscale caps', () => {
+  const opts = docker.buildContainerCreateOptions('/data/dir', '3');
+  expect(opts.HostConfig.PortBindings['8787/tcp'][0].HostIp).toBe('0.0.0.0');
+  expect(opts.HostConfig.CapAdd).toEqual(['NET_ADMIN']);
 });
 
 test('startContainer reuses existing stopped container when present', async () => {
