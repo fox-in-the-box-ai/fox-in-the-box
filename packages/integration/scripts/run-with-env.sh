@@ -15,4 +15,15 @@ if [ -f /data/config/hermes.env ]; then
   source /data/config/hermes.env || true
   set +a
 fi
+
+# Also pick up keys saved post-onboarding via the WebUI's Settings → Providers
+# panel, which writes to the active hermes home (~/.hermes/.env). The two
+# files are sourced in order so Settings entries override onboarding ones,
+# matching the in-app expectation that the most recent Settings save wins.
+if [ -n "${HOME:-}" ] && [ -f "$HOME/.hermes/.env" ]; then
+  set -a
+  # shellcheck disable=SC1091
+  source "$HOME/.hermes/.env" || true
+  set +a
+fi
 exec "$@"
