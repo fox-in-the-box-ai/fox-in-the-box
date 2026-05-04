@@ -308,17 +308,24 @@ _wait_tailscale_cli_ready() {
 # Run `tailscale up` automatically (no manual docker exec) and poll logs + stdout capture for the URL.
 # Use `tailscale up`, not `tailscale login`: login-only can finish OAuth while leaving the node
 # stopped (WantRunning=false); `up` authenticates if needed and brings the tunnel online.
+#
+# IMPORTANT: Do not call this from command substitution `$(...)`: subshell exit kills background
+# `tailscale up` jobs. Use globals FITB_TAILSCALE_URL + FITB_TS_UP_PID and call directly.
+FITB_TAILSCALE_URL=""
+FITB_TS_UP_PID=""
 _obtain_tailscale_login_url() {
   local url="" waited=0 poll_max="${FOX_TAILSCALE_URL_POLL_SEC:-180}"
   local cap="${TMPDIR:-/tmp}/fitb-tailscale-login.$$.$RANDOM.log"
   rm -f "$cap"
+  FITB_TAILSCALE_URL=""
+  FITB_TS_UP_PID=""
 
   info "Waiting for Tailscale daemon inside the container…"
   _wait_tailscale_cli_ready || true
 
   info "Starting Tailscale (opens auth URL if needed — then connects automatically)…"
   ($DOCKER_CMD exec "$CONTAINER" tailscale up --timeout=600 >>"$cap" 2>&1) &
-  local _ts_pid=$!
+  FITB_TS_UP_PID=$!
 
   while [[ "$waited" -lt "$poll_max" ]]; do
     url="$(_extract_tailscale_login_url)"
@@ -326,30 +333,42 @@ _obtain_tailscale_login_url() {
       url="$(grep -hoE 'https://login\.tailscale\.com[^[:space:]]+' "$cap" 2>/dev/null | head -1)"
     fi
     if [[ -n "$url" ]]; then
-      echo "$url"
+      FITB_TAILSCALE_URL="$url"
       return 0
     fi
     sleep 2
     waited=$((waited + 2))
   done
 
-  kill "$_ts_pid" 2>/dev/null || true
-  wait "$_ts_pid" 2>/dev/null || true
+  kill "$FITB_TS_UP_PID" 2>/dev/null || true
+  wait "$FITB_TS_UP_PID" 2>/dev/null || true
+  FITB_TS_UP_PID=""
 
   url="$(_extract_tailscale_login_url)"
   if [[ -z "$url" ]] && [[ -f "$cap" ]]; then
     url="$(grep -hoE 'https://login\.tailscale\.com[^[:space:]]+' "$cap" 2>/dev/null | head -1)"
   fi
   rm -f "$cap"
-  [[ -n "$url" ]] && { echo "$url"; return 0; }
+  if [[ -n "$url" ]]; then
+    FITB_TAILSCALE_URL="$url"
+    return 0
+  fi
   return 1
+}
+
+# Parse BackendState from `tailscale status --json` inside the container (grep breaks on nested JSON).
+_tailscale_backend_state() {
+  $DOCKER_CMD exec "$CONTAINER" sh -c \
+    'tailscale status --json 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get(\"BackendState\",\"\"))"' \
+    2>/dev/null | tr -d '\r\n'
 }
 
 if [[ "$USE_TAILSCALE" == "true" ]]; then
   LOGIN_URL=""
   set +e
-  LOGIN_URL="$(_obtain_tailscale_login_url)"
+  _obtain_tailscale_login_url
   _ts_url_rc=$?
+  LOGIN_URL="$FITB_TAILSCALE_URL"
   set -e
 
   if [[ "$_ts_url_rc" -ne 0 || -z "$LOGIN_URL" ]]; then
@@ -369,15 +388,20 @@ if [[ "$USE_TAILSCALE" == "true" ]]; then
       info "(Install 'qrencode' to display a QR code here.)"
     fi
 
+    # Wait for the background `tailscale up` (must not run inside `$(...)` or subshell kills it).
+    if [[ -n "${FITB_TS_UP_PID:-}" ]] && kill -0 "$FITB_TS_UP_PID" 2>/dev/null; then
+      info "Waiting for Tailscale to finish (complete browser login — tunnel connects when this step exits)…"
+      wait "$FITB_TS_UP_PID" 2>/dev/null || true
+    fi
+    FITB_TS_UP_PID=""
+
     # Poll until authenticated + tunnel up (`tailscale up` sets WantRunning; login alone does not).
-    info "Waiting for Tailscale to connect…"
+    info "Waiting for Tailscale backend…"
     CONNECTED=false
     DEADLINE=$(( $(date +%s) + 300 ))
     _poll_n=0
     while [[ $(date +%s) -lt $DEADLINE ]]; do
-      BACKEND_STATE="$($DOCKER_CMD exec "$CONTAINER" tailscale status --json 2>/dev/null \
-                       | grep -oE '"BackendState":"[^"]+"' \
-                       | grep -oE '[^"]+$' || true)"
+      BACKEND_STATE="$(_tailscale_backend_state)"
       if [[ "$BACKEND_STATE" == "Running" ]]; then
         CONNECTED=true
         break
