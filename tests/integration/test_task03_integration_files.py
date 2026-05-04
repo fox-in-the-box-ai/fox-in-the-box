@@ -50,6 +50,9 @@ class TestDockerfile(unittest.TestCase):
     def test_within_container_marker_for_webui(self) -> None:
         self.assertIn("/.within_container", self.df)
 
+    def test_foxinthebox_in_tailscale_group_when_present(self) -> None:
+        self.assertIn("usermod -aG tailscale foxinthebox", self.df)
+
 
 class TestSupervisordConf(unittest.TestCase):
     def setUp(self) -> None:
@@ -108,6 +111,15 @@ class TestEntrypoint(unittest.TestCase):
     def test_dev_mode_pip_installs_webui_when_present(self) -> None:
         self.assertIn("requirements.txt", self.sh)
         self.assertIn("hermes-webui", self.sh)
+
+    def test_tailscale_serve_waits_for_backend_running(self) -> None:
+        """Serve must not depend on tailscaled.state at entry (wizard logs in later)."""
+        self.assertIn("BackendState", self.sh)
+        self.assertIn("tailscale serve --bg", self.sh)
+        self.assertNotRegex(
+            self.sh,
+            re.compile(r"if\s+\[\s+-f\s+\"/data/data/tailscale/tailscaled\.state\"\s+\]"),
+        )
 
 
 if __name__ == "__main__":

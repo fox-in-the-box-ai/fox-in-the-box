@@ -9,6 +9,7 @@ const path = require('path');
 const IMAGE  = 'ghcr.io/fox-in-the-box-ai/cloud:stable';
 const CNAME  = 'fox-in-the-box';
 const PORT   = '8787/tcp';
+const ACCESS_MODE_FILE = 'docker-access-mode.json';
 
 let docker = null;
 let activeSocket = 'default';
@@ -245,30 +246,115 @@ function getDataDir() {
   }
 }
 
+function accessModePrefsPath() {
+  return path.join(getDataDir(), ACCESS_MODE_FILE);
+}
+
+/**
+ * @returns {'1'|'2'|'3'|null}  null = not saved yet (Windows should prompt)
+ */
+function getSavedAccessMode() {
+  try {
+    const p = accessModePrefsPath();
+    if (!fs.existsSync(p)) return null;
+    const raw = JSON.parse(fs.readFileSync(p, 'utf8'));
+    const m = String(raw.accessMode || '');
+    if (m === '1' || m === '2' || m === '3') return m;
+  } catch (_) {
+    /* ignore */
+  }
+  return null;
+}
+
+function saveAccessMode(mode) {
+  const p = accessModePrefsPath();
+  fs.mkdirSync(path.dirname(p), { recursive: true });
+  fs.writeFileSync(
+    p,
+    `${JSON.stringify({ version: 1, accessMode: mode }, null, 0)}\n`,
+    'utf8',
+  );
+}
+
+/**
+ * Effective access mode: FOX_ACCESS_MODE env, saved prefs, or default.
+ * Mirrors packages/scripts/install.sh (1=port LAN, 2=Tailscale-focused, 3=both).
+ */
+function getEffectiveAccessMode() {
+  const e = process.env.FOX_ACCESS_MODE;
+  if (e === '1' || e === '2' || e === '3') return e;
+  const saved = getSavedAccessMode();
+  if (saved) return saved;
+  return '2';
+}
+
+/**
+ * Windows first-run: choose how host publishes port 8787 / Tailscale caps.
+ * No-op on other platforms or when prefs already exist.
+ */
+async function ensureDockerAccessModeChosen() {
+  if (process.platform !== 'win32') return;
+  if (getSavedAccessMode() !== null) return;
+  const { dialog } = require('electron');
+  const { response } = await dialog.showMessageBox({
+    type: 'question',
+    title: 'Fox in the box — Network access',
+    message: 'How should this PC reach the container?',
+    detail:
+      'Port only: bind 8787 on all interfaces (localhost + LAN if firewall allows).\n'
+      + 'Tailscale only: localhost 8787 on this PC + Tailscale inside the container (recommended).\n'
+      + 'Both: LAN port 8787 and Tailscale.\n\n'
+      + 'To change later, remove the fox-in-the-box container in Docker Desktop and relaunch the app.',
+    buttons: ['Port only', 'Tailscale only', 'Both', 'Cancel'],
+    defaultId: 1,
+    cancelId: 3,
+  });
+  if (response === 3) {
+    const err = new Error('Setup cancelled at network access step.');
+    err.code = 'ACCESS_MODE_CANCELLED';
+    throw err;
+  }
+  const mode = response === 0 ? '1' : response === 1 ? '2' : '3';
+  saveAccessMode(mode);
+}
+
+function buildContainerCreateOptions(dataDir, accessMode) {
+  const hostConfig = {
+    AutoRemove: true,
+    Binds: [`${dataDir}:/data`],
+    PortBindings: {
+      [PORT]: [
+        {
+          HostIp: accessMode === '1' || accessMode === '3' ? '0.0.0.0' : '127.0.0.1',
+          HostPort: '8787',
+        },
+      ],
+    },
+  };
+  if (accessMode === '2' || accessMode === '3') {
+    hostConfig.CapAdd = ['NET_ADMIN'];
+    hostConfig.Devices = [
+      {
+        PathOnHost: '/dev/net/tun',
+        PathInContainer: '/dev/net/tun',
+        CgroupPermissions: 'rwm',
+      },
+    ];
+    hostConfig.Sysctls = { 'net.ipv4.ip_forward': '1' };
+  }
+  return {
+    name: CNAME,
+    Image: IMAGE,
+    HostConfig: hostConfig,
+    ExposedPorts: { [PORT]: {} },
+  };
+}
+
 async function createAndStartContainer() {
   const dataDir = getDataDir();
+  const accessMode = getEffectiveAccessMode();
   try {
-    const container = await docker.createContainer({
-      name: CNAME,
-      Image: IMAGE,
-      HostConfig: {
-        AutoRemove: true,
-        CapAdd: ['NET_ADMIN'],
-        Devices: [
-          {
-            PathOnHost: '/dev/net/tun',
-            PathInContainer: '/dev/net/tun',
-            CgroupPermissions: 'rwm',
-          },
-        ],
-        Sysctls: { 'net.ipv4.ip_forward': '1' },
-        PortBindings: {
-          [PORT]: [{ HostIp: '127.0.0.1', HostPort: '8787' }],
-        },
-        Binds: [`${dataDir}:/data`],
-      },
-      ExposedPorts: { [PORT]: {} },
-    });
+    const container = await docker.createContainer(buildContainerCreateOptions(dataDir, accessMode));
     await container.start();
     log.info('Container started:', CNAME);
     return { container, reused: false, reason: 'created-new' };
@@ -427,6 +513,11 @@ module.exports = {
   pullImage,
   getRunningContainer,
   getContainerByName,
+  ensureDockerAccessModeChosen,
+  getSavedAccessMode,
+  saveAccessMode,
+  getEffectiveAccessMode,
+  buildContainerCreateOptions,
   ensureContainerRunning,
   startContainer,
   stopContainer,
