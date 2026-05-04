@@ -5,8 +5,6 @@ on:
   push:
     branches:
       - main
-    tags:
-      - "v*"
   workflow_call:
   workflow_dispatch:
 
@@ -85,21 +83,3 @@ jobs:
           path: ${{ matrix.artifact-path }}
           if-no-files-found: error
           retention-days: 30
-
-      - name: Rename artifact to stable filename
-        if: startsWith(github.ref, 'refs/tags/v')
-        shell: bash
-        working-directory: packages/electron/dist
-        run: |
-          if [[ "${{ runner.os }}" == "Windows" ]]; then
-            mv *.exe fox-in-the-box-setup.exe
-          fi
-
-      - name: Upload to GitHub Release (tagged releases only)
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: ${{ matrix.artifact-path }}
-          generate_release_notes: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
