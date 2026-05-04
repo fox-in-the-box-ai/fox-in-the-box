@@ -8,3 +8,4 @@ packages/electron/node_modules/
 
 __pycache__/
 *.py[cod]
+CLAUDE.md
