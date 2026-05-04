@@ -57,15 +57,26 @@ jobs:
         id: tag
         run: echo "version=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
 
+      # Pin the released image to the exact bytes that wait-for-container just
+      # pushed. Pulling `:latest` would be racy: a concurrent push to main can
+      # mutate `:latest` between the build and this step, so the released
+      # vX.Y.Z / :stable tags would point at the newer commit's image instead
+      # of the tagged one. Pulling `name@sha256:...` removes that window. (#41)
       - name: Re-tag Docker image as versioned and :stable
+        env:
+          DIGEST: ${{ needs.wait-for-container.outputs.digest }}
         run: |
-          docker pull ghcr.io/fox-in-the-box-ai/cloud:latest
-          docker tag  ghcr.io/fox-in-the-box-ai/cloud:latest \
-                      ghcr.io/fox-in-the-box-ai/cloud:${{ steps.tag.outputs.version }}
-          docker tag  ghcr.io/fox-in-the-box-ai/cloud:latest \
-                      ghcr.io/fox-in-the-box-ai/cloud:stable
-          docker push ghcr.io/fox-in-the-box-ai/cloud:${{ steps.tag.outputs.version }}
-          docker push ghcr.io/fox-in-the-box-ai/cloud:stable
+          set -euo pipefail
+          if [[ -z "$DIGEST" ]]; then
+            echo "::error::wait-for-container did not produce a digest output."
+            exit 1
+          fi
+          IMG="ghcr.io/fox-in-the-box-ai/cloud"
+          docker pull "$IMG@$DIGEST"
+          docker tag  "$IMG@$DIGEST" "$IMG:${{ steps.tag.outputs.version }}"
+          docker tag  "$IMG@$DIGEST" "$IMG:stable"
+          docker push "$IMG:${{ steps.tag.outputs.version }}"
+          docker push "$IMG:stable"
 
       - name: Download Windows artifact
         uses: actions/download-artifact@v4
