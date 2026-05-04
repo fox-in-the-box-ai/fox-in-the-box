@@ -1,17 +1,32 @@
-# Done — Linux Docker detection in `install.sh`
+# DONE — Tailscale setup (cross-platform)
 
-## What changed
+## Implemented
 
-- **Cause:** With Docker already installed, the script skipped the branch that sets `DOCKER_CMD="sudo docker"` after `usermod -aG docker`. If the daemon was healthy but the current user could not use `/var/run/docker.sock` (not in `docker` group yet), `docker info` failed and the installer waited until timeout, then showed a macOS-only error.
-- **Fix:** On Linux, before (and during) the wait loop, call `_docker_linux_use_sudo_if_needed`: if `docker info` fails but `sudo -n docker info` succeeds, set `DOCKER_CMD="sudo docker"` and continue. Linux failure message now mentions `systemctl`, `docker` group, and `sudo docker info`.
-- **Tests:** New bats case with stubs for `sudo -n docker info` (must handle `-n` like real sudo).
+1. **`packages/integration/entrypoint.sh`**  
+   Tailscale Serve runs in a background helper that waits for WebUI `/health`, then polls `tailscale status --json` until `BackendState` is `Running`, then runs `tailscale serve --bg`. This fixes first-time wizard / delayed login (no longer requires `tailscaled.state` before supervisord starts).
 
-## How to verify
+2. **`packages/scripts/install.sh`**  
+   Login URL discovery reads `/data/logs/tailscaled.log` and `.err` inside the container via `docker exec`, with `docker logs` as fallback (tailscaled output is file-logged by supervisord, not on container stdout).
+
+3. **`packages/integration/Dockerfile`**  
+   Adds `foxinthebox` to the `tailscale` group when that group exists so the Hermes WebUI process can run `tailscale login` against the root-owned socket.
+
+4. **Windows Electron (`packages/electron/src/docker-manager.js`)**  
+   First-run dialog (Windows only) chooses access mode `1|2|3` matching `install.sh`; preference is stored in `userData/docker-access-mode.json`. `FOX_ACCESS_MODE` overrides. Host publish and `NET_ADMIN`/`/dev/net/tun`/sysctl follow the same rules as the shell installer.
+
+5. **`startup-orchestrator.js` / `main.js`**  
+   Call `ensureDockerAccessModeChosen()` before creating the container; tray flow does the same. Remediation text for `ACCESS_MODE_CANCELLED`.
+
+## How to run tests
 
 ```bash
-cd tests/container && bats test_install.bats
+pytest tests/integration/test_task03_integration_files.py -v
+cd packages/electron && pnpm test
 ```
 
-## Notes
+(`bats tests/container/test_install.bats` if bats is installed.)
 
-- Requires **passwordless** `sudo` for the `sudo -n` probe (typical on Ubuntu cloud images). If `sudo` needs a password, the script still cannot proceed non-interactively; the new Linux error text points to group membership and `sudo docker info`.
+## Notes / Supervisor
+
+- **`forks/hermes-webui`** was not changed; Dockerfile group membership addresses CLI access to tailscaled where applicable.
+- Existing Windows installs without `docker-access-mode.json` will see the new dialog once on next launch before the container is created.
