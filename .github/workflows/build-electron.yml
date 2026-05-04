@@ -10,6 +10,9 @@ on:
   # Called by release.yml
   workflow_call:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     name: Build Electron — ${{ matrix.os }}
