@@ -148,9 +148,25 @@ async function isImagePresent() {
 
 /**
  * Pull the image with a progress callback.
+ * First removes any existing local image to bypass Docker's client-side cache,
+ * ensuring updates to :stable tag are picked up immediately.
  * @param {(pct: number) => void} onProgress  0–100
  */
 async function pullImage(onProgress) {
+  // Remove cached image first to force fresh pull. Dockerode.pull() doesn't support
+  // --pull=always flag, so we delete and re-pull instead.
+  try {
+    const images = await docker.listImages({ filters: { reference: [IMAGE] } });
+    for (const img of images) {
+      const image = docker.getImage(img.Id);
+      await image.remove({ force: true });
+      log.info(`Removed stale image: ${IMAGE}`);
+    }
+  } catch (err) {
+    log.warn('Failed to remove old image before pull (may not exist):', err.message);
+    // Continue anyway; the pull will proceed
+  }
+
   return new Promise((resolve, reject) => {
     docker.pull(IMAGE, (err, stream) => {
       if (err) return reject(err);

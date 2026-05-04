@@ -147,13 +147,13 @@ async function runStartup({
   }
 
   await runPhase(sessionId, 'image_ready', async () => {
-    const present = await docker.isImagePresent();
-    if (present) return;
-
-    imageProgress('Downloading Fox in the box… (this only happens once)');
+    // Always pull the image to bypass Docker's client-side cache.
+    // This ensures hotfixes and updates to :stable tag are picked up immediately,
+    // even if an older version of the image is already cached locally.
+    imageProgress('Checking for updates and preparing container image…');
     await withTimeout(
       docker.pullImage((pct) => {
-        imageProgress(`Downloading Fox in the box… ${pct}%`);
+        imageProgress(`Preparing container image… ${pct}%`);
       }),
       15 * 60 * 1000,
       () => Object.assign(new Error('Image pull timed out'), { code: 'IMAGE_PULL_TIMEOUT' })
