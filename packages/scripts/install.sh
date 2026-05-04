@@ -167,9 +167,12 @@ DOCKER_CMD="${DOCKER_CMD:-docker}"
 success "Docker is ready."
 
 ##############################################################################
-# 3. Pull image
+# 3. Pull image (always fetch latest, don't use stale local cache)
 ##############################################################################
 info "Pulling image: $IMAGE"
+# Remove any existing cached image to force a fresh pull from registry.
+# This ensures hotfixes and updates to :stable tag are picked up immediately.
+$DOCKER_CMD rmi "$IMAGE" 2>/dev/null || true
 $DOCKER_CMD pull "$IMAGE" \
   || die "Failed to pull $IMAGE. Check your network connection or GHCR credentials."
 success "Image pulled."
