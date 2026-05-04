@@ -249,6 +249,88 @@ _prompt_access_mode() {
 _prompt_access_mode
 
 ##############################################################################
+# 4b. Tailscale hostname (only when Tailscale is in the chosen access mode)
+##############################################################################
+# The container's tailnet device name controls the HTTPS URL Tailscale Serve
+# publishes (https://<hostname>.<tailnet>.ts.net). Without --hostname, Tailscale
+# generates one from the container's kernel hostname, which on Docker is a
+# random short hash like `ip-172-26-8-227` — not user-friendly. (Closes #3.)
+
+_default_hostname() {
+  # Curated, on-brand adjective list. Random pick keeps tailnets collision-free
+  # by default while staying memorable. (Tailscale auto-suffixes duplicates with
+  # a numeric counter, so this is best-effort, not a guarantee.)
+  local adjectives=(quick clever bright swift keen amber nimble fierce bold sly golden autumn)
+  echo "fox-${adjectives[$((RANDOM % ${#adjectives[@]}))]}"
+}
+
+_sanitize_hostname() {
+  # Lowercase, collapse runs of non-[a-z0-9-] into a single -, strip leading
+  # and trailing -, truncate to 63 chars (DNS label limit). Returns empty if
+  # nothing valid remained.
+  local raw="$1"
+  local cleaned
+  cleaned=$(echo "$raw" \
+    | tr '[:upper:]' '[:lower:]' \
+    | sed -E 's/[^a-z0-9-]+/-/g; s/^-+//; s/-+$//')
+  echo "${cleaned:0:63}"
+}
+
+_prompt_hostname() {
+  local default_name
+  default_name=$(_default_hostname)
+
+  # Honor pre-set env var (CI / automated installs) — sanitize and use, with
+  # a warning + fallback if it ends up empty.
+  if [[ -n "${FOX_HOSTNAME:-}" ]]; then
+    local sanitized
+    sanitized=$(_sanitize_hostname "$FOX_HOSTNAME")
+    if [[ -z "$sanitized" ]]; then
+      warn "FOX_HOSTNAME='$FOX_HOSTNAME' had no valid characters — using $default_name."
+      FOX_HOSTNAME="$default_name"
+    else
+      if [[ "$sanitized" != "$FOX_HOSTNAME" ]]; then
+        info "FOX_HOSTNAME normalized to: $sanitized"
+      fi
+      FOX_HOSTNAME="$sanitized"
+    fi
+    info "Tailscale hostname: $FOX_HOSTNAME"
+    return
+  fi
+
+  echo
+  echo "Pick a name for this Fox on your tailnet."
+  echo "  Used in the HTTPS URL: https://<name>.<your-tailnet>.ts.net"
+  echo "  Lowercase letters, digits, hyphens. (If the name is taken, Tailscale appends a number.)"
+  echo
+
+  local entered=""
+  if [[ -t 0 ]]; then
+    read -rp "Hostname [default: $default_name]: " entered
+  elif ! { read -rp "Hostname [default: $default_name]: " entered < /dev/tty; } 2>/dev/null; then
+    entered=""
+    info "No usable terminal — using generated hostname."
+  fi
+
+  if [[ -z "$entered" ]]; then
+    FOX_HOSTNAME="$default_name"
+  else
+    FOX_HOSTNAME=$(_sanitize_hostname "$entered")
+    if [[ -z "$FOX_HOSTNAME" ]]; then
+      warn "Hostname '$entered' had no valid characters — using $default_name."
+      FOX_HOSTNAME="$default_name"
+    elif [[ "$FOX_HOSTNAME" != "$entered" ]]; then
+      info "Hostname normalized to: $FOX_HOSTNAME"
+    fi
+  fi
+  info "Tailscale hostname: $FOX_HOSTNAME"
+}
+
+if [[ "$USE_TAILSCALE" == "true" ]]; then
+  _prompt_hostname
+fi
+
+##############################################################################
 # 5. Create host directories
 ##############################################################################
 # App data dir — bind-mounted as /data inside the container
@@ -337,7 +419,7 @@ _obtain_tailscale_login_url() {
   # `tailscale up` stdout/stderr go to this file on the *host* running install.sh — not to
   # /data/logs/tailscaled.log (that file is only what supervisord's tailscaled writes).
   info "Host-side tailscale up log (use: tail -f \"$cap\")"
-  ($DOCKER_CMD exec "$CONTAINER" tailscale up --timeout=600 >>"$cap" 2>&1) &
+  ($DOCKER_CMD exec "$CONTAINER" tailscale up --hostname="$FOX_HOSTNAME" --timeout=600 >>"$cap" 2>&1) &
   FITB_TS_UP_PID=$!
 
   while [[ "$waited" -lt "$poll_max" ]]; do
@@ -391,7 +473,7 @@ _tailscale_poll_until_running() {
     _poll_n=$((_poll_n + 1))
     if [[ "$_poll_n" -eq 15 ]]; then
       info "Nudging tailscale up (tunnel may have stayed down after auth)…"
-      $DOCKER_CMD exec "$CONTAINER" tailscale up --timeout=120 >/dev/null 2>&1 || true
+      $DOCKER_CMD exec "$CONTAINER" tailscale up --hostname="$FOX_HOSTNAME" --timeout=120 >/dev/null 2>&1 || true
     fi
     sleep 3
   done
@@ -423,7 +505,7 @@ if [[ "$USE_TAILSCALE" == "true" ]]; then
     set +e
     # TS_AUTHKEY is read by tailscale up; never echo the key.
     $DOCKER_CMD exec -e "TS_AUTHKEY=${FOX_TAILSCALE_AUTHKEY}" "$CONTAINER" \
-      tailscale up --timeout=600 >>"$_ak_log" 2>&1
+      tailscale up --hostname="$FOX_HOSTNAME" --timeout=600 >>"$_ak_log" 2>&1
     _ts_ak_rc=$?
     set -e
     if [[ "$_ts_ak_rc" -ne 0 ]]; then
@@ -466,7 +548,7 @@ if [[ "$USE_TAILSCALE" == "true" ]]; then
       if [[ "$(_tailscale_backend_state)" != "Running" ]]; then
         info "Retrying tailscale up once to stabilize the tunnel…"
         set +e
-        $DOCKER_CMD exec "$CONTAINER" tailscale up --timeout=300 >/dev/null 2>&1
+        $DOCKER_CMD exec "$CONTAINER" tailscale up --hostname="$FOX_HOSTNAME" --timeout=300 >/dev/null 2>&1
         set -e
       fi
     fi
