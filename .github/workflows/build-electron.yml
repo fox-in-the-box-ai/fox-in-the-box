@@ -7,7 +7,6 @@ on:
       - main
     tags:
       - "v*"
-  # Called by release.yml
   workflow_call:
 
 permissions:
@@ -20,13 +19,16 @@ jobs:
 
     strategy:
       fail-fast: false
-      # macOS: no packaged build in CI/releases — use packages/scripts/install.sh
-      # (same curl|bash flow as Linux). Local unsigned zip: pnpm build --mac.
       matrix:
         include:
           - os: windows-latest
             artifact-name: fox-windows
             artifact-path: packages/electron/dist/*.exe
+          - os: macos-latest
+            artifact-name: fox-macos
+            artifact-path: |
+              packages/electron/dist/*.dmg
+              packages/electron/dist/*-mac.zip
 
     steps:
       - name: Checkout (with submodules)
@@ -34,7 +36,6 @@ jobs:
         with:
           submodules: recursive
 
-      # Windows: enable long paths in git and OS (pnpm hashed store paths exceed MAX_PATH)
       - name: Enable long paths (Windows only)
         if: runner.os == 'Windows'
         shell: pwsh
@@ -54,9 +55,6 @@ jobs:
         with:
           node-version: "20"
 
-      # Windows: use npm install (flat node_modules) to avoid pnpm's deeply-hashed
-      # store paths that exceed Windows MAX_PATH — makensis.exe can't open NSIS includes
-      # from paths like node_modules/.pnpm/app-builder-lib@24.13.3_<longhash>/...
       - name: Install dependencies
         shell: bash
         run: |
@@ -72,12 +70,12 @@ jobs:
         shell: bash
         run: pnpm build
         env:
-          # No code signing cert for v0.1 — CSC_IDENTITY_AUTO_DISCOVERY=false tells
-          # electron-builder to skip signing entirely rather than error on missing/empty cert.
-          # Remove this line and set WIN_CSC_LINK + WIN_CSC_KEY_PASSWORD secrets when ready to sign.
-          CSC_IDENTITY_AUTO_DISCOVERY: "false"
-          # GitHub token for electron-updater publish config
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
@@ -92,16 +90,15 @@ jobs:
         shell: bash
         working-directory: packages/electron/dist
         run: |
-          # Rename to fixed filename so website can link to /releases/latest/download/
           if [[ "${{ runner.os }}" == "Windows" ]]; then
             mv *.exe fox-in-the-box-setup.exe
           fi
 
       - name: Upload to GitHub Release (tagged releases only)
-        if: startsWith(github.ref, 'refs/tags/v') && runner.os == 'Windows'
+        if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
           files: ${{ matrix.artifact-path }}
-          generate_release_notes: false   # release.yml owns release notes
+          generate_release_notes: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
