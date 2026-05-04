@@ -1,5 +1,5 @@
 appId: io.foxinthebox.desktop
-productName: Fox in the box
+productName: Fox in the Box
 executableName: FoxInTheBox
 copyright: "Copyright © 2024 Vulpy, Inc."
 
@@ -30,8 +30,8 @@ nsis:
   perMachine: false
   allowToChangeInstallationDirectory: false
   deleteAppDataOnUninstall: false
-  uninstallDisplayName: Fox in the box
-  shortcutName: Fox in the box
+  uninstallDisplayName: Fox in the Box
+  shortcutName: Fox in the Box
   installerIcon: assets/icon.ico
   uninstallerIcon: assets/icon.ico
   include: build/installer.nsh
