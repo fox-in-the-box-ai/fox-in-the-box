@@ -10,6 +10,7 @@ on:
 
 permissions:
   contents: write
+  id-token: write   # OIDC token for Azure Trusted Signing on Windows builds
 
 jobs:
   build:
@@ -75,6 +76,27 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+      # Sign the NSIS installer in place using Azure Trusted Signing (Icemint LLC
+      # certificate profile). OIDC auth — no client secret needed; the federated
+      # credential in Azure trusts this repo's GitHub Actions runs via the
+      # AZURE_TENANT_ID + AZURE_CLIENT_ID identity. Runs only on Windows; the
+      # already-signed *.exe is what's picked up by the next Upload step, so
+      # release.yml downloads and ships a signed installer.
+      - name: Sign Windows installer (Azure Trusted Signing)
+        if: runner.os == 'Windows'
+        uses: azure/artifact-signing-action@v1
+        with:
+          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          endpoint: https://eus.codesigning.azure.net/
+          trusted-signing-account-name: Icemint
+          certificate-profile-name: fitb-exe-signing
+          files-folder: packages/electron/dist
+          files-folder-filter: exe
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
