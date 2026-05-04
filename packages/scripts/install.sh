@@ -274,20 +274,32 @@ success "Container '$CONTAINER' is running."
 ##############################################################################
 # 7. Tailscale authentication
 ##############################################################################
+# tailscaled logs go to /data/logs/*.log (supervisord), not container stdout —
+# scrape those via docker exec, with docker logs as fallback.
+_extract_tailscale_login_url() {
+  local url=""
+  url="$($DOCKER_CMD exec "$CONTAINER" sh -c \
+    'grep -hEo "https://login\.tailscale\.com[^[:space:]]+" /data/logs/tailscaled.log /data/logs/tailscaled.err 2>/dev/null | head -1' \
+    2>/dev/null || true)"
+  [[ -n "$url" ]] && { echo "$url"; return 0; }
+  local LOG_LINE="$($DOCKER_CMD logs --tail 80 "$CONTAINER" 2>&1 || true)"
+  echo "$LOG_LINE" | grep -oE 'https://login\.tailscale\.com/a/[A-Za-z0-9]+' | head -1 || true
+}
+
 if [[ "$USE_TAILSCALE" == "true" ]]; then
   info "Waiting for Tailscale login URL (up to 60 s)…"
   LOGIN_URL=""
   DEADLINE=$(( $(date +%s) + 60 ))
   while [[ $(date +%s) -lt $DEADLINE ]]; do
-    LOG_LINE="$($DOCKER_CMD logs --tail 50 "$CONTAINER" 2>&1 || true)"
-    LOGIN_URL="$(echo "$LOG_LINE" | grep -oE 'https://login\.tailscale\.com/a/[A-Za-z0-9]+' | head -1 || true)"
+    LOGIN_URL="$(_extract_tailscale_login_url)"
     [[ -n "$LOGIN_URL" ]] && break
     sleep 2
   done
 
   if [[ -z "$LOGIN_URL" ]]; then
     warn "Tailscale login URL not seen in logs within 60 s."
-    warn "Run:  docker logs $CONTAINER | grep tailscale"
+    warn "Try:  $DOCKER_CMD exec $CONTAINER tail -80 /data/logs/tailscaled.log"
+    warn "  or:  $DOCKER_CMD logs $CONTAINER | grep tailscale"
   else
     echo
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
