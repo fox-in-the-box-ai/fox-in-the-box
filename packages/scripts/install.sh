@@ -4,6 +4,7 @@
 #   or:  bash install.sh
 #
 # Non-interactive (no /dev/tty): set FOX_ACCESS_MODE to 1, 2, or 3 instead of prompting.
+# Tailscale: optional — FOX_TAILSCALE_WAIT_READY_SEC (default 120), FOX_TAILSCALE_URL_POLL_SEC (default 180)
 set -euo pipefail
 
 ##############################################################################
@@ -289,20 +290,70 @@ _extract_tailscale_login_url() {
   echo "$LOG_LINE" | grep -oE 'https://login\.tailscale\.com/a/[A-Za-z0-9]+' | head -1 || true
 }
 
-if [[ "$USE_TAILSCALE" == "true" ]]; then
-  info "Waiting for Tailscale login URL (up to 60 s)…"
-  LOGIN_URL=""
-  DEADLINE=$(( $(date +%s) + 60 ))
-  while [[ $(date +%s) -lt $DEADLINE ]]; do
-    LOGIN_URL="$(_extract_tailscale_login_url)"
-    [[ -n "$LOGIN_URL" ]] && break
+# Wait until /dev/net/tun exists and tailscale CLI responds (supervisord may start tailscaled late).
+_wait_tailscale_cli_ready() {
+  local waited=0 max_wait="${FOX_TAILSCALE_WAIT_READY_SEC:-120}"
+  while [[ "$waited" -lt "$max_wait" ]]; do
+    if $DOCKER_CMD exec "$CONTAINER" sh -c 'test -c /dev/net/tun' >/dev/null 2>&1 \
+      && $DOCKER_CMD exec "$CONTAINER" tailscale version >/dev/null 2>&1; then
+      return 0
+    fi
     sleep 2
+    waited=$((waited + 2))
+  done
+  warn "Tailscale CLI not ready within ${max_wait}s — check: $DOCKER_CMD exec $CONTAINER ls -l /dev/net/tun"
+  return 1
+}
+
+# Run `tailscale login` automatically (no manual docker exec) and poll logs + stdout capture for the URL.
+_obtain_tailscale_login_url() {
+  local url="" waited=0 poll_max="${FOX_TAILSCALE_URL_POLL_SEC:-180}"
+  local cap="${TMPDIR:-/tmp}/fitb-tailscale-login.$$.$RANDOM.log"
+  rm -f "$cap"
+
+  info "Waiting for Tailscale daemon inside the container…"
+  _wait_tailscale_cli_ready || true
+
+  info "Starting Tailscale login (opens auth URL — no manual commands required)…"
+  ($DOCKER_CMD exec "$CONTAINER" tailscale login --timeout=600 >>"$cap" 2>&1) &
+  local _ts_pid=$!
+
+  while [[ "$waited" -lt "$poll_max" ]]; do
+    url="$(_extract_tailscale_login_url)"
+    if [[ -z "$url" ]] && [[ -f "$cap" ]]; then
+      url="$(grep -hoE 'https://login\.tailscale\.com[^[:space:]]+' "$cap" 2>/dev/null | head -1)"
+    fi
+    if [[ -n "$url" ]]; then
+      echo "$url"
+      return 0
+    fi
+    sleep 2
+    waited=$((waited + 2))
   done
 
-  if [[ -z "$LOGIN_URL" ]]; then
-    warn "Tailscale login URL not seen in logs within 60 s."
-    warn "Try:  $DOCKER_CMD exec $CONTAINER tail -80 /data/logs/tailscaled.log"
-    warn "  or:  $DOCKER_CMD logs $CONTAINER | grep tailscale"
+  kill "$_ts_pid" 2>/dev/null || true
+  wait "$_ts_pid" 2>/dev/null || true
+
+  url="$(_extract_tailscale_login_url)"
+  if [[ -z "$url" ]] && [[ -f "$cap" ]]; then
+    url="$(grep -hoE 'https://login\.tailscale\.com[^[:space:]]+' "$cap" 2>/dev/null | head -1)"
+  fi
+  rm -f "$cap"
+  [[ -n "$url" ]] && { echo "$url"; return 0; }
+  return 1
+}
+
+if [[ "$USE_TAILSCALE" == "true" ]]; then
+  LOGIN_URL=""
+  set +e
+  LOGIN_URL="$(_obtain_tailscale_login_url)"
+  _ts_url_rc=$?
+  set -e
+
+  if [[ "$_ts_url_rc" -ne 0 || -z "$LOGIN_URL" ]]; then
+    warn "Tailscale login URL not discovered automatically after polling."
+    warn "Check:  $DOCKER_CMD exec $CONTAINER tail -80 /data/logs/tailscaled.log"
+    warn "Or run:  $DOCKER_CMD exec -it $CONTAINER tailscale login"
   else
     echo
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
