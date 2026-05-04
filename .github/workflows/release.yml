@@ -26,6 +26,12 @@ jobs:
       packages: write
       id-token: write   # OIDC token for Azure Trusted Signing — must be granted at the caller, not just declared in the called workflow
     secrets: inherit
+    with:
+      # Binds the Windows matrix job to this GitHub Environment so its OIDC
+      # token's sub claim is `repo:.../environment:release`, which the Azure
+      # federated credential `github-env-release` matches exactly. Removes
+      # dependency on tag-name patterns (Azure FICs don't actually wildcard).
+      signing-environment: release
 
   release:
     name: Create GitHub Release
