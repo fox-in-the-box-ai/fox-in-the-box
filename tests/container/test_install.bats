@@ -219,6 +219,45 @@ SCRIPT
 # ---------------------------------------------------------------------------
 # Test 6 — Docker install failure exits 1 with error message
 # ---------------------------------------------------------------------------
+@test "Linux: pre-installed Docker uses sudo when socket needs root (sudo -n docker info)" {
+  cat > "$STUB_BIN/docker" <<'EOF'
+#!/usr/bin/env bash
+case "$1" in
+  info) exit 1 ;;
+  pull) exit 0 ;;
+  ps)   echo "" ;;
+  run)  echo "id"; exit 0 ;;
+  stop|rm) exit 0 ;;
+  logs) echo "No output" ;;
+  exec) echo '{"BackendState":"Running"}' ;;
+  *)    exit 0 ;;
+esac
+EOF
+  chmod +x "$STUB_BIN/docker"
+
+  # Passthrough except: "sudo -n docker info" succeeds (simulates passwordless sudo + socket root-only)
+  cat > "$STUB_BIN/sudo" <<'EOF'
+#!/usr/bin/env bash
+if [[ "$1" == "-n" ]]; then
+  shift
+fi
+if [[ "$1" == "docker" && "$2" == "info" ]]; then
+  exit 0
+fi
+if [[ "$1" == "docker" ]]; then
+  shift
+  exec docker "$@"
+fi
+exec "$@"
+EOF
+  chmod +x "$STUB_BIN/sudo"
+
+  run env FOX_ACCESS_MODE=1 bash "$TEST_DIR/install.sh"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Docker is ready"* ]] || [[ "$output" == *"Fox in the Box is installed"* ]]
+  [[ "$output" == *"sudo only"* ]] || [[ "$output" == *"usermod -aG docker"* ]]
+}
+
 @test "exits 1 with error when Docker install script fails" {
   # Override docker stub so docker info fails
   cat > "$STUB_BIN/docker" <<'EOF'
