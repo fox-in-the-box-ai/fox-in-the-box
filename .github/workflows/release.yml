@@ -24,6 +24,7 @@ jobs:
     permissions:
       contents: write
       packages: write
+      id-token: write   # OIDC token for Azure Trusted Signing — must be granted at the caller, not just declared in the called workflow
     secrets: inherit
 
   release:
