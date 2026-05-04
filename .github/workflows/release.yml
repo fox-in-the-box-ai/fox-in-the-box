@@ -6,6 +6,10 @@ on:
     tags:
       - "v*"
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   wait-for-container:
     name: Wait — build-container.yml
@@ -75,6 +79,10 @@ jobs:
           VERSION_BARE="${VERSION#v}"
           awk "/^## \[${VERSION_BARE}\]/{found=1; next} found && /^## \[/{exit} found{print}" CHANGELOG.md \
             > /tmp/release_notes.md
+          if [ ! -s /tmp/release_notes.md ]; then
+            echo "::error::CHANGELOG.md has no entry for [${VERSION_BARE}] — refusing to publish a release with empty body."
+            exit 1
+          fi
           echo "notes_path=/tmp/release_notes.md" >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub Release
@@ -82,6 +90,7 @@ jobs:
         with:
           tag_name: ${{ steps.tag.outputs.version }}
           body_path: ${{ steps.changelog.outputs.notes_path }}
+          fail_on_unmatched_files: true
           files: |
             release-artifacts/windows/*.exe
             release-artifacts/macos/*.dmg
