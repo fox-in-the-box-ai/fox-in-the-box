@@ -11,12 +11,46 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// Match the in-container probe (forks/hermes-webui/bootstrap.py:wait_for_health):
+// healthy = HTTP 200 AND body contains `"status": "ok"`. Status alone is too loose
+// — anything on :8787 returning 200 with a different shape would falsely satisfy
+// the gate. Cap the captured body so a misbehaving endpoint can't pin memory.
+const HEALTHY_MARKER = '"status": "ok"';
+const MAX_BODY_BYTES = 4096;
+
 function requestHealth(url, timeoutMs) {
   return new Promise((resolve) => {
     const req = http.get(url, (res) => {
       const statusCode = res.statusCode;
-      res.resume(); // drain
-      resolve({ ok: statusCode === 200, statusCode, error: null });
+      if (statusCode !== 200) {
+        res.resume();
+        resolve({ ok: false, statusCode, error: null });
+        return;
+      }
+      let body = '';
+      let truncated = false;
+      res.setEncoding('utf8');
+      res.on('data', (chunk) => {
+        if (truncated) return;
+        if (body.length + chunk.length > MAX_BODY_BYTES) {
+          body += chunk.slice(0, MAX_BODY_BYTES - body.length);
+          truncated = true;
+          res.resume(); // discard remainder without buffering
+          return;
+        }
+        body += chunk;
+      });
+      res.on('end', () => {
+        const ok = body.includes(HEALTHY_MARKER);
+        resolve({
+          ok,
+          statusCode,
+          error: ok ? null : `body missing ${HEALTHY_MARKER}`,
+        });
+      });
+      res.on('error', (err) => {
+        resolve({ ok: false, statusCode, error: err.message });
+      });
     });
 
     req.on('error', (err) => {
