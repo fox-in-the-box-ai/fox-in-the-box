@@ -3,8 +3,6 @@ productName: Fox in the box
 executableName: FoxInTheBox
 copyright: "Copyright © 2024 Vulpy, Inc."
 
-# Skip native module rebuild — no native modules need rebuilding for the target platform
-# (cpu-features via ssh2/dockerode fails on Windows with pnpm due to .cjs invocation issue)
 npmRebuild: false
 
 directories:
@@ -26,8 +24,6 @@ win:
         - x64
   artifactName: "fox-in-the-box-setup-${arch}.exe"
   signAndEditExecutable: false
-  # Code signing: set WIN_CSC_LINK (path/URL to .pfx) and WIN_CSC_KEY_PASSWORD in CI
-  # electron-builder picks these up automatically when present
 
 nsis:
   oneClick: true
@@ -36,26 +32,28 @@ nsis:
   deleteAppDataOnUninstall: false
   uninstallDisplayName: Fox in the box
   shortcutName: Fox in the box
-  # Explicit icons — Start menu / Add/Remove can show the default Electron icon if these are omitted.
   installerIcon: assets/icon.ico
   uninstallerIcon: assets/icon.ico
   include: build/installer.nsh
 
-# Unsigned .zip only — no DMG (avoids Apple notarization / cert gatekeeper issues).
-# Release installs for macOS use packages/scripts/install.sh (same as Linux).
 mac:
   icon: assets/icon.icns
   target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
     - target: zip
       arch:
         - x64
         - arm64
-  artifactName: "fox-in-the-box-${arch}-mac.zip"
-  identity: null
+  artifactName: "fox-in-the-box-${arch}-mac.${ext}"
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  notarize: true
 
-# Linux desktop installers (snap/AppImage) are not shipped; install.sh + Docker is the path.
-# Unpacked "dir" is enough to validate the app on Linux. Scoped package "name" still needs
-# explicit executableName for a sane binary in dist/linux-unpacked.
 linux:
   category: Utility
   executableName: fox-in-the-box
