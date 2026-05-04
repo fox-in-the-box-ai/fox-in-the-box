@@ -324,6 +324,9 @@ _obtain_tailscale_login_url() {
   _wait_tailscale_cli_ready || true
 
   info "Starting Tailscale (opens auth URL if needed — then connects automatically)…"
+  # `tailscale up` stdout/stderr go to this file on the *host* running install.sh — not to
+  # /data/logs/tailscaled.log (that file is only what supervisord's tailscaled writes).
+  info "Host-side tailscale up log (use: tail -f \"$cap\")"
   ($DOCKER_CMD exec "$CONTAINER" tailscale up --timeout=600 >>"$cap" 2>&1) &
   FITB_TS_UP_PID=$!
 
