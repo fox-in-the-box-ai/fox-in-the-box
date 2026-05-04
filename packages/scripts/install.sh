@@ -305,7 +305,9 @@ _wait_tailscale_cli_ready() {
   return 1
 }
 
-# Run `tailscale login` automatically (no manual docker exec) and poll logs + stdout capture for the URL.
+# Run `tailscale up` automatically (no manual docker exec) and poll logs + stdout capture for the URL.
+# Use `tailscale up`, not `tailscale login`: login-only can finish OAuth while leaving the node
+# stopped (WantRunning=false); `up` authenticates if needed and brings the tunnel online.
 _obtain_tailscale_login_url() {
   local url="" waited=0 poll_max="${FOX_TAILSCALE_URL_POLL_SEC:-180}"
   local cap="${TMPDIR:-/tmp}/fitb-tailscale-login.$$.$RANDOM.log"
@@ -314,8 +316,8 @@ _obtain_tailscale_login_url() {
   info "Waiting for Tailscale daemon inside the container…"
   _wait_tailscale_cli_ready || true
 
-  info "Starting Tailscale login (opens auth URL — no manual commands required)…"
-  ($DOCKER_CMD exec "$CONTAINER" tailscale login --timeout=600 >>"$cap" 2>&1) &
+  info "Starting Tailscale (opens auth URL if needed — then connects automatically)…"
+  ($DOCKER_CMD exec "$CONTAINER" tailscale up --timeout=600 >>"$cap" 2>&1) &
   local _ts_pid=$!
 
   while [[ "$waited" -lt "$poll_max" ]]; do
@@ -353,7 +355,7 @@ if [[ "$USE_TAILSCALE" == "true" ]]; then
   if [[ "$_ts_url_rc" -ne 0 || -z "$LOGIN_URL" ]]; then
     warn "Tailscale login URL not discovered automatically after polling."
     warn "Check:  $DOCKER_CMD exec $CONTAINER tail -80 /data/logs/tailscaled.log"
-    warn "Or run:  $DOCKER_CMD exec -it $CONTAINER tailscale login"
+    warn "Or run:  $DOCKER_CMD exec -it $CONTAINER tailscale up"
   else
     echo
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -367,10 +369,11 @@ if [[ "$USE_TAILSCALE" == "true" ]]; then
       info "(Install 'qrencode' to display a QR code here.)"
     fi
 
-    # Poll until authenticated
+    # Poll until authenticated + tunnel up (`tailscale up` sets WantRunning; login alone does not).
     info "Waiting for Tailscale to connect…"
     CONNECTED=false
-    DEADLINE=$(( $(date +%s) + 180 ))
+    DEADLINE=$(( $(date +%s) + 300 ))
+    _poll_n=0
     while [[ $(date +%s) -lt $DEADLINE ]]; do
       BACKEND_STATE="$($DOCKER_CMD exec "$CONTAINER" tailscale status --json 2>/dev/null \
                        | grep -oE '"BackendState":"[^"]+"' \
@@ -378,6 +381,12 @@ if [[ "$USE_TAILSCALE" == "true" ]]; then
       if [[ "$BACKEND_STATE" == "Running" ]]; then
         CONNECTED=true
         break
+      fi
+      _poll_n=$((_poll_n + 1))
+      # If OAuth finished but the tunnel never came up, nudge `tailscale up` once (~45s in).
+      if [[ "$_poll_n" -eq 15 ]]; then
+        info "Nudging tailscale up (tunnel may have stayed down after browser auth)…"
+        $DOCKER_CMD exec "$CONTAINER" tailscale up --timeout=120 >/dev/null 2>&1 || true
       fi
       sleep 3
     done
@@ -392,7 +401,9 @@ if [[ "$USE_TAILSCALE" == "true" ]]; then
         success "Tailscale connected!"
       fi
     else
-      warn "Tailscale not yet confirmed running. Check with: docker exec $CONTAINER tailscale status"
+      warn "Tailscale not yet confirmed running. Try: docker exec $CONTAINER tailscale status"
+      warn "Then bring the tunnel up: docker exec $CONTAINER tailscale up"
+      warn "On AWS, ensure outbound UDP is allowed (WireGuard) and the container has NET_ADMIN + /dev/net/tun."
     fi
   fi
 fi
