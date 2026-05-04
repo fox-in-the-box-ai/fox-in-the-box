@@ -6,6 +6,24 @@ jest.mock('http', () => ({ get: jest.fn() }));
 const http = require('http');
 const { waitUntilHealthy } = require('../../packages/electron/src/health-check');
 
+function makeRes({ statusCode, body }) {
+  const handlers = {};
+  return {
+    statusCode,
+    setEncoding() {},
+    resume() {},
+    on(event, handler) {
+      handlers[event] = handler;
+    },
+    _emit() {
+      if (body !== undefined && handlers.data) handlers.data(body);
+      if (handlers.end) handlers.end();
+    },
+  };
+}
+
+const HEALTHY_BODY = '{\n  "status": "ok",\n  "uptime_seconds": 1.2\n}';
+
 describe('waitUntilHealthy', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -36,7 +54,9 @@ describe('waitUntilHealthy', () => {
         if (calls < 3) {
           if (req._onError) req._onError(new Error('not ready'));
         } else {
-          cb({ statusCode: 200, resume: () => {} });
+          const res = makeRes({ statusCode: 200, body: HEALTHY_BODY });
+          cb(res);
+          res._emit();
         }
         inFlight -= 1;
       }, 10);
@@ -52,6 +72,52 @@ describe('waitUntilHealthy', () => {
 
     expect(maxInFlight).toBe(1);
     expect(calls).toBeGreaterThanOrEqual(3);
+  });
+
+  test('rejects 200 responses missing the "status": "ok" marker', async () => {
+    http.get.mockImplementation((_url, cb) => {
+      const req = {
+        _onError: null,
+        on(event, handler) { if (event === 'error') this._onError = handler; },
+        setTimeout() {},
+        destroy(err) { if (this._onError) this._onError(err || new Error('timeout')); },
+      };
+      setTimeout(() => {
+        const res = makeRes({ statusCode: 200, body: '{"status":"degraded"}' });
+        cb(res);
+        res._emit();
+      }, 1);
+      return req;
+    });
+
+    await expect(waitUntilHealthy({
+      timeoutMs: 30,
+      intervalMs: 1,
+      requestTimeoutMs: 10,
+    })).rejects.toMatchObject({ code: 'HEALTH_TIMEOUT' });
+  });
+
+  test('accepts 200 with healthy body and resolves', async () => {
+    http.get.mockImplementation((_url, cb) => {
+      const req = {
+        _onError: null,
+        on(event, handler) { if (event === 'error') this._onError = handler; },
+        setTimeout() {},
+        destroy() {},
+      };
+      setTimeout(() => {
+        const res = makeRes({ statusCode: 200, body: HEALTHY_BODY });
+        cb(res);
+        res._emit();
+      }, 1);
+      return req;
+    });
+
+    await expect(waitUntilHealthy({
+      timeoutMs: 1000,
+      intervalMs: 1,
+      requestTimeoutMs: 100,
+    })).resolves.toBeUndefined();
   });
 
   test('rejects with HEALTH_TIMEOUT when service never becomes healthy', async () => {
@@ -92,7 +158,11 @@ describe('waitUntilHealthy', () => {
         destroy(err) {
           if (this._onError) this._onError(err || new Error('timeout'));
           // Late success callback should not flip result.
-          setTimeout(() => cb({ statusCode: 200, resume: () => {} }), 20);
+          setTimeout(() => {
+            const res = makeRes({ statusCode: 200, body: HEALTHY_BODY });
+            cb(res);
+            res._emit();
+          }, 20);
         },
       };
       return req;
