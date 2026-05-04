@@ -6,6 +6,17 @@ on:
     branches:
       - main
   workflow_call:
+    inputs:
+      signing-environment:
+        description: >-
+          GitHub Environment to bind the Windows signing job to. The Azure
+          federated identity credential is keyed on this environment's subject
+          claim, so it must match the environment configured in Entra ID.
+          Empty (default) means: produce unsigned build artifacts and skip
+          the Azure login + signing steps. release.yml passes "release".
+        type: string
+        required: false
+        default: ''
   workflow_dispatch:
 
 permissions:
@@ -16,6 +27,11 @@ jobs:
   build:
     name: Build Electron — ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+    # When signing-environment is set (release.yml call), the matrix jobs
+    # bind to that GitHub Environment. The OIDC token GitHub mints then
+    # carries `environment:<name>` in its sub claim, which the Azure
+    # federated credential matches exactly. Empty value = no environment.
+    environment: ${{ inputs.signing-environment }}
 
     strategy:
       fail-fast: false
@@ -77,12 +93,12 @@ jobs:
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
-      # Establish Azure auth context via OIDC. The signing action below picks up
-      # credentials from the active Azure session rather than re-authenticating
-      # itself; without this step, the signing step's inline OIDC path fails to
-      # complete the token exchange against the Trusted Signing endpoint.
+      # Establish Azure auth context via OIDC. Skipped when signing-environment
+      # is empty (e.g. push to main, workflow_dispatch without input) — those
+      # builds produce unsigned artifacts purely for CI verification and never
+      # ship to a release.
       - name: Azure login (OIDC)
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && inputs.signing-environment != ''
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
@@ -90,11 +106,10 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       # Sign the NSIS installer in place using Azure Trusted Signing (Icemint LLC
-      # certificate profile). Auth comes from the azure/login step above. Runs
-      # only on Windows; the already-signed *.exe is what's picked up by the next
-      # Upload step, so release.yml downloads and ships a signed installer.
+      # certificate profile). Auth comes from the azure/login step above. Same
+      # gate as the login step — only signs when bound to the signing environment.
       - name: Sign Windows installer (Azure Trusted Signing)
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && inputs.signing-environment != ''
         uses: azure/artifact-signing-action@v1
         with:
           azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
