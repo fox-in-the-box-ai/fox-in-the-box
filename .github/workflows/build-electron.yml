@@ -71,6 +71,15 @@ jobs:
         with:
           node-version: "20"
 
+      # macOS/Linux: workspace-aware install at the repo root.
+      # Windows: install in packages/electron with npm so node_modules is flat.
+      # pnpm's content-addressed store nests deps under
+      #   node_modules/.pnpm/<name>@<ver>_<longhash>/...
+      # which blows past Windows MAX_PATH (260) for makensis.exe's NSIS include
+      # resolver during electron-builder. `--shamefully-hoist` was tried in
+      # 4510cc5 and still produced unreachable include paths, so the fallback
+      # is intentional. Don't switch back to pnpm here without confirming
+      # makensis can resolve every NSIS include from the resulting tree (#42).
       - name: Install dependencies
         shell: bash
         run: |
