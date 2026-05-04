@@ -1,0 +1,47 @@
+name: Sync Submodules to Latest
+
+on:
+  # Triggered immediately when hermes-webui or hermes-agent push to their main branch
+  repository_dispatch:
+    types: [hermes-webui-updated, hermes-agent-updated]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout with submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Update submodules to latest remote branches
+        run: |
+          git config --global user.name "fox-bot"
+          git config --global user.email "bot@foxinthebox.io"
+          git submodule update --remote
+
+      - name: Check for changes
+        id: changes
+        run: |
+          if git diff --quiet HEAD; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            git diff --stat HEAD
+          fi
+
+      - name: Commit and push (if changed)
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          git add forks/hermes-webui forks/hermes-agent
+          git commit -m "chore: bump submodules to latest remote"
+          git push origin main
+
+      - name: No changes
+        if: steps.changes.outputs.changed == 'false'
+        run: echo "Submodules already at latest — nothing to do"
