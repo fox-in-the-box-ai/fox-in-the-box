@@ -7,7 +7,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
-## [0.1.0] - 2026-05-04
+## [0.0.1] - 2026-05-04
 
 Initial public release.
 
@@ -24,4 +24,4 @@ Initial public release.
 - Data directory structure at `~/.foxinthebox` with `config/`, `data/`, and `cache/` separation
 - MIT license
 
-[0.1.0]: https://github.com/fox-in-the-box-ai/fox-in-the-box/releases/tag/v0.1.0
+[0.0.1]: https://github.com/fox-in-the-box-ai/fox-in-the-box/releases/tag/v0.0.1
