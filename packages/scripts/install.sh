@@ -292,14 +292,20 @@ _extract_tailscale_login_url() {
   echo "$LOG_LINE" | grep -oE 'https://login\.tailscale\.com/a/[A-Za-z0-9]+' | head -1 || true
 }
 
-# Wait until /dev/net/tun exists, CLI works, and `tailscale status` talks to tailscaled (not just the binary).
+# Wait until /dev/net/tun exists and the tailscale CLI runs. Do NOT require `tailscale status` here:
+# on first boot `docker exec … tailscale status` can block or hang until tailscaled is ready, which
+# leaves the installer silent after "Container is running" for a long time or indefinitely.
 _wait_tailscale_cli_ready() {
   local waited=0 max_wait="${FOX_TAILSCALE_WAIT_READY_SEC:-120}"
+  info "Waiting for TUN device and tailscale CLI inside the container (up to ${max_wait}s)…"
   while [[ "$waited" -lt "$max_wait" ]]; do
     if $DOCKER_CMD exec "$CONTAINER" sh -c 'test -c /dev/net/tun' >/dev/null 2>&1 \
-      && $DOCKER_CMD exec "$CONTAINER" tailscale version >/dev/null 2>&1 \
-      && $DOCKER_CMD exec "$CONTAINER" tailscale status >/dev/null 2>&1; then
+      && $DOCKER_CMD exec "$CONTAINER" tailscale version >/dev/null 2>&1; then
+      info "Tailscale CLI is reachable; starting join…"
       return 0
+    fi
+    if (( waited % 20 == 0 && waited > 0 )); then
+      info "…still waiting (${waited}s / ${max_wait}s) — first boot may be slow"
     fi
     sleep 2
     waited=$((waited + 2))
@@ -407,6 +413,7 @@ _tailscale_poll_until_running() {
 }
 
 if [[ "$USE_TAILSCALE" == "true" ]]; then
+  info "Tailscale mode — preparing authentication (do not interrupt this step)…"
   _wait_tailscale_cli_ready || true
 
   # ── Headless: reusable install auth key (no browser, stable for automation) ──
