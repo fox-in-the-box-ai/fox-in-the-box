@@ -7,6 +7,15 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.0.2] - 2026-05-04
+
+### Fixed
+
+- Mobile: titlebar now visible for safe-area spacing; inner content hidden and border removed on narrow viewports
+- Submodule sync: hermes-webui and hermes-agent now auto-synced to latest on every upstream commit
+
+[0.0.2]: https://github.com/fox-in-the-box-ai/fox-in-the-box/releases/tag/v0.0.2
+
 ## [0.0.1] - 2026-05-04
 
 Initial public release.
