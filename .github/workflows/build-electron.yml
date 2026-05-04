@@ -77,12 +77,22 @@ jobs:
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
+      # Establish Azure auth context via OIDC. The signing action below picks up
+      # credentials from the active Azure session rather than re-authenticating
+      # itself; without this step, the signing step's inline OIDC path fails to
+      # complete the token exchange against the Trusted Signing endpoint.
+      - name: Azure login (OIDC)
+        if: runner.os == 'Windows'
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
       # Sign the NSIS installer in place using Azure Trusted Signing (Icemint LLC
-      # certificate profile). OIDC auth — no client secret needed; the federated
-      # credential in Azure trusts this repo's GitHub Actions runs via the
-      # AZURE_TENANT_ID + AZURE_CLIENT_ID identity. Runs only on Windows; the
-      # already-signed *.exe is what's picked up by the next Upload step, so
-      # release.yml downloads and ships a signed installer.
+      # certificate profile). Auth comes from the azure/login step above. Runs
+      # only on Windows; the already-signed *.exe is what's picked up by the next
+      # Upload step, so release.yml downloads and ships a signed installer.
       - name: Sign Windows installer (Azure Trusted Signing)
         if: runner.os == 'Windows'
         uses: azure/artifact-signing-action@v1
