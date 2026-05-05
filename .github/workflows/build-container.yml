@@ -1,6 +1,13 @@
 # .github/workflows/build-container.yml
 name: Build Container
 
+# Multi-arch (linux/amd64 + linux/arm64) container build using the
+# cross-runner pattern: each platform builds natively on its own runner
+# (no QEMU emulation), per-platform digests are exported as artifacts,
+# and a final merge job assembles the manifest list with
+# `docker buildx imagetools create`. Native arm64 runners are GA and
+# free for public repos. Issue #82.
+
 on:
   push:
     branches:
@@ -8,27 +15,38 @@ on:
   pull_request:
     branches:
       - main
-  # Manual rebuild (uses submodules at the checked-out ref — bump forks/ in main first).
   workflow_dispatch:
-  # Called by release.yml. The digest output lets the caller pin the released
-  # image to the exact bytes this run pushed (closes the `:latest` race in #41).
   workflow_call:
     outputs:
       digest:
-        description: "Content digest of the pushed image (e.g. sha256:abc...)."
-        value: ${{ jobs.build-and-push.outputs.digest }}
+        description: >-
+          Index (manifest-list) digest of the pushed image. Pulling
+          `name@<digest>` from any platform auto-selects the matching
+          child manifest, so callers (release.yml) consume this exactly
+          like the single-platform digest from before #82.
+        value: ${{ jobs.merge.outputs.digest }}
+
+env:
+  IMAGE: ghcr.io/fox-in-the-box-ai/cloud
 
 jobs:
-  build-and-push:
-    name: Build & Push Docker Image
-    runs-on: ubuntu-latest
-
+  # ── Build per platform, push by digest, export the digest as an artifact.
+  # No tag is written at this stage — tagging happens in the merge job once
+  # both per-platform manifests are confirmed pushed. Cache scopes are
+  # explicitly per-platform to prevent any chance of cross-arch layer
+  # contamination (#82 reviewer concern).
+  build:
+    name: Build & Push (${{ matrix.platform.short }})
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - { runner: ubuntu-latest,    short: amd64, full: linux/amd64 }
+          - { runner: ubuntu-24.04-arm, short: arm64, full: linux/arm64 }
+    runs-on: ${{ matrix.platform.runner }}
     permissions:
       contents: read
-      packages: write   # required to push to GHCR
-
-    outputs:
-      digest: ${{ steps.push.outputs.digest }}
+      packages: write
 
     steps:
       - name: Checkout (with submodules)
@@ -43,8 +61,77 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Determine image tag
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Determine FITB_VERSION
         id: meta
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            echo "fitb_version=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "fitb_version=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: packages/integration/Dockerfile
+          platforms: ${{ matrix.platform.full }}
+          # `push-by-digest=true` writes the image to the registry without
+          # creating a tag — the merge job tags it once both arches are
+          # confirmed. `name-canonical=true` ensures the resulting digest
+          # is verifiable at name@sha256:... pull time.
+          outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
+          # Per-platform cache scopes — distinct keys so amd64 and arm64
+          # never read each other's cache layers (reviewer concern #3).
+          cache-from: type=gha,scope=cloud-${{ matrix.platform.short }}
+          cache-to:   type=gha,scope=cloud-${{ matrix.platform.short }},mode=max
+          build-args: |
+            FITB_VERSION=${{ steps.meta.outputs.fitb_version }}
+
+      - name: Export per-platform digest as artifact
+        run: |
+          set -euo pipefail
+          mkdir -p "${{ runner.temp }}/digests"
+          digest="${{ steps.build.outputs.digest }}"
+          if [[ -z "$digest" ]]; then
+            echo "::error::build-push-action did not return a digest for ${{ matrix.platform.full }}"
+            exit 1
+          fi
+          # Filename is the digest sans the sha256: prefix; merge job
+          # globs these and prefixes name@sha256: at imagetools-create time.
+          touch "${{ runner.temp }}/digests/${digest#sha256:}"
+
+      - name: Upload digest artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: digest-${{ matrix.platform.short }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  # ── Assemble the manifest list, verify both arches present, expose the
+  # index digest. This is the most fragile step (#82 reviewer concern #1):
+  # if either platform's manifest is missing, the merge silently produces a
+  # single-platform image. The verify-both-arches step below makes that a
+  # hard fail.
+  merge:
+    name: Merge into manifest list
+    needs: [build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      digest: ${{ steps.merge.outputs.digest }}
+      tag:    ${{ steps.tag.outputs.tag }}
+
+    steps:
+      - name: Determine tag
+        id: tag
         run: |
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
             echo "tag=dev" >> "$GITHUB_OUTPUT"
@@ -52,41 +139,122 @@ jobs:
             echo "tag=latest" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Build Docker image
-        run: |
-          # FITB_VERSION is written to /app/version.txt (migrations / display).
-          # Hermes repos are baked from forks/ at image build time (submodules).
-          FITB_VERSION_ARG=""
-          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
-            FITB_VERSION_ARG="--build-arg FITB_VERSION=${{ github.ref_name }}"
-          fi
-          docker build \
-            --platform linux/amd64 \
-            $FITB_VERSION_ARG \
-            -t ghcr.io/fox-in-the-box-ai/cloud:${{ steps.meta.outputs.tag }} \
-            -f packages/integration/Dockerfile \
-            .
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Push Docker image to GHCR
-        id: push
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Download per-platform digests
+        uses: actions/download-artifact@v4
+        with:
+          path: ${{ runner.temp }}/digests
+          pattern: digest-*
+          merge-multiple: true
+
+      - name: Create manifest list and push
+        id: merge
+        working-directory: ${{ runner.temp }}/digests
         run: |
           set -euo pipefail
-          IMAGE="ghcr.io/fox-in-the-box-ai/cloud:${{ steps.meta.outputs.tag }}"
-          docker push "$IMAGE"
-          # `RepoDigests` is `[name@sha256:...]` once the image has been pushed
-          # to the registry. Strip the `name@` prefix to get the bare digest so
-          # callers can compose `name@<digest>` for any tag they want.
-          DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "$IMAGE" | cut -d'@' -f2)
+          TAG="${{ steps.tag.outputs.tag }}"
+          # Source list = name@sha256:<digest> for each per-platform image.
+          # `printf '%s '` over the artifact filenames, with an explicit
+          # name@sha256: prefix.
+          SOURCES=$(printf "${IMAGE}@sha256:%s " *)
+          echo "Sources: $SOURCES"
+          docker buildx imagetools create -t "${IMAGE}:${TAG}" $SOURCES
+          # Capture the index digest from the freshly-pushed manifest list.
+          # `inspect --raw` returns the canonical bytes; their content
+          # digest IS the manifest-list digest. Use --format for stability.
+          DIGEST=$(docker buildx imagetools inspect "${IMAGE}:${TAG}" --format '{{json .Manifest}}' | jq -r '.digest')
+          if [[ -z "$DIGEST" || "$DIGEST" == "null" ]]; then
+            echo "::error::Could not determine index digest from manifest-list inspect"
+            exit 1
+          fi
           echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
-          echo "Pushed $IMAGE @ $DIGEST"
+          echo "Manifest-list digest: $DIGEST"
 
-      - name: Tag and push :stable
+      - name: Verify both architectures present in manifest list
+        run: |
+          set -euo pipefail
+          INSPECT=$(docker buildx imagetools inspect "${IMAGE}:${{ steps.tag.outputs.tag }}" \
+            --format '{{range .Manifest.Manifests}}{{.Platform.OS}}/{{.Platform.Architecture}}{{"\n"}}{{end}}')
+          echo "Platforms found in manifest list:"
+          echo "$INSPECT"
+          # Both must be present. `attestation-manifest` entries (with
+          # platform "unknown/unknown") are filtered out by grepping for
+          # the explicit platform strings.
+          if ! grep -qx 'linux/amd64' <<<"$INSPECT"; then
+            echo "::error::linux/amd64 manifest is missing from the published index — refusing to ship a single-platform image as multi-arch."
+            exit 1
+          fi
+          if ! grep -qx 'linux/arm64' <<<"$INSPECT"; then
+            echo "::error::linux/arm64 manifest is missing from the published index — refusing to ship a single-platform image as multi-arch."
+            exit 1
+          fi
+          echo "✅ Both linux/amd64 and linux/arm64 confirmed in manifest list"
+
+      - name: Re-tag :stable on non-PR events
         if: github.event_name != 'pull_request'
         run: |
-          docker tag ghcr.io/fox-in-the-box-ai/cloud:latest ghcr.io/fox-in-the-box-ai/cloud:stable
-          docker push ghcr.io/fox-in-the-box-ai/cloud:stable
+          # `imagetools create` operates registry-side and preserves the
+          # manifest list. Don't use `docker pull && docker tag` — that
+          # collapses to a single-platform image. (#82)
+          docker buildx imagetools create -t "${IMAGE}:stable" "${IMAGE}:${{ steps.tag.outputs.tag }}"
 
-      - name: Smoke test — start container
+  # ── Pull the published manifest by INDEX digest on each platform's
+  # native runner and run the smoke test. This proves the digest pin
+  # contract release.yml depends on still works (#82 reviewer concern #2):
+  # `docker pull name@<index-digest>` auto-selects the host platform's
+  # child manifest. Each smoke also validates `/health` body contains
+  # `"status": "ok"` — not just HTTP 200 — to catch a #57-style mismatch.
+  smoke:
+    name: Smoke (${{ matrix.platform.short }})
+    needs: [merge]
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - { runner: ubuntu-latest,    short: amd64, expected: amd64 }
+          - { runner: ubuntu-24.04-arm, short: arm64, expected: arm64 }
+    runs-on: ${{ matrix.platform.runner }}
+    permissions:
+      contents: read
+      packages: read
+
+    steps:
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull image by INDEX digest (verifies digest-pin compatibility)
+        env:
+          DIGEST: ${{ needs.merge.outputs.digest }}
+        run: |
+          set -euo pipefail
+          docker pull "${IMAGE}@${DIGEST}"
+          # Confirm the registry served the matching child manifest for
+          # this runner's architecture — that's exactly what release.yml
+          # relies on (`docker pull "$IMG@$DIGEST"` on amd64 must yield
+          # an amd64 image without --platform).
+          ARCH=$(docker image inspect "${IMAGE}@${DIGEST}" --format '{{.Architecture}}')
+          if [[ "$ARCH" != "${{ matrix.platform.expected }}" ]]; then
+            echo "::error::Pulling index digest on ${{ matrix.platform.short }} runner did not auto-select ${{ matrix.platform.expected }} (got: $ARCH). release.yml's pull-by-digest pattern would break."
+            exit 1
+          fi
+          echo "✅ Index-digest pull resolved to $ARCH on ${{ matrix.platform.short }} runner"
+
+      - name: Start container
+        env:
+          DIGEST: ${{ needs.merge.outputs.digest }}
         run: |
           docker run -d \
             --name test-fox \
@@ -94,33 +262,37 @@ jobs:
             --device /dev/net/tun \
             --sysctl net.ipv4.ip_forward=1 \
             -p 127.0.0.1:8787:8787 \
-            ghcr.io/fox-in-the-box-ai/cloud:${{ steps.meta.outputs.tag }}
+            "${IMAGE}@${DIGEST}"
 
-      - name: Smoke test — wait for container to be healthy
-        # Poll instead of blind sleep: first boot still runs migrations / chown /
-        # service startup; allow up to 3 minutes (36 × 5s). Fail fast if container exits.
+      - name: Wait for /health to return 200 with healthy body
+        # Validates BOTH the HTTP status AND that the body contains
+        # `"status": "ok"`. v0.2.0 (#57) showed status-code-only checks
+        # can mask body-shape divergence — don't repeat that.
         run: |
+          set -euo pipefail
           for i in $(seq 1 36); do
-            if curl -sf http://localhost:8787/health -o /dev/null 2>/dev/null; then
-              echo "✅ /health returned HTTP 200 (attempt $i)"
+            RESP=$(curl -fsS http://localhost:8787/health 2>/dev/null) || RESP=""
+            if [[ -n "$RESP" ]] && echo "$RESP" | grep -q '"status": "ok"'; then
+              echo "✅ /health returned 200 with healthy body on attempt $i"
+              echo "Body: $RESP"
               exit 0
             fi
-            # Abort early if the container died
             if ! docker inspect test-fox --format '{{.State.Running}}' | grep -q true; then
-              echo "❌ Container exited unexpectedly"
+              echo "::error::Container exited unexpectedly on ${{ matrix.platform.short }}"
               docker logs test-fox
               exit 1
             fi
-            echo "  Waiting... ($i/36)"
+            echo "  Waiting on ${{ matrix.platform.short }}... ($i/36)"
             sleep 5
           done
-          echo "❌ Container did not become healthy within 3 minutes"
+          echo "::error::Container did not return a healthy /health body within 3 minutes on ${{ matrix.platform.short }}"
+          docker logs test-fox
           exit 1
 
-      - name: Smoke test — print container logs (for debugging)
+      - name: Container logs (always — debug)
         if: always()
         run: docker logs test-fox 2>&1 || true
 
-      - name: Smoke test — stop container
+      - name: Stop container
         if: always()
         run: docker stop test-fox || true

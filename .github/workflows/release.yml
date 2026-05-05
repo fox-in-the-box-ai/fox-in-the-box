@@ -57,11 +57,21 @@ jobs:
         id: tag
         run: echo "version=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
 
-      # Pin the released image to the exact bytes that wait-for-container just
-      # pushed. Pulling `:latest` would be racy: a concurrent push to main can
-      # mutate `:latest` between the build and this step, so the released
-      # vX.Y.Z / :stable tags would point at the newer commit's image instead
-      # of the tagged one. Pulling `name@sha256:...` removes that window. (#41)
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Pin the released image to the exact bytes wait-for-container pushed,
+      # while preserving the multi-arch manifest list (#82). The previous
+      # implementation used `docker pull && docker tag && docker push` —
+      # that pattern collapses a manifest list to a single-platform image
+      # because `docker pull` on the (amd64) runner only fetches the amd64
+      # child manifest, then the `tag` and `push` rewrite the new tag with
+      # just amd64. Switching to `docker buildx imagetools create` keeps
+      # the operation registry-side: it constructs the new tag pointing at
+      # the same manifest list, so `:vX.Y.Z` and `:stable` are multi-arch.
+      # The digest pinning rationale from #41 still holds — using
+      # `name@<index-digest>` as the source means a concurrent push to
+      # main can't mutate :latest between build and release.
       - name: Re-tag Docker image as versioned and :stable
         env:
           DIGEST: ${{ needs.wait-for-container.outputs.digest }}
@@ -72,11 +82,20 @@ jobs:
             exit 1
           fi
           IMG="ghcr.io/fox-in-the-box-ai/cloud"
-          docker pull "$IMG@$DIGEST"
-          docker tag  "$IMG@$DIGEST" "$IMG:${{ steps.tag.outputs.version }}"
-          docker tag  "$IMG@$DIGEST" "$IMG:stable"
-          docker push "$IMG:${{ steps.tag.outputs.version }}"
-          docker push "$IMG:stable"
+          VERSION="${{ steps.tag.outputs.version }}"
+          docker buildx imagetools create -t "$IMG:$VERSION" "$IMG@$DIGEST"
+          docker buildx imagetools create -t "$IMG:stable"   "$IMG@$DIGEST"
+          # Verify the released tags are multi-arch — fail loudly if either
+          # has somehow become single-platform (ships a broken release
+          # before users find out).
+          for TAG in "$VERSION" "stable"; do
+            PLATFORMS=$(docker buildx imagetools inspect "$IMG:$TAG" \
+              --format '{{range .Manifest.Manifests}}{{.Platform.OS}}/{{.Platform.Architecture}}{{"\n"}}{{end}}')
+            echo "$IMG:$TAG platforms:"; echo "$PLATFORMS"
+            grep -qx 'linux/amd64' <<<"$PLATFORMS" || { echo "::error::$IMG:$TAG missing linux/amd64"; exit 1; }
+            grep -qx 'linux/arm64' <<<"$PLATFORMS" || { echo "::error::$IMG:$TAG missing linux/arm64"; exit 1; }
+          done
+          echo "✅ Both $IMG:$VERSION and $IMG:stable are multi-arch (linux/amd64, linux/arm64)"
 
       - name: Download Windows artifact
         uses: actions/download-artifact@v4
