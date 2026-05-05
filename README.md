@@ -115,6 +115,7 @@ Installs Docker if needed, pulls the container image, asks how you want to acces
 docker run -d \
   --name fox-in-the-box \
   --restart unless-stopped \
+  --add-host=host.docker.internal:host-gateway \
   --cap-add=NET_ADMIN \
   --device /dev/net/tun \
   --sysctl net.ipv4.ip_forward=1 \
