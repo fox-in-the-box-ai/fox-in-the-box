@@ -174,7 +174,7 @@ Most users start with **OpenRouter** — one key, hundreds of models. Add more f
 | **MiniMax** | Settings → Providers | Global + China endpoints |
 | **NVIDIA NIM** | Settings → Providers | Hosted NIM endpoints |
 | **OpenCode-Zen / Go** | Settings → Providers | Code-specialized providers |
-| **Ollama Cloud** | Settings → Providers | Hosted Ollama |
+| **Ollama Cloud** | Settings → Providers | Hosted Ollama (`ollama.com`). Local Ollama daemons are reachable today via a custom `model.base_url` in `hermes.yaml`; first-class one-click integration is on the [Roadmap](#roadmap). |
 | **LM Studio** | Settings → Providers | Local OpenAI-compatible endpoint |
 | **GitHub Copilot, Nous Portal, Codex, Qwen** | `hermes` CLI inside the container | OAuth-only — managed via the bundled Hermes CLI, not the Settings UI |
 
