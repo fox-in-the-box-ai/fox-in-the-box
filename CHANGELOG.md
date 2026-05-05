@@ -7,6 +7,37 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.4.4] - 2026-05-05
+
+Closes the desktop-Tailscale gap. Until v0.4.3, the only way to authenticate Tailscale on a fresh install was either `install.sh` (Linux/macOS host-script users) or `docker exec` into the container manually. Windows .exe and macOS DMG users — the primary distribution path on the GitHub Release page — had no way to wire up Tailscale from inside the app despite the README explicitly promising *"Optional secure HTTPS access from your phone or another laptop via Tailscale"*. v0.4.4 closes both ends of this:
+
+### Added
+
+- **Tailscale connection panel in Settings (#96 phase 1).** New tile above the existing hostname tile, with status badge (Connected / Connecting / Needs login / Disconnected / Unknown), the tailnet HTTPS URL when connected, and Connect / Disconnect buttons. Clicking Connect spawns `tailscale up` in a daemon thread inside the container, scrapes the auth URL from stdout (handles both Tailscale-cloud and headscale-style URLs), and opens it in a new browser tab. The page polls `/api/tailscale/up/poll` every 2s; once `BackendState == Running`, the panel flips to Connected and Tailscale Serve auto-config (already wired in `entrypoint.sh:178`) publishes the HTTPS URL within ~10s.
+  - Advanced accordion exposes an auth-key field — paste a reusable key from your tailnet admin console for unattended/non-interactive auth (no browser, succeeds in <30s).
+  - The state machine is idempotent: clicking Connect twice doesn't double-spawn; it returns the in-flight `auth_url` instead.
+  - Six new endpoints under `/api/tailscale/*` (status, up, up/poll, logout, serve get/post). The argv builder already accepts the full power-user flag set (`--login-server`, `--advertise-routes`, `--advertise-tags`, `--accept-routes`, `--accept-dns`, `--exit-node`, `--hostname`) — Phase 2 will surface these in the UI.
+- **Hostname customization in onboarding (#68).** When the wizard finishes and the user lands in the chat UI for the first time, if Tailscale is running and `FOX_HOSTNAME` isn't set, a small modal pre-fills `fox-<adjective>` and lets the user pick a friendly name. Save uses #44's existing endpoint; Skip uses a new dismiss endpoint. Both persist `settings.json:hostname_prompted=true` so the modal never re-fires. Closes the AC-drift gap from #44 — the field shipped to Settings but most users never discovered it.
+- **macOS access-mode chooser parity.** `ensureDockerAccessModeChosen()` now fires on macOS DMG first-runs (was Windows-only). DMG users can opt into Tailscale before container creation instead of being silently routed to the default mode.
+
+### Why this matters for the README's headline promise
+
+Top of README: *"Reachable from anywhere. Optional secure HTTPS access from your phone or another laptop via Tailscale."* Until today, that was true only for `install.sh` users. With v0.4.4, the promise extends to Release-page binary users on Windows and macOS — the primary distribution channel.
+
+### Deferred to follow-up phases (#96)
+
+- **Wizard step injection** during onboarding — Phase 2. Users currently auth from Settings → Network, which is one click away; less discoverable but functional.
+- **Power-user fields in UI** (login-server, advertise-routes, advertise-tags, accept-routes, accept-dns, exit-node) — Phase 2. The backend already accepts them.
+- **Reactive banner** in chat UI when access mode is Tailscale but state is Disconnected — Phase 3.
+- **Serve retry button** for the case where entrypoint.sh's auto-config failed — Phase 3.
+
+### Tracked separately
+
+- **#9 polish** (reactive modal for non-opted-in users on first remote failure, recovery banner when remote is back) was the original v0.4.4 partner for #68; it was swapped for #96 phase 1 after the Tailscale gap surfaced. Will land in a later v0.4.x release.
+- **#98** — install.sh hangs on Linux after the Tailscale login URL displays. Filed as P0; v0.4.5 hotfix in flight.
+
+---
+
 ## [0.4.3] - 2026-05-05
 
 Onboarding wizard now offers the bundled local model when no Ollama daemon is detected. Closes the gap from v0.3.0's "Option B" closure, where the welcome step had a fast-path for Ollama users only — leaving everyone else with no choice but OpenRouter. With v0.4.0's download manager and v0.4.1's local-fallback runtime in place, the wizard can finally run end-to-end on a user's hardware with no API key.
