@@ -2,7 +2,21 @@
 FROM python:3.11-slim
 
 # ── build args ────────────────────────────────────────────────────────────────
-ARG TARGETARCH=amd64
+# QA fix (v0.4.7 verification, Phase 0): TARGETARCH is automatically set by
+# BuildKit based on the target platform (--platform linux/arm64 → "arm64",
+# linux/amd64 → "amd64"). Previously this line had a default value
+# `=amd64` which OVERRODE BuildKit's auto-injection — so on every arm64
+# build (including the multi-arch CI matrix), TARGETARCH stuck as "amd64"
+# and we downloaded the x86_64 tarballs for both qdrant and llama-server
+# into the arm64 image. qdrant happened to keep working via Rosetta
+# emulation on Apple Silicon; llama-server failed with
+#   "rosetta error: failed to open elf at /lib64/ld-linux-x86-64.so.2"
+# meaning the entire local-fallback feature (issue #9, shipped in
+# v0.4.1) was silently broken on Apple Silicon since launch. Removing
+# the default lets BuildKit's value flow through. If the variable IS
+# unset (some non-buildkit pathway), the case statements default to x64
+# anyway, so this change cannot make non-buildkit builds worse.
+ARG TARGETARCH
 # Pin QDRANT_VERSION to match qdrant-client in hermes-agent (see task 03 docs).
 # Do NOT use "latest" in production builds.
 ARG QDRANT_VERSION=v1.9.4

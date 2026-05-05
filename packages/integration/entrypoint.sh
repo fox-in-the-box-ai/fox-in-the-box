@@ -25,7 +25,8 @@ if [ ! -f "$ONBOARDING_FLAG" ]; then
         /data/data/tailscale \
         /data/cache \
         /data/logs \
-        /data/run
+        /data/run \
+        /data/state/webui
 
     # Seed default configs (only if the source directory exists)
     if [ -d "$DEFAULTS_DIR" ]; then
@@ -49,7 +50,8 @@ else
         /data/data/tailscale \
         /data/cache \
         /data/logs \
-        /data/run
+        /data/run \
+        /data/state/webui
 
     # Self-heal: if a previous install was partial, backfill any missing default configs.
     if [ -d "$DEFAULTS_DIR" ]; then
@@ -138,7 +140,8 @@ chown -R foxinthebox:foxinthebox \
     /data/data/mem0 \
     /data/data/memos \
     /data/cache \
-    /data/logs
+    /data/logs \
+    /data/state
 # /data/run is kept root-owned (reserved for future use; supervisord pid/socket are
 # under /run/fitb so bind-mounted /data from Docker Desktop does not break AF_UNIX).
 # /data/data/tailscale is kept root-owned so tailscaled can write state.
@@ -233,10 +236,16 @@ try:
 except Exception:
     sys.exit(1)
 " 2>/dev/null; then
-            if tailscale serve --bg / http://localhost:8787 2>/dev/null; then
+            # QA fix v0.4.7-WaveH: legacy positional-URL syntax
+            # (`serve --bg / http://localhost:8787`) was removed in Tailscale
+            # 1.60+. Modern form is `serve [--bg] <port>`. Verified during
+            # v0.4.7 QA against tailscale 1.96.4. Older syntax silently
+            # returned "invalid argument format" on every boot since the
+            # tailscale binary in the image moved past that version.
+            if tailscale serve --bg 8787 2>/dev/null; then
                 echo "[entrypoint] Tailscale Serve configured (https → localhost:8787)."
             else
-                echo "[entrypoint] WARNING: tailscale serve failed — will retry on next container restart."
+                echo "[entrypoint] WARNING: tailscale serve failed — may need HTTPS enabled at https://login.tailscale.com/admin/dns."
             fi
             exit 0
         fi
