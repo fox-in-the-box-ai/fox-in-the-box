@@ -156,6 +156,8 @@ The setup wizard runs once. After that the app handles itself — but a few thin
 
 **Name your Fox on Tailscale.** If you're using Tailscale for remote access, **Settings → System → Device name (Tailscale)** lets you pick a friendly hostname (e.g. `fox-clever`) — it shows up on your tailnet and in the HTTPS URL Tailscale Serve publishes. Defaults to a `fox-<adjective>` if you leave it blank.
 
+**Enable HTTPS for the tailnet URL.** Tailscale Serve needs HTTPS to be enabled on your tailnet — a one-time toggle in the [Tailscale admin console](https://login.tailscale.com/admin/dns) → **DNS** → **Enable HTTPS**. Once enabled, Fox publishes its chat UI at `https://fox-<your-name>.<your-tailnet>.ts.net/`. The first time you visit, Chrome / Safari may show a brief HTTPS warning while Tailscale provisions the cert — refresh after a minute. Without HTTPS enabled on the tailnet, the chat UI is still reachable via the device's tailnet IP (e.g. `http://100.x.x.x:8787`); only the friendly HTTPS URL requires the toggle.
+
 **Update the app.** The desktop app pulls new versions automatically. For the install script, re-run the same `curl … | bash` line; it replaces the running container without touching your data.
 
 **Memory.** Conversation memory persists automatically across sessions. To wipe it (start fresh, troubleshoot, or hand off the install) see [docs/RESET.md](docs/RESET.md).

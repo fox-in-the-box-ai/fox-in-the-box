@@ -1,0 +1,193 @@
+# Fox in the Box — Smoke Test Checklist
+
+**When to run:** Before tagging any minor version bump (v0.5.0, v0.6.0, …) and after any change to onboarding, providers, Tailscale, local fallback, or the Docker image. Per roadmap Rule 5: stabilization pass before every minor release.
+
+**How long it takes:** ~30 minutes if everything passes. Plan ~2 hours if something fails (fix → rebuild → re-run from the failed step).
+
+**Setup:**
+1. Build the candidate image: `docker build -f packages/integration/Dockerfile -t fitb:smoke .`
+2. Reset state: `docker rm -f fitb-smoke 2>/dev/null; docker volume rm fitb-smoke-data 2>/dev/null; docker volume create fitb-smoke-data`
+3. Start: `docker run -d --name fitb-smoke --cap-add=NET_ADMIN --device /dev/net/tun --sysctl net.ipv4.ip_forward=1 -p 127.0.0.1:8788:8787 -v fitb-smoke-data:/data fitb:smoke`
+4. Wait: `until curl -fsS http://127.0.0.1:8788/health >/dev/null; do sleep 2; done`
+5. Wait 15 seconds more for entrypoint to finish (operator grant, etc.)
+
+**The container is at `http://127.0.0.1:8788`. The user's real install (port 8787) is unaffected.**
+
+---
+
+## Section A — Container health (5 min)
+
+- [ ] **A1.** `/health` returns 200 with `{"status":"ok"}`
+- [ ] **A2.** Container logs show `[entrypoint] Granted foxinthebox tailscale operator access.` within ~15s of startup
+- [ ] **A3.** `docker exec fitb-smoke supervisorctl -c /etc/supervisor/supervisord.conf status` — all programs RUNNING except `llama-server` (which should be STOPPED unless local fallback is enabled)
+- [ ] **A4.** Architecture check on Apple Silicon: `docker exec fitb-smoke ls /app/llama-cpp/ | grep libggml-cpu | head -3` — output should contain `armv8` or `armv9` flavors (NOT `alderlake`/`cannonlake`/etc which would be x86_64 — that's #114)
+
+---
+
+## Section B — Onboarding wizard (5 min)
+
+Open `http://127.0.0.1:8788` in a fresh browser tab (or incognito).
+
+- [ ] **B1.** Wizard renders at `/setup` (not redirected to `/`)
+- [ ] **B2.** Welcome step shows progress dots `1 / 3 — Welcome` (or 4 if Tailscale path)
+- [ ] **B3.** Next button is disabled briefly with "Detecting local options…" while probes run, then enables
+- [ ] **B4.** If Ollama is running on host: shows "Local model detected" CTA with the model name
+- [ ] **B5.** If no Ollama: shows "Run a local model — no API key needed" CTA with "~2.5 GB" size hint
+- [ ] **B6.** Click Next → API Key step renders with OpenRouter input + `sk-or-…` placeholder
+- [ ] **B7.** Paste a valid OpenRouter key, click Next → Done step renders
+- [ ] **B8.** Click "Open Fox" → redirects to `/`, chat UI loads
+- [ ] **B9.** Skip footer ("Skip for now — I'll configure later") works on every step
+
+---
+
+## Section C — Settings persistence across restart (3 min)
+
+- [ ] **C1.** Settings → toggle theme to `light`, change a few other things
+- [ ] **C2.** Verify `docker exec fitb-smoke ls /data/state/webui/settings.json` exists, foxinthebox-owned (NOT in `/app/.hermes/webui/`)
+- [ ] **C3.** `docker restart fitb-smoke`, wait for /health
+- [ ] **C4.** Reload browser → all your changes survived
+- [ ] **C5.** Same test for hostname-prompted flag and tailscale_* power-user fields
+
+---
+
+## Section D — Provider switching (5 min)
+
+- [ ] **D1.** Settings → Providers → paste an OpenRouter key, save
+- [ ] **D2.** Send a chat → real response from configured model
+- [ ] **D3.** Pick a different model from the model picker → conversation continues
+- [ ] **D4.** Settings → Providers → if Ollama detected, click "Use this model" on a local Ollama model
+- [ ] **D5.** Verify config landed in the gateway's path: `docker exec fitb-smoke cat /data/data/hermes/config.yaml | head -10` shows `provider: custom` and the Ollama base URL (NOT in `/app/.hermes/config.yaml`)
+- [ ] **D6.** Send a chat → response routes through Ollama (check Ollama's logs on host)
+- [ ] **D7.** Switch back to OpenRouter → next chat routes through OR
+
+---
+
+## Section E — Tailscale full lifecycle (8 min)
+
+Requires a real Tailscale account.
+
+- [ ] **E1.** Settings → Network → click "Connect" → status badge transitions Disconnected → Connecting → Needs login
+- [ ] **E2.** Auth URL opens in a new browser tab automatically (within ~3 seconds of clicking Connect)
+- [ ] **E3.** Click through auth on Tailscale's site → badge flips to **Connected**
+- [ ] **E4.** Tailnet URL (e.g. `https://fox-clever.<your-tailnet>.ts.net/`) shown in the tile
+- [ ] **E5.** From your phone (also on tailnet): open the URL → chat UI loads (Chrome may show brief HTTPS warning during cert provisioning — refresh after a minute)
+- [ ] **E6.** Settings → Network → expand Advanced → set advertise_routes (e.g. `10.0.0.0/24`), accept_dns to false → Save → confirm "Apply now?" prompt → click Yes → reconnects
+- [ ] **E7.** Verify in [Tailscale admin console](https://login.tailscale.com/admin/machines): your machine shows the new routes/tags applied
+- [ ] **E8.** Click Disconnect → confirms → badge flips to Disconnected, Tailscale admin console shows machine offline
+- [ ] **E9.** No orphan `tailscale up` processes: `docker exec fitb-smoke ps aux 2>/dev/null | grep "tailscale up" | grep -v grep` returns nothing
+- [ ] **E10.** Re-Connect → fresh auth URL, full flow works again
+
+---
+
+## Section F — Local AI fallback full flow (15 min — includes 2.5 GB download)
+
+- [ ] **F1.** Settings → Providers → "Local fallback" tile shows status "Disabled"
+- [ ] **F2.** Toggle ON → status: Downloading (X / 2491 MB)
+- [ ] **F3.** Watch the download progress bar increment; should not be stuck at 0% (#index-out-of-bounds = check) and not be a frozen value
+- [ ] **F4.** Once at 100%: `sha256_verified: true` in `/api/local-fallback/status` JSON
+- [ ] **F5.** Status transitions Downloading → Starting → Warming → **Ready**
+- [ ] **F6.** `endpoint: http://127.0.0.1:8643/v1` populated, `server_healthy: true`
+- [ ] **F7.** Direct chat works: `docker exec fitb-smoke curl -s -X POST http://127.0.0.1:8643/v1/chat/completions -H 'Content-Type: application/json' -d '{"model":"phi4-mini","messages":[{"role":"user","content":"Reply PONG"}],"max_tokens":5,"stream":false}'` returns a real completion
+- [ ] **F8.** Toggle OFF → llama-server stops within ~5s (frees RAM); model file stays on `/data/models/`
+- [ ] **F9.** Toggle ON again → goes straight to Ready in seconds (model already on disk, no re-download)
+
+---
+
+## Section G — Reactive failover modal (3 min)
+
+Requires local fallback to be **OFF** for this section.
+
+- [ ] **G1.** Use a configured remote provider that's healthy → send a chat → normal response
+- [ ] **G2.** Force a failure: temporarily set the OR base_url to a dead endpoint (or use an invalid key) → send a chat → error appears in the chat: "No response received: HTTP 4xx" or "Stream interrupted"
+- [ ] **G3.** **Reactive modal appears**: "Your provider is having trouble. Want to enable a local AI model as a fallback?"
+- [ ] **G4.** Click "Not now" → modal closes
+- [ ] **G5.** Trigger another failure in the same tab → modal does NOT re-fire (sessionStorage flag)
+- [ ] **G6.** Reload page (clears session flag) → trigger failure → modal CAN fire again
+- [ ] **G7.** This time click "Enable" → POST `/api/local-fallback/enable` fires, modal shows "Enabled. Your next failure will silently use local."
+- [ ] **G8.** With local now enabled, trigger another remote failure → silent failover, real local response in chat (no error to user)
+
+---
+
+## Section H — Recovery banner (3 min)
+
+Requires local fallback to be **ON** AND a recent remote failure (set up in Section G).
+
+- [ ] **H1.** With local fallback ON, restore the remote provider to working state
+- [ ] **H2.** Within ~90s, top banner appears: "Your remote provider looks reachable again. Switch off local fallback to use it?"
+- [ ] **H3.** Click "Keep local" → banner closes, no re-appearance this session
+- [ ] **H4.** Reload page → banner can re-appear once
+- [ ] **H5.** This time click "Switch back" → POST `/api/local-fallback/disable` fires, banner closes, polling stops
+
+---
+
+## Section I — Onboarding hostname prompt (#68) (2 min)
+
+- [ ] **I1.** Wipe the volume, fresh container with Tailscale auth completed (so `BackendState=Running`)
+- [ ] **I2.** Onboarding completed but no `FOX_HOSTNAME` set → first chat-UI load: modal appears: "Name this Fox"
+- [ ] **I3.** Default fills with `fox-<adjective>`
+- [ ] **I4.** Save → tailnet hostname applies; modal closes, never reappears
+- [ ] **I5.** Wipe + redo, this time click Skip → no rename; modal still never reappears (prompted=true persisted)
+
+---
+
+## Section J — Linux install.sh (5 min, only on minor version bumps)
+
+```bash
+docker run --rm -v $PWD:/repo:ro ubuntu:22.04 bash -c "
+  apt-get update -qq && apt-get install -qq -y bash shellcheck >/dev/null 2>&1
+  bash --version | head -1
+  bash -n /repo/packages/scripts/install.sh && echo 'syntax OK'
+  shellcheck -S error /repo/packages/scripts/install.sh
+"
+```
+
+- [ ] **J1.** Bash 5.x syntax check passes on `ubuntu:22.04`
+- [ ] **J2.** Same for `ubuntu:24.04`
+- [ ] **J3.** ShellCheck reports no errors at `-S error` level
+- [ ] **J4.** (Manual) On a real Linux machine, run `install.sh` once: choose Tailscale, complete browser auth, verify the bounded-poll fix from #98 works (no hang)
+
+---
+
+## Section K — Multi-platform binaries (5 min, only on minor version bumps)
+
+After the release tag publishes:
+
+- [ ] **K1.** GitHub Release page has all 5 assets: `arm64-mac.dmg`, `arm64-mac.zip`, `setup-x64.exe`, `x64-mac.dmg`, `x64-mac.zip`
+- [ ] **K2.** macOS arm64 DMG: download, `open <dmg>`, drag to Applications, launch — Electron starts, no Gatekeeper rejection. `codesign -dvv` shows Developer ID + `Notarization Ticket=stapled`. `spctl` accepts.
+- [ ] **K3.** macOS x64 DMG: same on an Intel Mac (or Rosetta on Apple Silicon — should still launch)
+- [ ] **K4.** Windows .exe: install on a Windows machine — SmartScreen accepts (signed by Icemint LLC). Launches Docker Desktop access-mode chooser → wizard.
+- [ ] **K5.** All three platforms: walk through full wizard, verify chat works end-to-end with a real provider key
+
+---
+
+## Section L — Regression checks from prior releases (carry forward)
+
+These checklists were testing gates from previous phases. Re-run before any minor bump.
+
+| Phase / Issue | Checks |
+|---|---|
+| #105 Phase 0 (v0.5.0) | All A–K above |
+| #4 + #5 Phase 1 (v0.5.1) | Plugin loads cleanly · PII masking detects SSN/CC/phone/email · <30 ms p95 latency · toggle off = no impact |
+| #7 Phase 2 (v0.5.2) | All 5 starter rules tested positive + negative · rules don't false-positive on normal conversation |
+| #64 Phase 3 (v0.6.0) | Every page screenshot-compared · no overflow / truncation · mobile (375px) renders · onboarding still works |
+| #6 Phase 4 (v0.7.0) | Safe messages: zero impact · unsafe messages caught and wiped · hardware probe disables on 8 GB · all prior guards still work · cold start <10s |
+| #12 Phase 5 (v0.8.0) | Routine via conversation in <5 min · executes on schedule · failed routine surfaces clear error · all prior features unaffected |
+
+---
+
+## What "PASS" means
+
+- Every box checked
+- Any failure → fix it, rebuild, re-run from the failing section onward
+- Don't tag if any box is unchecked. The 48-hour soak rule (roadmap Rule 2) starts when the tag actually publishes — not when this checklist starts.
+
+## What's NOT in scope here
+
+- Performance benchmarks (run separately if a release is performance-critical)
+- Security audit (run before any release with new attack-surface code)
+- Accessibility audit (run before #64 ships and again before v1.0)
+- Localization (when i18n work happens; not before v0.7.0)
+
+---
+
+**Last updated:** v0.5.0 — Phase 0 stabilization. Update as new features ship and add their checks to Section L.
