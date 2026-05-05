@@ -18,7 +18,8 @@ Fox in the Box bundles a full AI assistant — agent, chat UI, persistent memory
 - **Runs on your computer.** Conversations, memory, and files stay on your machine.
 - **Remembers across sessions.** Your assistant picks up where you left off.
 - **Reachable from anywhere.** Optional secure HTTPS access from your phone or another laptop via Tailscale.
-- **Setup in the browser.** No terminal needed for the desktop app. Paste your API key, click Open Fox, start chatting.
+- **Setup in the browser.** No terminal needed for the desktop app. Paste your API key — or skip the wizard entirely if you already have a local model running.
+- **Local AI in one click.** Got Ollama installed? Fox auto-detects it on first launch and lets you chat with a local model — no API key, no terminal.
 - **Open source.** MIT licensed. You can read every line of what's running.
 
 ---
@@ -149,7 +150,11 @@ The setup wizard runs once. After that the app handles itself — but a few thin
 
 **Add or switch providers.** OpenRouter is configured during onboarding. To add Anthropic, OpenAI, Google Gemini, DeepSeek, Mistral, or any other supported provider: open Fox, click the **gear icon** in the top bar → **Settings → Providers** → paste the API key → **Save**. The new provider is live within seconds — no restart, no terminal. Overwrite a key to rotate it; click **Remove** to clear it.
 
+**Use a local model.** If you have [Ollama](https://ollama.com/download) running on your computer, Fox finds it automatically. **Settings → Providers → Local Ollama** lists every model you've pulled with `ollama pull …` and lets you switch to one with a single click. Keyless, on-device, private. No need to learn the OpenAI-compat URL or memorize model names.
+
 **Pick a model.** The model picker in the chat lists every model your configured providers offer. Switch any time; the conversation thread is preserved.
+
+**Name your Fox on Tailscale.** If you're using Tailscale for remote access, **Settings → System → Device name (Tailscale)** lets you pick a friendly hostname (e.g. `fox-clever`) — it shows up on your tailnet and in the HTTPS URL Tailscale Serve publishes. Defaults to a `fox-<adjective>` if you leave it blank.
 
 **Update the app.** The desktop app pulls new versions automatically. For the install script, re-run the same `curl … | bash` line; it replaces the running container without touching your data.
 
@@ -175,7 +180,8 @@ Most users start with **OpenRouter** — one key, hundreds of models. Add more f
 | **MiniMax** | Settings → Providers | Global + China endpoints |
 | **NVIDIA NIM** | Settings → Providers | Hosted NIM endpoints |
 | **OpenCode-Zen / Go** | Settings → Providers | Code-specialized providers |
-| **Ollama Cloud** | Settings → Providers | Hosted Ollama (`ollama.com`). Local Ollama daemons are reachable today via a custom `model.base_url` in `hermes.yaml`; first-class one-click integration is on the [Roadmap](#roadmap). |
+| **Ollama Cloud** | Settings → Providers | Hosted Ollama (`ollama.com`) |
+| **Local Ollama** | Auto-detected — no key needed | Fox probes `host.docker.internal:11434` then `localhost:11434` on Settings open. If a daemon is running, it appears as its own tile with a list of installed models and one-click switching. Linux requires Fox v0.3.0+ (containers built before then need to be re-created — they're missing the `--add-host=host.docker.internal:host-gateway` flag). |
 | **LM Studio** | Settings → Providers | Local OpenAI-compatible endpoint |
 | **GitHub Copilot, Nous Portal, Codex, Qwen** | `hermes` CLI inside the container | OAuth-only — managed via the bundled Hermes CLI, not the Settings UI |
 
@@ -239,11 +245,11 @@ The app itself is free and open source. You only pay for AI usage at your provid
 What we're working on next. No promises on dates — this is a small team — but this is the direction.
 
 **Coming soon**
-- Hostname customization during desktop app setup
-- First-run guided conversation to help new users explore what Fox can do
+- Pull and delete Ollama models from inside Fox — no need to drop to a terminal
+- Conversational onboarding when no local model is detected (currently the chat-driven welcome only kicks in if Ollama is already installed)
 
 **On the horizon**
-- Local AI model support — run smaller models directly on your computer for offline use or provider outages
+- Bundled local AI fallback — auto-download a small model so Fox keeps working when your provider is down or rate-limited (no Ollama required)
 - Safety guardrails — PII detection, content filtering, and input/output validation
 - Scriptable workflows — teach Fox multi-step routines specific to your business
 
