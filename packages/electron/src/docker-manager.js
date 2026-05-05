@@ -289,11 +289,14 @@ function getEffectiveAccessMode() {
 }
 
 /**
- * Windows first-run: choose how host publishes port 8787 / Tailscale caps.
- * No-op on other platforms or when prefs already exist.
+ * First-run: choose how host publishes port 8787 / Tailscale caps.
+ * Originally Windows-only (#issue-XX); macOS parity added for #96 so
+ * DMG users can opt into Tailscale before container creation. No-op on
+ * Linux (host-script users go through install.sh's chooser) and when
+ * prefs already exist.
  */
 async function ensureDockerAccessModeChosen() {
-  if (process.platform !== 'win32') return;
+  if (process.platform !== 'win32' && process.platform !== 'darwin') return;
   if (getSavedAccessMode() !== null) return;
   const { dialog } = require('electron');
   const { response } = await dialog.showMessageBox({
