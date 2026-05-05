@@ -539,9 +539,45 @@ if [[ "$USE_TAILSCALE" == "true" ]]; then
         info "(Install 'qrencode' to display a QR code here.)"
       fi
 
+      # Bounded wait for `tailscale up` to finish OR for BackendState to
+      # become Running, whichever happens first. The unbounded `wait` we
+      # used before could hang indefinitely on Linux when the tunnel
+      # authenticated but failed to come up (firewall blocking outbound
+      # UDP, MTU mismatch, NAT-type incompatibility, SELinux/AppArmor
+      # restricting TUN access despite --device /dev/net/tun). `tailscale
+      # up --timeout=600` is *supposed* to give up after 10 minutes but
+      # in practice on Linux it sometimes doesn't honor that flag when
+      # the daemon stays in a half-authenticated state. Issue #98.
       if [[ -n "${FITB_TS_UP_PID:-}" ]] && kill -0 "$FITB_TS_UP_PID" 2>/dev/null; then
-        info "Waiting for Tailscale to finish (complete browser login — this step exits when the tunnel is up)…"
-        wait "$FITB_TS_UP_PID" 2>/dev/null || true
+        info "Waiting for Tailscale to finish (complete browser login — this step exits when the tunnel is up or after 15 min)…"
+        _ts_wait_deadline=$(( $(date +%s) + 900 ))
+        while [[ $(date +%s) -lt $_ts_wait_deadline ]]; do
+          if ! kill -0 "$FITB_TS_UP_PID" 2>/dev/null; then
+            break  # tailscale up exited (either succeeded or hit its own --timeout)
+          fi
+          if [[ "$(_tailscale_backend_state)" == "Running" ]]; then
+            info "Tailscale tunnel is Running — proceeding."
+            kill "$FITB_TS_UP_PID" 2>/dev/null || true
+            break
+          fi
+          sleep 3
+        done
+        # If still alive after the deadline, the tunnel never came up.
+        # Kill the bg process so the script can proceed to error reporting
+        # rather than hang. This is the #98 hang fix.
+        if kill -0 "$FITB_TS_UP_PID" 2>/dev/null; then
+          warn "tailscale up still running after 15 minutes — tunnel didn't reach Running state."
+          warn "Common causes on Linux: outbound UDP blocked by firewall, MTU mismatch, NAT type"
+          warn "incompatibility, or SELinux/AppArmor restricting TUN access. Killing background"
+          warn "process and continuing — your container is up; you can retry Tailscale later."
+          warn "Inspect: $DOCKER_CMD exec $CONTAINER tail -80 /data/logs/tailscaled.err"
+          warn "Retry:   $DOCKER_CMD exec $CONTAINER tailscale up --hostname=\"$FOX_HOSTNAME\""
+          kill "$FITB_TS_UP_PID" 2>/dev/null || true
+          # Give SIGTERM a moment, then force-kill if still alive.
+          sleep 2
+          kill -9 "$FITB_TS_UP_PID" 2>/dev/null || true
+          wait "$FITB_TS_UP_PID" 2>/dev/null || true
+        fi
       fi
       FITB_TS_UP_PID=""
 
