@@ -23,6 +23,20 @@ Fox in the Box bundles a full AI assistant — agent, chat UI, persistent memory
 
 ---
 
+## How it works
+
+Fox in the Box runs a small private server on your computer inside something called a **Docker container** — think of it as a sealed box that keeps everything organized and separate from the rest of your system. The desktop app manages this box for you automatically.
+
+When you send a message, the app forwards it to your chosen AI provider (like OpenRouter or Anthropic) over the internet, gets a response, and displays it in the chat. The only thing that leaves your computer is the message itself — your conversation history, files, and memory stay on your machine.
+
+**Memory** is what makes Fox different from a plain chatbot. It remembers what you've talked about across sessions — your preferences, your projects, the context of previous conversations. This memory is stored locally in a small database on your computer, not in the cloud.
+
+**Remote access** is optional. If you want to chat with your assistant from your phone or another computer, Fox can set up a secure private link using Tailscale (a free personal VPN). Only your own devices can reach it — nobody else can see or access your assistant.
+
+**Updates** are simple: the desktop app pulls the latest version automatically. If you installed via the terminal script, run it again — it replaces the old version and keeps your data.
+
+---
+
 ## Install
 
 ### Windows desktop app — **easiest**
@@ -79,6 +93,20 @@ See [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md) for the full build flow.
 
 ---
 
+## After setup
+
+The setup wizard runs once. After that the app handles itself — but a few things are worth knowing.
+
+**Add or switch providers.** OpenRouter is configured during onboarding. To add Anthropic, OpenAI, Google Gemini, DeepSeek, Mistral, or any other supported provider: open Fox, click the **gear icon** in the top bar → **Settings → Providers** → paste the API key → **Save**. The new provider is live within seconds — no restart, no terminal. Overwrite a key to rotate it; click **Remove** to clear it.
+
+**Pick a model.** The model picker in the chat lists every model your configured providers offer. Switch any time; the conversation thread is preserved.
+
+**Update the app.** The desktop app pulls new versions automatically. For the install script, re-run the same `curl … | bash` line; it replaces the running container without touching your data.
+
+**Memory.** Conversation memory persists automatically across sessions. To wipe it (start fresh, troubleshoot, or hand off the install) see [docs/RESET.md](docs/RESET.md).
+
+---
+
 ## Architecture
 
 | Component | Purpose |
@@ -127,6 +155,23 @@ Yes. Choose the Tailscale option during setup; you'll get an HTTPS URL you can o
 
 **How much does it cost?**
 The app itself is free and open source. You only pay for AI usage at your provider (typically a few cents per conversation, depending on the model).
+
+---
+
+## Roadmap
+
+What we're working on next. No promises on dates — this is a small team — but this is the direction.
+
+**Coming soon**
+- Hostname customization during desktop app setup
+- First-run guided conversation to help new users explore what Fox can do
+
+**On the horizon**
+- Local AI model support — run smaller models directly on your computer for offline use or provider outages
+- Safety guardrails — PII detection, content filtering, and input/output validation
+- Scriptable workflows — teach Fox multi-step routines specific to your business
+
+**Have an idea?** [Open a discussion](https://github.com/fox-in-the-box-ai/fox-in-the-box/discussions) or [file a feature request](https://github.com/fox-in-the-box-ai/fox-in-the-box/issues/new).
 
 ---
 
