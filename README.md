@@ -37,6 +37,55 @@ When you send a message, the app forwards it to your chosen AI provider (like Op
 
 ---
 
+## Features
+
+A practical tour of what's in the box. Most of this is wired up by the bundled [Hermes Agent](https://github.com/NousResearch/hermes-agent) and [Hermes WebUI](https://github.com/NousResearch/hermes-webui); Fox in the Box adds the desktop wrapper, the Docker packaging, the onboarding wizard, Tailscale integration, and the auto-update channel.
+
+### Chat
+
+- Streaming responses with live tool-call progress, markdown rendering, and syntax-highlighted code blocks
+- 26 slash commands — including `/new`, `/clear`, `/compress`, `/branch`, `/queue`, `/interrupt`, `/steer`, `/btw`, `/background`, `/reasoning`, `/yolo`, `/voice`, `/skills`, `/personality`, `/usage`, `/retry`, `/undo`, `/status`
+- **Live steering** — inject mid-stream guidance without canceling the current turn
+- **Branching** — fork a conversation into a new session at any point and explore an alternate direction
+- **Background tasks** — kick off long-running prompts and keep chatting; a badge tracks completion
+- **Session search** — browse and search every prior conversation from the sidebar
+
+### Memory and personalization
+
+- Persistent memory across sessions, stored locally in **Qdrant** (vector DB) + **mem0**
+- Read, edit, and prune entries from the Memory panel
+- Per-profile personality (`SOUL.md`) — give your assistant a different voice in different profiles
+
+### Multi-profile
+
+- Separate Hermes environments with isolated config, sessions, and memory
+- Switch profiles without restarting; create one for work, one for personal, one for experiments
+
+### Skills, tools, and scheduling
+
+- **Skills** — bundled and user-authored. Browse, search, and edit from the Skills panel. Each skill can register its own slash command.
+- **MCP integrations** — Brave Search included out of the box. Add more in `hermes.yaml`.
+- **Built-in tools** — file I/O, terminal execution, web browsing (Chrome DevTools Protocol), vision, TTS, transcription, image generation
+- **Scheduled tasks** — cron-style job builder; trigger a skill at a fixed cadence (every weekday at 9am, hourly, custom cron)
+
+### Setup and management
+
+- Browser-based onboarding — paste your OpenRouter key, click Open Fox, you're in. No terminal.
+- **Switch providers from the chat** — Settings → Providers → key → Save. Live in seconds (no restart).
+- **Auto-update** — desktop app pulls new releases via electron-updater; install-script users re-run the same one-liner to upgrade in place
+- **Backup-friendly data layout** — everything in `~/.foxinthebox`; reset by deleting the folder
+- **Built-in log viewer + diagnostics** — Settings → System
+
+### Privacy and access
+
+- **Local-first** — the only outbound traffic is the LLM API call when you send a message. Memory, sessions, and files never leave your machine.
+- **Tailscale integration** — optional secure remote access from your phone or another laptop on your tailnet, with automatic HTTPS via Tailscale Serve
+- **MIT licensed** — every line of Fox is readable on GitHub
+
+> **Advanced — messaging gateways.** Hermes Agent ships with Slack, Discord, Telegram, and WhatsApp gateway adapters. They're available inside the container but currently driven via the `hermes` CLI rather than the WebUI. Setup is more involved than provider key entry; see the [Hermes Agent docs](https://github.com/NousResearch/hermes-agent) if you need them today, and watch the [Roadmap](#roadmap) for in-app gateway management.
+
+---
+
 ## Install
 
 ### Windows desktop app — **easiest**
@@ -107,6 +156,30 @@ The setup wizard runs once. After that the app handles itself — but a few thin
 
 ---
 
+## Supported providers
+
+Most users start with **OpenRouter** — one key, hundreds of models. Add more from Settings → Providers when you need direct access or specific pricing.
+
+| Provider | How to add | Notes |
+|---|---|---|
+| **OpenRouter** | Onboarding wizard, then Settings | Recommended starting point. Hundreds of models via a single API. |
+| **Anthropic** | Settings → Providers | Direct Claude API |
+| **OpenAI** | Settings → Providers | Direct GPT API |
+| **Google Gemini** | Settings → Providers | Google AI Studio |
+| **xAI (Grok)** | Settings → Providers | Direct xAI API |
+| **DeepSeek** | Settings → Providers | Direct |
+| **Mistral AI** | Settings → Providers | Direct |
+| **Z.ai (GLM)** | Settings → Providers | Direct |
+| **Kimi** | Settings → Providers | Coding-tuned models |
+| **MiniMax** | Settings → Providers | Global + China endpoints |
+| **NVIDIA NIM** | Settings → Providers | Hosted NIM endpoints |
+| **OpenCode-Zen / Go** | Settings → Providers | Code-specialized providers |
+| **Ollama Cloud** | Settings → Providers | Hosted Ollama (`ollama.com`). Local Ollama daemons are reachable today via a custom `model.base_url` in `hermes.yaml`; first-class one-click integration is on the [Roadmap](#roadmap). |
+| **LM Studio** | Settings → Providers | Local OpenAI-compatible endpoint |
+| **GitHub Copilot, Nous Portal, Codex, Qwen** | `hermes` CLI inside the container | OAuth-only — managed via the bundled Hermes CLI, not the Settings UI |
+
+---
+
 ## Architecture
 
 | Component | Purpose |
@@ -118,6 +191,8 @@ The setup wizard runs once. After that the app handles itself — but a few thin
 | supervisord | Process management inside the container |
 
 **Container vs. data:** the published Docker image bundles Hermes agent and webui source (from `forks/` submodules) at **build** time. The container's `/data` volume holds your config, databases, logs, and Tailscale state. Updating Hermes for end users means pulling a newer image, not re-cloning at runtime.
+
+**Tech stack:** Electron 28 (desktop wrapper) · Python 3.11 (Hermes Agent + WebUI) · Qdrant (vector DB) · mem0 (memory layer) · supervisord (process management) · Tailscale (remote access) · Docker (packaging). Hermes WebUI is intentionally vanilla — Python `http.server` + plain JavaScript, no SPA framework — so the chat UI loads instantly on any device.
 
 ---
 
