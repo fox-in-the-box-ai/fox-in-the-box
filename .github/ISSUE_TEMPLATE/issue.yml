@@ -1,0 +1,103 @@
+name: Open an issue
+description: Bug, feature, task, or docs change — one form for everything.
+title: ""
+body:
+  - type: dropdown
+    id: type
+    attributes:
+      label: Type
+      description: What kind of issue is this?
+      options:
+        - Bug — something is broken or not behaving as expected
+        - Feature — new capability or improvement
+        - Task — chore, refactor, internal cleanup
+        - Docs — README, CHANGELOG, contributor docs
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: |
+        Your best guess. Maintainers may re-triage.
+        P0 = blocks shipping or breaks the install.
+        P1 = important, address soon.
+        P2 = nice to have.
+      options:
+        - P0
+        - P1
+        - P2
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: |
+        For bugs: what happened, what you expected, steps to reproduce.
+        For features: the problem this solves, who benefits, how it should behave.
+        For tasks/docs: what needs to change and why.
+      placeholder: |
+        # Bug example
+        Setup window stayed at "Step 5/6 — Wait for services" even after
+        the container booted. curl http://127.0.0.1:8787/health returned
+        {"status":"ok"} but the Electron app never closed the window.
+
+        # Feature example
+        Users with Ollama already installed have no discoverable way to
+        use it. Adding a dedicated "Local Ollama" provider tile would
+        let them chat without an OpenRouter key.
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: |
+        Checklist of conditions that, when all true, mean this is done.
+        Optional but very helpful — it pins down what "shipped" means.
+      placeholder: |
+        - [ ] Setup window closes within ~1s of /health returning 200
+        - [ ] Polling validates body contains `"status":"ok"`, not just status code
+        - [ ] Existing tests still pass; new test covers the body-validation branch
+    validations:
+      required: false
+
+  - type: input
+    id: version
+    attributes:
+      label: App version (for bugs)
+      description: |
+        Visible in the chat UI footer, or run `cat ~/.foxinthebox/data/version.txt`.
+        Skip this for features / tasks / docs.
+      placeholder: e.g. 0.3.1
+    validations:
+      required: false
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform (for bugs)
+      description: Where the issue surfaced. Skip for features / tasks / docs.
+      options:
+        - Windows desktop app
+        - macOS desktop app (Apple Silicon)
+        - macOS desktop app (Intel)
+        - Linux (install.sh)
+        - Docker (manual)
+        - Not platform-specific
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Pre-submit checklist
+      options:
+        - label: I searched existing open and closed issues; this is not a duplicate
+          required: true
+        - label: For bugs — I included version + platform above (or it's not platform-specific)
+          required: false
