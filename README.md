@@ -150,7 +150,7 @@ The setup wizard runs once. After that the app handles itself — but a few thin
 
 **Add or switch providers.** OpenRouter is configured during onboarding. To add Anthropic, OpenAI, Google Gemini, DeepSeek, Mistral, or any other supported provider: open Fox, click the **gear icon** in the top bar → **Settings → Providers** → paste the API key → **Save**. The new provider is live within seconds — no restart, no terminal. Overwrite a key to rotate it; click **Remove** to clear it.
 
-**Use a local model.** If you have [Ollama](https://ollama.com/download) running on your computer, Fox finds it automatically. **Settings → Providers → Local Ollama** lists every model you've pulled with `ollama pull …` and lets you switch to one with a single click. Keyless, on-device, private. No need to learn the OpenAI-compat URL or memorize model names.
+**Use a local model.** If you have [Ollama](https://ollama.com/download) running on your computer, Fox finds it automatically. **Settings → Providers → Local Ollama** lists every model on your machine and lets you switch to one with a single click. Keyless, on-device, private. If you don't have any models yet, Fox shows a recommended set with one-click install — no terminal needed. You can pull more, switch active model, and delete unused ones, all from inside the chat. Total disk usage is shown so you know what you're carrying.
 
 **Pick a model.** The model picker in the chat lists every model your configured providers offer. Switch any time; the conversation thread is preserved.
 
@@ -181,7 +181,7 @@ Most users start with **OpenRouter** — one key, hundreds of models. Add more f
 | **NVIDIA NIM** | Settings → Providers | Hosted NIM endpoints |
 | **OpenCode-Zen / Go** | Settings → Providers | Code-specialized providers |
 | **Ollama Cloud** | Settings → Providers | Hosted Ollama (`ollama.com`) |
-| **Local Ollama** | Auto-detected — no key needed | Fox probes `host.docker.internal:11434` then `localhost:11434` on Settings open. If a daemon is running, it appears as its own tile with a list of installed models and one-click switching. Linux requires Fox v0.3.0+ (containers built before then need to be re-created — they're missing the `--add-host=host.docker.internal:host-gateway` flag). |
+| **Local Ollama** | Auto-detected — no key needed | Fox probes `host.docker.internal:11434` then `localhost:11434` on Settings open. If a daemon is running, it appears as its own tile with installed models, one-click switching, **one-click pull from a recommended set** when no models are installed, and delete from inside the chat (since v0.3.1). Linux requires Fox v0.3.0+ (containers built before then need to be re-created — they're missing the `--add-host=host.docker.internal:host-gateway` flag). |
 | **LM Studio** | Settings → Providers | Local OpenAI-compatible endpoint |
 | **GitHub Copilot, Nous Portal, Codex, Qwen** | `hermes` CLI inside the container | OAuth-only — managed via the bundled Hermes CLI, not the Settings UI |
 
@@ -245,8 +245,8 @@ The app itself is free and open source. You only pay for AI usage at your provid
 What we're working on next. No promises on dates — this is a small team — but this is the direction.
 
 **Coming soon**
-- Pull and delete Ollama models from inside Fox — no need to drop to a terminal
 - Conversational onboarding when no local model is detected (currently the chat-driven welcome only kicks in if Ollama is already installed)
+- Hostname prompt during first-run when Tailscale is enabled (today the field lives in Settings only)
 
 **On the horizon**
 - Bundled local AI fallback — auto-download a small model so Fox keeps working when your provider is down or rate-limited (no Ollama required)
