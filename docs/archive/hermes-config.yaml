@@ -1,0 +1,19 @@
+# ── Archived 2026-05-05 ─────────────────────────────────────────────────────
+# This file was at the repo root before v0.3.0 cleanup. It is *not* the
+# canonical FITB Hermes config — the comment below is misleading and dates
+# back to early scaffolding. The actually-canonical config lives at
+#   packages/integration/default-configs/hermes.yaml
+# which entrypoint.sh copies to /data/config/hermes.yaml on first container
+# boot. Kept here only for git-history continuity; safe to ignore. (#repo-structure)
+# ────────────────────────────────────────────────────────────────────────────
+
+# FITB Hermes Configuration — Skills + External Dirs
+# This is the canonical config for all FITB instances
+
+skills:
+  external_dirs:
+    - /home/ubuntu/workspace/skills
+  template_vars: true
+  inline_shell: false
+  inline_shell_timeout: 10
+  guard_agent_created: false
