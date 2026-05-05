@@ -330,6 +330,12 @@ function buildContainerCreateOptions(dataDir, accessMode) {
         },
       ],
     },
+    // Lets the container reach a host-side daemon at host.docker.internal —
+    // required for the local-Ollama integration (issue #66) on Linux. Docker
+    // Desktop on macOS/Windows resolves this name natively. Linux Docker
+    // Engine 20.10+ takes the special host-gateway value as a placeholder
+    // for the host's gateway address.
+    ExtraHosts: ['host.docker.internal:host-gateway'],
   };
   if (accessMode === '2' || accessMode === '3') {
     hostConfig.CapAdd = ['NET_ADMIN'];
