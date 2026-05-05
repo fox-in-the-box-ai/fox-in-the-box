@@ -7,6 +7,34 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.4.0] - 2026-05-05
+
+The first of three v0.4.x releases on the path to fully-offline-capable Fox. This one ships the **local-model download engine** (#10) — server-side, resumable, sha256-verified GGUF downloads. Phi-4-mini Q4_K_M is the first registered model; v0.4.1 will add the llama.cpp runtime that consumes it (#9), and v0.4.2 wires conversational onboarding through the same path (#69).
+
+Also includes the **multi-arch container image** (#82, P0) that landed earlier today — `:latest` and `:stable` are now manifest lists with `linux/amd64` and `linux/arm64` child images. arm64 hosts (Raspberry Pi, AWS Graviton, Apple Silicon Linux VMs) pull native binaries; no QEMU emulation, no platform-mismatch warning.
+
+### Added
+
+- **Local model download manager (#10).** Settings → System → "Local AI models" lists registered models with their on-disk status, expected size, and a single context-sensitive button (Download / Cancel / Delete). Downloads are server-side: closing the browser tab doesn't interrupt the download — re-opening Settings picks up the live progress. Resumes across container restarts because the partial file lives on the `/data` volume. New REST surface: `GET /api/local-models`, `POST /api/local-models/<id>/download`, `POST /api/local-models/<id>/cancel`, `POST /api/local-models/<id>/delete`, `GET /api/local-models/<id>/progress` (SSE). Distinct from the existing `/api/models` chat-input picker — no collision.
+
+- **Phi-4-mini Q4_K_M registered as the first downloadable model.** 2.49 GB, sha256-pinned (`01999f17c39cc307…`), sourced from `bartowski/microsoft_Phi-4-mini-instruct-GGUF`. The URL, sha256, and size are all `MODEL_*_PHI4MINI` env-overridable so we can flip to a mirror without a code release if HuggingFace ever has an outage. The model isn't *used* anywhere yet — that's #9 in v0.4.1.
+
+- **Multi-arch container image (#82, P0).** Cross-runner build pattern: native amd64 on `ubuntu-latest`, native arm64 on `ubuntu-24.04-arm` (GitHub-hosted, free for public repos). Per-platform digests are pushed to GHCR by digest, then assembled into a manifest list via `docker buildx imagetools create`. Verify-both-arches step fails the build hard if either platform's manifest is missing — won't let a single-platform image ship as `:latest`. Per-platform GHA cache scopes (`cloud-amd64`, `cloud-arm64`) prevent cross-arch layer contamination. Smoke test runs on each native runner: pulls by index digest, asserts the registry auto-selected the matching child manifest, validates `/health` returns 200 **and** body contains `"status": "ok"` (per #57's lesson).
+
+### Changed
+
+- **`release.yml` retag step now uses `docker buildx imagetools create`** instead of `docker pull && docker tag && docker push`. The old pattern collapsed a manifest list to a single-platform image because the pull only fetched the runner's child manifest — multi-arch users would have silently lost arm64 on every tagged release. The new pattern operates registry-side and preserves the full manifest list. Defense-in-depth verify step in `release.yml` fails the release loudly if either `:vX.Y.Z` or `:stable` ends up missing a platform.
+
+### Integrity & verification
+
+- All four diligence checks built into CI: manifest-list verify, index-digest pull arch verification, distinct cache scopes, body-shape validation on `/health`. Verified end-to-end on PR #83 (5/5 checks green) and on PR #84.
+
+### Caveats
+
+- Phi-4-mini downloads as soon as the user clicks Download in Settings, but **there's no way to use it yet**. v0.4.1 (#9) adds the llama.cpp runtime + Settings → Providers "Local fallback" toggle that makes the model serve chat traffic. Power users who want to pre-stage the model can do so today; everyone else can ignore the new section until v0.4.1 lands.
+
+[0.4.0]: https://github.com/fox-in-the-box-ai/fox-in-the-box/releases/tag/v0.4.0
+
 ## [0.3.1] - 2026-05-05
 
 Fully closes the local-Ollama integration that started in v0.3.0. Users with Ollama installed can now pull and delete models from inside the WebUI — no terminal step at any point in the flow. The 2-minute first-chat goal from #66 is now actually reachable: install Ollama, open Fox, click a recommended model, chat.
