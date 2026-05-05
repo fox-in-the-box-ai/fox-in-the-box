@@ -351,6 +351,7 @@ info "Starting container…"
 $DOCKER_CMD run -d \
   --name "$CONTAINER" \
   --restart unless-stopped \
+  --add-host=host.docker.internal:host-gateway \
   $TAILSCALE_FLAGS \
   -v "$DATA_DIR":/data \
   $PORT_BIND \
