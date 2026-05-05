@@ -7,6 +7,39 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.3.1] - 2026-05-05
+
+Fully closes the local-Ollama integration that started in v0.3.0. Users with Ollama installed can now pull and delete models from inside the WebUI — no terminal step at any point in the flow. The 2-minute first-chat goal from #66 is now actually reachable: install Ollama, open Fox, click a recommended model, chat.
+
+### Added
+
+- **Pull Ollama models from inside Fox.** New **Settings → Providers → Local Ollama** controls:
+  - **Recommended-models card** when zero models are installed: one-click pull buttons for `llama3.1:8b`, `mistral:7b`, `phi4-mini`, `deepseek-coder-v2:16b`
+  - **Pull form** with a free-form input plus a curated `<datalist>` of suggestions (the four above plus `gemma3:4b` and `qwen3:4b`). Browse-all link to ollama.com/library
+  - **Live progress block** during a pull: percentage bar, current/total bytes, instantaneous speed (rolling 4-sample window), ETA. After completion the model immediately appears in the list (cache invalidation)
+  - Server-side allowlist regex on model names (`^[A-Za-z0-9._:/-]+$`, ≤200 chars) — defense-in-depth against shell-injection-via-config
+
+- **Delete Ollama models from inside Fox.** Per-row Delete button next to the existing Use button. Confirmation dialog includes the freed-space estimate; success toast reports the actual freed bytes returned by Ollama. Model list refreshes after delete so the row disappears and the disk-usage indicator decreases.
+
+- **Total-disk indicator.** Local Ollama tile header now shows total bytes across installed models.
+
+### API
+
+- New `POST /api/ollama/pull` — SSE-proxied stream of Ollama's NDJSON `/api/pull` progress. Three event types: `progress`, `done`, `error`. Errors include validation, daemon-not-running, mid-stream Ollama errors, network drop. Client-disconnect mid-pull doesn't kill the underlying Ollama pull (Ollama keeps fetching in the background by design).
+- New `POST /api/ollama/delete` — wraps Ollama's `DELETE /api/delete`. Returns `{ok, freed_bytes}` on success or `{ok: false, error}` on failure (404 surfaced as "Model not installed: \<name\>").
+- `GET /api/ollama/models` now returns `total_size_bytes` for the disk-usage indicator.
+
+### Why `POST /api/ollama/delete` instead of `DELETE`
+
+hermes-webui's request dispatcher routes only `GET` and `POST` at the framework level. Adding DELETE-method support would require server.py changes outside this fix's scope. POST symmetry with the rest of the Ollama endpoints is the cleaner local minimum.
+
+### Closes
+
+- #67 — Ollama Phase 3: pull / delete model management UI
+- The remaining acceptance criteria from #66 that hadn't shipped in v0.3.0 (zero-terminal flow, 2-minute first-chat for non-technical users with Ollama)
+
+[0.3.1]: https://github.com/fox-in-the-box-ai/fox-in-the-box/releases/tag/v0.3.1
+
 ## [0.3.0] - 2026-05-05
 
 The "Smoother onboarding + first taste of local" release. Clears both of v0.2.0's "Coming soon" promises and adds first-class local Ollama support so users with Ollama already installed can chat without an API key, without a terminal, without a custom-endpoint config.
