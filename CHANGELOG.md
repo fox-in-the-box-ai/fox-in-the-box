@@ -7,6 +7,32 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.5.0] - 2026-05-05
+
+Stabilization release. Real-hardware verification of v0.3.0–v0.4.6 features surfaced 5 latent bugs that had been silently shipping for months. All fixed and verified end-to-end against a real Docker container and a real Tailscale tailnet.
+
+This is Phase 0 of the new roadmap: nothing new, everything works.
+
+### Fixed
+
+- **Local AI fallback now actually works on Apple Silicon (#114).** The Docker build was downloading x86_64 binaries into arm64 images. `llama-server` would crash with a Rosetta error within seconds of toggling the fallback on. Apple Silicon users have been hitting this since v0.4.1.
+- **Tailscale Serve now actually publishes HTTPS (#115).** The bundled tailscale binary moved past 1.60, which removed the legacy `serve` syntax we were calling. Auto-config silently failed on every container — the `https://<host>.<tailnet>.ts.net/` URL the README promised never came up. Modern syntax now used; verified end-to-end.
+- **Settings actually persist across container restart (#116).** Theme, hostname-prompted flag, local-fallback toggle, all 6 Tailscale power-user fields — every persisted setting was being written to a path inside the image, wiped on every restart. This bug has been latent since the project's beginning. Fixed: settings live on the `/data` volume now.
+- **Model switching actually reaches the gateway (#117).** When you switched providers via Settings (Ollama, OpenRouter, custom), the WebUI was writing config to a file the gateway never read. The "Save" call returned ok=true; the next chat ignored your change and routed through whatever was loaded at boot. Latent since v0.3.0. Fixed: WebUI and gateway now share the same config path.
+- README updated to mention the one-time HTTPS toggle in the Tailscale admin console (DNS → Enable HTTPS) that Tailscale Serve requires.
+
+### Verified
+
+Tailscale full lifecycle (real auth, real device on tailnet) · bundled llama.cpp full flow on arm64 (2.5 GB download → real chat) · Ollama detect → use-model → chat · settings persistence across `docker restart` · reactive failover modal on real provider failure · macOS DMG signed + notarized stapled · Linux `install.sh` syntax on Ubuntu 22.04 + 24.04.
+
+Full verification log on `qa/v0.4.7-verification` branch (kept as reference, not merged).
+
+### What's next
+
+Phase 1 (v0.5.1): guardrail plugin scaffold (#4) + Presidio PII detection (#5).
+
+---
+
 ## [0.4.7] - 2026-05-05
 
 Hotfix release. Comprehensive QA pass on the v0.4.4–v0.4.6 features after the project owner asked the question: "Have we fully completed Ollama and Tailscale integrations? Is there literally anything left, untested, not working fully or where we came short?" Answer: yes, plenty. Two parallel review agents and one adversarial reviewer found 30+ real bugs across the freshly-shipped code. End-to-end testing against a real Docker container surfaced two more showstoppers: **the v0.4.4 desktop Tailscale flow had been silently broken — clicking Connect showed "Starting…" forever**.
