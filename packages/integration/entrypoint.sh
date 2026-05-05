@@ -180,6 +180,16 @@ fi
 # Wizard / install.sh complete Tailscale *after* first boot, so we must not require
 # tailscaled.state at entrypoint start. Parent process execs supervisord below;
 # this subshell survives, waits for /health, then polls until BackendState=Running.
+#
+# QA fix v0.4.7: ALSO grant the foxinthebox user permission to talk to
+# tailscaled via `tailscale set --operator=foxinthebox`. Without this,
+# the webui module (which runs as foxinthebox per supervisord.conf) gets
+# "Access denied: checkprefs access denied" when calling `tailscale up`
+# from /api/tailscale/up. tailscaled runs as root for NET_ADMIN; the
+# operator-set is the supported way to delegate user-mode CLI access
+# without giving up root daemon privileges. Issue surfaced during the
+# v0.4.7 QA pass — the desktop Tailscale flow shipped in v0.4.4 was
+# never actually working because of this.
 (
     sleep 10
     _health_dead=240
@@ -195,6 +205,21 @@ fi
     if [ "$_hi" -ge "$_health_dead" ]; then
         echo "[entrypoint] Tailscale Serve helper: WebUI /health not ready within ${_health_dead}s."
         exit 0
+    fi
+    # Wait briefly for tailscaled to be ready, then grant the webui user
+    # operator access. Idempotent — tailscale stores this in its state
+    # file so re-running is harmless. Best-effort: log + continue on error.
+    _opi=0
+    while [ "$_opi" -lt 60 ]; do
+        if tailscale set --operator=foxinthebox 2>/dev/null; then
+            echo "[entrypoint] Granted foxinthebox tailscale operator access."
+            break
+        fi
+        _opi=$((_opi + 2))
+        sleep 2
+    done
+    if [ "$_opi" -ge 60 ]; then
+        echo "[entrypoint] WARNING: tailscale set --operator failed within 60s; webui /api/tailscale/up will fail until run by hand."
     fi
     # Up to ~15 min for user to finish Tailscale auth (wizard or manual).
     _ts_iters=450
