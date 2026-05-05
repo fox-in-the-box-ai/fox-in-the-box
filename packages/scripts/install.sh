@@ -551,21 +551,35 @@ if [[ "$USE_TAILSCALE" == "true" ]]; then
       if [[ -n "${FITB_TS_UP_PID:-}" ]] && kill -0 "$FITB_TS_UP_PID" 2>/dev/null; then
         info "Waiting for Tailscale to finish (complete browser login — this step exits when the tunnel is up or after 15 min)…"
         _ts_wait_deadline=$(( $(date +%s) + 900 ))
+        # QA fix: track WHY the loop exited so the deadline-expired branch
+        # below can distinguish "Running was reached, SIGTERM'd cleanly"
+        # from "deadline hit, process never died". The previous code
+        # re-probed `kill -0` to make that decision and could double-fire
+        # the kill in racy timings.
+        _ts_exit_reason=""
         while [[ $(date +%s) -lt $_ts_wait_deadline ]]; do
           if ! kill -0 "$FITB_TS_UP_PID" 2>/dev/null; then
+            _ts_exit_reason="proc-exited"
             break  # tailscale up exited (either succeeded or hit its own --timeout)
           fi
-          if [[ "$(_tailscale_backend_state)" == "Running" ]]; then
+          # QA fix: wrap _tailscale_backend_state in set +e/-e — the
+          # helper docker-execs into the container and any transient
+          # failure under set -e propagates and aborts the install.
+          set +e
+          _ts_state="$(_tailscale_backend_state 2>/dev/null)"
+          set -e
+          if [[ "$_ts_state" == "Running" ]]; then
             info "Tailscale tunnel is Running — proceeding."
             kill "$FITB_TS_UP_PID" 2>/dev/null || true
+            _ts_exit_reason="running"
             break
           fi
           sleep 3
         done
-        # If still alive after the deadline, the tunnel never came up.
-        # Kill the bg process so the script can proceed to error reporting
-        # rather than hang. This is the #98 hang fix.
-        if kill -0 "$FITB_TS_UP_PID" 2>/dev/null; then
+        # If we left the loop because deadline hit (not because the proc
+        # exited or Running was reached), surface diagnostics and
+        # escalate to SIGKILL so the script doesn't hang on `wait`.
+        if [[ -z "$_ts_exit_reason" ]]; then
           warn "tailscale up still running after 15 minutes — tunnel didn't reach Running state."
           warn "Common causes on Linux: outbound UDP blocked by firewall, MTU mismatch, NAT type"
           warn "incompatibility, or SELinux/AppArmor restricting TUN access. Killing background"
@@ -573,11 +587,15 @@ if [[ "$USE_TAILSCALE" == "true" ]]; then
           warn "Inspect: $DOCKER_CMD exec $CONTAINER tail -80 /data/logs/tailscaled.err"
           warn "Retry:   $DOCKER_CMD exec $CONTAINER tailscale up --hostname=\"$FOX_HOSTNAME\""
           kill "$FITB_TS_UP_PID" 2>/dev/null || true
-          # Give SIGTERM a moment, then force-kill if still alive.
+          # Give SIGTERM a moment to land, then escalate.
           sleep 2
-          kill -9 "$FITB_TS_UP_PID" 2>/dev/null || true
-          wait "$FITB_TS_UP_PID" 2>/dev/null || true
+          if kill -0 "$FITB_TS_UP_PID" 2>/dev/null; then
+            kill -9 "$FITB_TS_UP_PID" 2>/dev/null || true
+          fi
         fi
+        # Reap the process regardless of exit reason; suppress shell's
+        # "not a child" noise if the proc was reaped externally already.
+        wait "$FITB_TS_UP_PID" 2>/dev/null || true
       fi
       FITB_TS_UP_PID=""
 
