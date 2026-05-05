@@ -7,6 +7,36 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.3.0] - 2026-05-05
+
+The "Smoother onboarding + first taste of local" release. Clears both of v0.2.0's "Coming soon" promises and adds first-class local Ollama support so users with Ollama already installed can chat without an API key, without a terminal, without a custom-endpoint config.
+
+### Added
+
+- **First-class local Ollama integration.** Settings → Providers gets a new **Local Ollama** tile that auto-detects a host-side Ollama daemon (probing `host.docker.internal:11434` then `localhost:11434`, 10s cache), lists installed models from `/api/tags` with parameter size, quantization, and disk size, and offers a one-click **"Use"** button per model. Picking a model writes `model.{provider:custom, base_url, name}` into `config.yaml` and triggers the gateway hot-reload pattern from v0.2.0 — no API key, no terminal, no manual configuration. Routes through Hermes Agent's existing custom OpenAI-compat endpoint path; no agent-side changes. Closes #66 (phases 1 and 2; phase 3 — pull/delete model UI — tracked as #67 for v0.3.1).
+
+- **Local Ollama fast-path on the onboarding wizard.** When a host-side Ollama daemon is detected with at least one model installed, the wizard's Welcome step surfaces a green-bordered "Local model detected" panel with a **"Use <model name>"** CTA. Click → activates the model server-side → marks onboarding complete → drops the user straight into chat. No API key step. Falls back to the existing OpenRouter wizard when Ollama isn't detected. Part of #11.
+
+- **Skip CTA on every onboarding step.** `POST /api/setup/skip` marks onboarding complete without collecting an API key — exit hatch for users who'll configure providers later from Settings, or who already have keys persisted from a prior install. Closes the "User can skip onboarding entirely" AC of #11.
+
+- **Externalized onboarding welcome text.** The wizard's Welcome paragraph(s) are now read from `/data/config/onboarding.md` (default copy ships from the container's defaults sweep). Edit the file in place to customize the greeting per install. New `GET /api/setup/welcome` endpoint serves the content. Closes the "Script is externalized" AC of #11.
+
+- **Tailscale device hostname customization in Settings.** A new **Device name (Tailscale)** field in Settings → System lets desktop-app users pick a friendly name for their Fox on their tailnet — no longer stuck with Tailscale's auto-generated `ip-x-x-x-x` hostnames in the HTTPS URL Tailscale Serve publishes. The field defaults to a `fox-<adjective>` from the same curated list `install.sh` uses (parity with the v0.1.3 shell-install fix from #3). Persists `FOX_HOSTNAME` to `/data/config/hermes.env` and applies live via `tailscale set --hostname=<sanitized>` against the running daemon — surgical `EditPrefs` mutation, not the full-preferences-reset risk of `tailscale up`. After applying, re-reads `tailscale status --json` and surfaces any collision suffix the control plane appended. If the daemon isn't running or authenticated yet (common at first run), the persist is a soft-success — the value applies on the next daemon start. Closes #44. Wizard-step refinement tracked separately as #68.
+
+- **Linux Docker host networking.** `packages/electron/src/docker-manager.js` (Dockerode `HostConfig.ExtraHosts`) and `packages/scripts/install.sh` now add `--add-host=host.docker.internal:host-gateway` so the local-Ollama probe (and any future host-reaching code) works on Linux Docker Engine 20.10+. macOS / Windows Docker Desktop resolves this name natively; Linux Engine takes `host-gateway` as a placeholder for the host's gateway address.
+
+### Fixed
+
+- **Onboarding state drift.** `onboarding.json:completed` and `settings.json:onboarding_completed` were two unsynchronized flags — the redirect middleware read only the first, and any code path flipping the second was silently ignored. `/api/setup/{complete,skip}` now write both, and `onboarding_complete()` reads either. Future CLI / direct-config bootstrappers can flip either flag and the redirect agrees.
+
+### Caveats
+
+- **Local Ollama on existing v0.2.x containers.** The Linux `--add-host` flag was added to the container creation flow in this release. Containers created before v0.3.0 don't have it — the Local Ollama tile will show "Not detected" on Linux until the container is re-created. macOS / Windows Docker Desktop is unaffected. Surfaced inline in the Local Ollama tile's not-detected copy.
+
+- **Live Tailscale hostname mutation requires an authenticated daemon.** If you set the device name before authenticating Tailscale (or with the daemon stopped), the value still persists to `hermes.env` and applies on the next daemon start. The Settings UI surfaces this distinction in its status line.
+
+[0.3.0]: https://github.com/fox-in-the-box-ai/fox-in-the-box/releases/tag/v0.3.0
+
 ## [0.2.0] - 2026-05-04
 
 The "App works out of the box" release. The first-launch flow now closes itself when services are healthy, post-onboarding key changes take effect without a container restart, and the release pipeline pins images by content digest so a tagged version is reproducible.
