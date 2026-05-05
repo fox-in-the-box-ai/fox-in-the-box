@@ -7,6 +7,29 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.4.2] - 2026-05-05
+
+Bug-fix release. When a remote provider closed the connection mid-stream — rate limit hit during streaming, gateway timeout, network reset after the first token — the user saw their partial response and then nothing. Spinner disappeared with no error, no recovery hint. The app appeared silently broken. v0.4.2 surfaces the failure clearly and preserves the partial response across page reload.
+
+### Fixed
+
+- **Mid-stream gateway errors no longer leave messages unanswered (#89).** The silent-failure detector in `streaming.py` was gated on `not _token_sent` to avoid false-firing on tool-call-only completions. Side effect: when tokens HAD started streaming and then the provider dropped the connection without re-raising (the agent's internal handler swallowed the failure), neither the silent-failure path nor the outer exception handler caught it. Result: the user's chat looked broken with no explanation. Fix:
+  - Drop the `_token_sent=False` gate. The right condition is `not _assistant_added` — if no completed assistant message landed, the user needs feedback regardless of partial token streaming.
+  - Branch on `_token_sent` for the error label: when tokens streamed → **"Stream interrupted"** (with the underlying error), when none did → existing **"No response received"**. The latter was misleading when half a response was already on screen.
+  - Preserve `STREAM_PARTIAL_TEXT` in the persisted assistant message: `<partial>\n\n*[Stream interrupted: <label> — <error>]*`. Page reload no longer erases what the user already saw — the partial response stays visible with a clear marker that the stream broke.
+  - Symmetric fix in the outer exception handler (`streaming.py:~2440`) — when a provider error IS raised mid-stream, the persisted message also includes the partial.
+  - Frontend: new `stream_interrupted` type recognized by the apperror SSE handler so the live error bubble label reads cleanly.
+
+### Why this isn't covered by v0.4.1's local fallback (#9)
+
+#9 silently retries opted-in users' transient failures on the local model. That handles the **opted-in user with a downloaded local model** case. #89 is the broader case: a user without local fallback (or who hadn't opted in) still gets clear error feedback rather than silence. The two fixes are complementary.
+
+### Closes
+
+- **#89** — Gateway errors mid-chat leave messages unanswered with no error shown
+
+[0.4.2]: https://github.com/fox-in-the-box-ai/fox-in-the-box/releases/tag/v0.4.2
+
 ## [0.4.1] - 2026-05-05
 
 The local-AI fallback experience now actually works end-to-end. v0.4.0 shipped the download infrastructure; v0.4.1 ships the runtime that consumes it. Enable a single Settings toggle, wait for the one-time 2.5 GB download, and your chat keeps working when your remote provider is rate-limited or unreachable. Silent failover, no chat interruption.
