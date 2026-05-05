@@ -7,6 +7,35 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.4.1] - 2026-05-05
+
+The local-AI fallback experience now actually works end-to-end. v0.4.0 shipped the download infrastructure; v0.4.1 ships the runtime that consumes it. Enable a single Settings toggle, wait for the one-time 2.5 GB download, and your chat keeps working when your remote provider is rate-limited or unreachable. Silent failover, no chat interruption.
+
+### Added
+
+- **Local AI fallback runtime (#9).** New tile in **Settings → Providers** ("Local fallback"). Toggle ON triggers v0.4.0's download manager (Phi-4-mini Q4_K_M, ~2.5 GB, sha256-pinned), and once the file lands, supervisord starts the bundled `llama-server`. The Settings tile shows live status: `Off` / `Will start downloading…` / `Downloading 1.2 GB / 2.5 GB (48%)` / `Starting llama-server…` / `Ready — your provider failures will silently retry on the local model.`
+- **Silent failover.** When the user is opted in and a remote-provider call hits a transient failure (5xx, 429, connection drop), the existing agent-level retry path is plumbed at the local model. No modal, no chat interruption — the conversation continues. The retry classifier never fails over on auth/quota/billing/model-not-found errors (those are config errors that need to surface to the user, not be masked by a local model).
+- **Bundled `llama.cpp` (b9026), per-arch.** Pre-built CPU binaries pulled into the image at build time via the same `TARGETARCH` switch the Qdrant build uses (#82's multi-arch pipeline keeps both x64 and arm64 builds covered). Supervised by supervisord with `--sleep-idle-seconds 60` — process stays up so failover is fast, weights unload after 60 s of no requests so RAM cost is ~50 MB at idle (vs ~3.5 GB while serving).
+
+### Changed
+
+- **`/api/local-fallback/{status,enable,disable}`** new endpoints exposing the orchestration above.
+- **`settings.json` schema** gains `local_fallback_enabled` (bool, default `false`). Persisted via the existing `_SETTINGS_DEFAULTS` + `_SETTINGS_BOOL_KEYS` allowlist.
+- **`packages/integration/Dockerfile`** installs `libgomp1` + `libcurl4` (~550 KB total) for the `llama-server` runtime.
+- **`packages/integration/supervisord.conf`** gains `[program:llama-server]` with `autostart=false` — zero idle RAM cost when a user hasn't opted into local fallback.
+
+### Caveats
+
+- **First-run download is ~2.5 GB.** Honestly displayed in the toggle copy. Users on slow connections will wait. The download persists on `/data/models/` across container restarts; second-run is instant.
+- **Reactive modal not yet shipped.** When a remote-provider call fails and the user *hasn't* opted in, today they see the existing remote error. v0.4.2 will add a one-time "Try local model? (downloads ~2.5 GB once)" prompt with a "Always do this" checkbox.
+- **No recovery banner yet.** When the remote provider comes back, the user stays on the local model until they manually toggle off. v0.4.2 polish will add a passive "Remote is back — switch?" banner.
+
+### Closes
+
+- **#9** — local CPU fallback model (the original "provider outage handling" issue from the v0.1 backlog)
+
+[0.4.1]: https://github.com/fox-in-the-box-ai/fox-in-the-box/releases/tag/v0.4.1
+
 ## [0.4.0] - 2026-05-05
 
 The first of three v0.4.x releases on the path to fully-offline-capable Fox. This one ships the **local-model download engine** (#10) — server-side, resumable, sha256-verified GGUF downloads. Phi-4-mini Q4_K_M is the first registered model; v0.4.1 will add the llama.cpp runtime that consumes it (#9), and v0.4.2 wires conversational onboarding through the same path (#69).
