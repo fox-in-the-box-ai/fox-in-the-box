@@ -7,6 +7,24 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.4.3] - 2026-05-05
+
+Onboarding wizard now offers the bundled local model when no Ollama daemon is detected. Closes the gap from v0.3.0's "Option B" closure, where the welcome step had a fast-path for Ollama users only — leaving everyone else with no choice but OpenRouter. With v0.4.0's download manager and v0.4.1's local-fallback runtime in place, the wizard can finally run end-to-end on a user's hardware with no API key.
+
+### Added
+
+- **Bundled-llama.cpp fast-path on the welcome step (#69).** When the wizard detects no host-side Ollama, it probes `/api/local-fallback/status` and offers Phi-4-mini directly:
+  - **Already on disk** → instant "Use bundled local model" CTA, no download.
+  - **Not yet on disk** → "Download & use local model (~2.5 GB)" CTA. Click triggers `/api/local-fallback/enable` (toggles the flag, kicks the download via #10's manager, and queues llama-server start once the file lands). The welcome step swaps to a progress panel with a live MB / total counter and percentage bar; the user can close the window — the download keeps running on the server side.
+  - **Outside the supervisord-managed container** (`ui_state: no-supervisor`) → CTA hidden; only OpenRouter and the skip footer show.
+- Priority order on step 1 is now: Ollama detected → bundled llama.cpp ready → bundled llama.cpp installable → no local CTA. OpenRouter remains available on every branch via the existing **Next** button.
+
+### Why this matters
+
+Before v0.4.3, the only way to onboard without an API key was to (a) install Ollama on the host beforehand, or (b) skip the wizard and configure local fallback manually from Settings → Providers. (b) required knowledge most users don't have. v0.4.3 closes that loop: a user with no Ollama, no API key, and no prior knowledge of the local-fallback feature now has a one-click path to a working chat against an on-device model.
+
+---
+
 ## [0.4.2] - 2026-05-05
 
 Bug-fix release. When a remote provider closed the connection mid-stream — rate limit hit during streaming, gateway timeout, network reset after the first token — the user saw their partial response and then nothing. Spinner disappeared with no error, no recovery hint. The app appeared silently broken. v0.4.2 surfaces the failure clearly and preserves the partial response across page reload.
