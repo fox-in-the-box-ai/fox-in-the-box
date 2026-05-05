@@ -1,278 +1,131 @@
-# Dev Mode — Version Sync & Local Testing
+# Dev Mode
 
-## Overview
+Local development with bind-mounted submodules. Lets you iterate on `forks/hermes-agent` and `forks/hermes-webui` without rebuilding the container or pushing tags between every change.
 
-**Dev mode** lets you test FITB changes with local code mounts instead of cloning from git tags. Perfect for rapid iteration on `hermes-agent` and `hermes-webui` features.
+## When to use
 
----
+- Working on a feature branch in either submodule and want to run it inside the FITB container immediately
+- Testing a bug-fix candidate before opening a PR
+- Reproducing a production issue against a known-good snapshot
 
-## Version Sync System
+If you're just running the released image as a user, you don't need any of this — see the README quickstart.
 
-### Single Source of Truth
-
-All version references now read from `/VERSION` at the repo root:
-
-```
-VERSION (repo root)
-  ↓
-  ├─ package.json (build:docker scripts)
-  ├─ Dockerfile (ARG FITB_VERSION)
-  └─ Electron app display
-```
-
-### Build commands
-
-```bash
-# Production: read VERSION file, tag image as 0.1.0
-pnpm build:docker
-# → docker build ... -t fox-in-the-box:$(cat VERSION)
-
-# Dev: read VERSION, tag as 'dev', enable FITB_DEV=1
-pnpm build:docker:dev
-# → docker build ... --build-arg FITB_DEV=1 -t fox-in-the-box:dev
-```
-
-### Updating version
-
-```bash
-echo "0.2.0" > VERSION
-pnpm build:docker  # ← builds as :0.2.0
-
-# Also updates package.json version manually if needed
-```
-
----
-
-## Dev Mode Workflow
-
-### 1. Build dev image (once)
+## Build the dev image (one-time per Dockerfile change)
 
 ```bash
 pnpm build:docker:dev
-# Builds with FITB_DEV=1 flag
-# Skips git clone logic in entrypoint
 ```
 
-### 2. Run container with bind mounts
+What this does:
+- Reads `VERSION` (repo root) — currently `0.5.0`
+- Builds with `--build-arg FITB_DEV=1`
+- Tags the image as `fox-in-the-box:dev`
+- Skips the `_clone_app hermes-agent` / `_clone_app hermes-webui` calls in `entrypoint.sh` — the container will use bind-mounted submodules instead
+
+## Run with bind mounts
 
 ```bash
 pnpm dev:container
-# Mounts:
-#   forks/hermes-agent    → /root/.hermes/hermes-agent
-#   forks/hermes-webui    → /root/.hermes/hermes-webui
-# Container uses LOCAL code, not git tags
 ```
 
-Or manually:
-
+Wraps:
 ```bash
 docker run -it --rm \
-  --cap-add=NET_ADMIN \
-  --device /dev/net/tun \
+  --cap-add=NET_ADMIN --device /dev/net/tun \
   -p 127.0.0.1:8787:8787 \
   -v $(pwd)/forks/hermes-agent:/root/.hermes/hermes-agent \
   -v $(pwd)/forks/hermes-webui:/root/.hermes/hermes-webui \
   fox-in-the-box:dev
 ```
 
-### 3. Iterate (outside container)
+Edit code in `forks/*` on your host. The container sees the changes immediately. After a Python change, restart the affected service from inside the container:
 
 ```bash
-# Terminal 1: container running
-pnpm dev:container
-
-# Terminal 2: make changes locally
-cd forks/hermes-agent
-git checkout -b feature/my-change
-# ... edit code ...
-
-# Terminal 3: container sees changes immediately (bind mount)
-# Restart services inside container if needed:
-#   supervisorctl restart hermes
+docker exec -it <container> supervisorctl -c /etc/supervisor/supervisord.conf restart hermes-webui
+# or hermes-gateway, qdrant, llama-server, tailscaled
 ```
 
----
+For static-asset changes (HTML / JS / CSS in `forks/hermes-webui/static/`), just hard-refresh the browser — webui serves static files directly from the bind mount.
 
-## Dev Mode Behavior
-
-When `FITB_DEV=1` during build:
-
-### Entrypoint changes
-- ✅ Still creates `/data/config`, `/data/cache`, etc. (first-run setup)
-- ❌ Skips `_clone_app hermes-agent` and `_clone_app hermes-webui`
-- ✅ Runs `scripts/dev-init.sh` to verify bind mounts are present
-- ✅ Logs branch + commit of mounted repos for debugging
-
-### Expected output on startup
+## Expected startup output
 
 ```
 [entrypoint] Dev mode detected (FITB_DEV=1)
-[dev-init] Dev mode initialization — using bind-mounted hermes-agent and hermes-webui
-[dev-init] ✓ hermes-agent bind mount detected
-[dev-init]   Branch: feature/my-change
-[dev-init]   Commit: abc1234
-[dev-init] ✓ hermes-webui bind mount detected
-[dev-init]   Branch: fix/sidebar
-[dev-init]   Commit: def5678
+[dev-init] Using bind-mounted hermes-agent and hermes-webui
+[dev-init] ✓ hermes-agent — branch: feat/your-work, commit: abc1234
+[dev-init] ✓ hermes-webui — branch: feat/your-work, commit: def5678
 ```
 
 If a mount is missing:
-
 ```
 [dev-init] WARNING: /root/.hermes/hermes-webui/.git not found
-[dev-init] Make sure you mounted it: -v $(pwd)/forks/hermes-webui:/root/.hermes/hermes-webui
+[dev-init] Make sure both `-v` flags are present (forks/hermes-agent and forks/hermes-webui)
 ```
 
----
+## Prod vs Dev image differences
 
-## Prod vs Dev Build Matrix
+| Aspect | `fox-in-the-box:dev` | `fox-in-the-box:<version>` (production) |
+|---|---|---|
+| Build flag | `FITB_DEV=1` | `FITB_DEV=0` (default) |
+| Submodule source | Bind-mounted from your host | Cloned from a git tag at build time |
+| Tag | `dev` | semver e.g. `0.5.0` |
+| Use case | Iterating on submodule code | Released artifact, CI, what users run |
 
-| Aspect | Production | Dev |
-|--------|-----------|-----|
-| **Build cmd** | `pnpm build:docker` | `pnpm build:docker:dev` |
-| **FITB_VERSION** | From VERSION file | From VERSION file |
-| **FITB_DEV** | 0 (clone from git) | 1 (skip clone, use mounts) |
-| **Image tag** | `0.1.0`, `latest`, etc. | `dev` |
-| **Entrypoint** | Clones hermes-agent/webui | Skips clone, runs dev-init |
-| **Mount mounts** | Not needed | Required for hermes-agent/.git, hermes-webui/.git |
-| **Use case** | Production container, CI/CD, releases | Local dev, testing, feature branches |
+## Common workflows
 
----
-
-## Testing Scenarios
-
-### Test P0 bug fix before merge
+### Test a feature branch in both submodules together
 
 ```bash
-# Check out feature branch in both forks
-cd forks/hermes-agent && git checkout feature/cli-graceful-shutdown
-cd forks/hermes-webui && git checkout feature/session-lock-watchdog
+cd forks/hermes-agent  && git checkout feat/agent-side-thing
+cd ../hermes-webui     && git checkout feat/webui-side-thing
+cd ../..
 
-# Build dev image
 pnpm build:docker:dev
-
-# Run with mounts
 pnpm dev:container
-
-# Test inside container
-hermes chat  # or whatever you're testing
 ```
 
-### Test version upgrade path
+### Switch back to mainline mid-session
 
 ```bash
-# Update VERSION
-echo "0.2.0" > VERSION
-
-# Build prod image
-pnpm build:docker
-
-# In entrypoint, version migration logic runs
-# (scripts/migrations/v0.1.0_to_v0.2.0.sh, if exists)
+# Inside container terminal
+exit
+# or in another shell:
+docker stop <container>
 ```
+Switch the submodule branches with `git checkout master` (note: hermes-webui uses `master`, not `main`), re-run `pnpm dev:container`.
 
-### Test container image after release
+### Reproduce a production-only issue
+
+When dev mode hides the bug, you need the actual built image. Build the production image with the same VERSION as production:
 
 ```bash
-# Simulate release build
-pnpm build:docker
-# Image is tagged as :0.1.0 (or whatever VERSION contains)
-
-# Push to GHCR manually (CI does this automatically)
-docker tag fox-in-the-box:0.1.0 ghcr.io/fox-in-the-box-ai/cloud:0.1.0
-docker push ghcr.io/fox-in-the-box-ai/cloud:0.1.0
+docker build -f packages/integration/Dockerfile \
+  -t fitb:repro --build-arg FITB_VERSION=v0.5.0 .
+docker run --rm --cap-add=NET_ADMIN --device /dev/net/tun \
+  --sysctl net.ipv4.ip_forward=1 \
+  -p 127.0.0.1:8788:8787 \
+  -v fitb-repro-data:/data fitb:repro
 ```
 
----
-
-## Implementation Details
-
-### Dockerfile changes
-
-```dockerfile
-ARG FITB_VERSION=v0.1.0
-ARG FITB_DEV=0
-
-# ... later ...
-
-RUN echo "${FITB_VERSION}" > /app/version.txt
-# Entrypoint reads this to decide what to clone
-
-COPY packages/integration/scripts/ /app/scripts/
-# Includes dev-init.sh
-```
-
-### Entrypoint logic
-
-```bash
-if [ "$FITB_DEV" = "1" ]; then
-    echo "[entrypoint] Dev mode detected — skipping git clone"
-    /app/scripts/dev-init.sh
-else
-    echo "[entrypoint] Production mode — cloning from git tags"
-    _clone_app hermes-agent
-    _clone_app hermes-webui
-fi
-```
-
----
+(Port 8788 not 8787 so it doesn't collide with your real install.)
 
 ## Troubleshooting
 
-### "Cannot find /root/.hermes/hermes-agent/.git"
+| Symptom | Likely cause | Fix |
+|---|---|---|
+| "Cannot find `/root/.hermes/hermes-agent/.git`" | Missing or wrong `-v` | Verify both `-v` flags include `:/root/.hermes/...` |
+| "Container still cloning from git" | Used `:latest` instead of `:dev` | `pnpm build:docker:dev` then `pnpm dev:container` |
+| "My code changes don't show up" | Service has cached bytecode / open file | `supervisorctl restart hermes-webui` (or whichever) |
+| "Container won't start, exits in seconds" | Submodule branch references a Python module not yet checked out | Fix the branch state first; `pnpm dev:container` again |
 
-**Cause:** Bind mount not provided or path is wrong.
+## Related files
 
-**Fix:**
-```bash
-# Make sure you're running with both mounts:
-docker run ... \
-  -v $(pwd)/forks/hermes-agent:/root/.hermes/hermes-agent \
-  -v $(pwd)/forks/hermes-webui:/root/.hermes/hermes-webui \
-  fox-in-the-box:dev
-```
+- `packages/integration/Dockerfile` — `ARG FITB_DEV` + `ARG FITB_VERSION` plumbing
+- `packages/integration/entrypoint.sh` — branches on `FITB_DEV` to skip clone
+- `packages/integration/scripts/dev-init.sh` — bind-mount validator that runs in dev mode only
+- `package.json` — `dev:container` script (the actual `docker run` invocation)
 
-### "Container still cloning from git"
+## Related docs
 
-**Cause:** Using `fox-in-the-box:latest` instead of `fox-in-the-box:dev`.
-
-**Fix:**
-```bash
-# Rebuild dev image
-pnpm build:docker:dev
-
-# Run dev image explicitly
-docker run ... fox-in-the-box:dev  # not :latest
-```
-
-### "Changes I make locally don't appear in container"
-
-**Cause:** Container cached old Python bytecode or Node modules.
-
-**Fix:**
-```bash
-# Inside container, restart affected service
-supervisorctl restart hermes
-
-# Or restart entire container
-docker restart <container_id>
-```
-
----
-
-## Next Steps
-
-1. ✅ VERSION file created at repo root
-2. ✅ Dockerfile updated to read FITB_VERSION + FITB_DEV args
-3. ✅ package.json build:docker + build:docker:dev + dev:container commands
-4. ✅ dev-init.sh script validates bind mounts
-5. ⏳ Update entrypoint.sh to use FITB_DEV flag (next commit)
-6. ⏳ Test dev mode workflow end-to-end
-
----
-
-## See also
-
-- `packages/integration/Dockerfile` — build args, entrypoint setup
-- `packages/integration/entrypoint.sh` — runtime logic
-- `packages/integration/scripts/dev-init.sh` — bind mount validation
+- [`RELEASE_WORKFLOW.md`](RELEASE_WORKFLOW.md) — how production releases are cut (separate flow)
+- [`../qa/SMOKE_CHECKLIST.md`](../qa/SMOKE_CHECKLIST.md) — the verification gate every release must pass
