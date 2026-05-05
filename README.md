@@ -131,9 +131,15 @@ Then open **http://localhost:8787** and follow the setup wizard.
 
 ```bash
 git submodule update --init --recursive
+pnpm install
+pnpm build:docker          # build the container with the version in /VERSION
+docker run -d --name fitb \
+  --cap-add=NET_ADMIN --device /dev/net/tun --sysctl net.ipv4.ip_forward=1 \
+  -p 127.0.0.1:8787:8787 -v ~/.foxinthebox:/data \
+  fox-in-the-box:$(cat VERSION)
 ```
 
-See [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md) for the full build flow.
+For local iteration on the bundled `hermes-agent` / `hermes-webui` submodules, see [`docs/DEV_MODE.md`](docs/DEV_MODE.md). For releases, see [`docs/RELEASE_WORKFLOW.md`](docs/RELEASE_WORKFLOW.md).
 
 ---
 
@@ -217,9 +223,11 @@ See **[docs/RESET.md](docs/RESET.md)** for the full reset procedure (Windows and
 - [CONTRIBUTING.md](CONTRIBUTING.md) — how to contribute
 - [SECURITY.md](SECURITY.md) — vulnerability reporting
 - [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) — community standards
-- [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md) — development setup
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — system design
+- [docs/DEV_MODE.md](docs/DEV_MODE.md) — local development with bind-mounted submodules
+- [docs/RELEASE_WORKFLOW.md](docs/RELEASE_WORKFLOW.md) — how releases are cut
 - [docs/RESET.md](docs/RESET.md) — full reset / clean install
+- [docs/GATEWAY.md](docs/GATEWAY.md) — Hermes Agent gateway internals
+- [qa/SMOKE_CHECKLIST.md](qa/SMOKE_CHECKLIST.md) — pre-release verification gate
 
 ---
 
