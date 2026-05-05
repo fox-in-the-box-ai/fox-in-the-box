@@ -7,6 +7,24 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.4.5] - 2026-05-05
+
+Hotfix release. P0 user report from a fresh Linux install: `install.sh` was hanging indefinitely after the Tailscale login URL displayed, even when the user successfully authenticated in the browser. Reported as #98.
+
+### Fixed
+
+- **`install.sh` no longer hangs forever after the Tailscale login URL is shown (#98).** Root cause: the script waited on the `tailscale up` background process via an unbounded `wait $FITB_TS_UP_PID`. `tailscale up --timeout=600` is supposed to exit after 10 minutes, but on Linux it doesn't always honor the flag when the daemon authenticates successfully but the WireGuard tunnel never reaches Running (firewall blocking outbound UDP, MTU mismatch, NAT-type incompatibility, SELinux/AppArmor restricting TUN access despite the `--device /dev/net/tun` grant). The fix replaces the unbounded `wait` with a bounded poll that:
+  - Exits as soon as `BackendState == Running` is observed (typically within 5–30s of the user clicking through — actually faster than the original)
+  - Exits if the bg process dies on its own (success or `--timeout` honored)
+  - At a 15-minute hard deadline, sends SIGTERM, gives 2s grace, sends SIGKILL if still alive, surfaces actionable diagnostic hints (`tailscaled.err` location, common Linux causes, manual retry command), and proceeds to the existing `_tailscale_poll_until_running` which reports failure cleanly.
+- The auth-key path is untouched — it's already bounded reliably by `tailscale up --timeout=600` because there's no browser-side wait involved.
+
+### Why the issue is Linux-specific
+
+macOS Docker Desktop runs everything inside its own VM with predictable networking; Linux Docker Engine inherits the host's network stack with all its weirdness. Some Linux distros also have SELinux/AppArmor profiles that subtly restrict TUN access even when `--device /dev/net/tun` is granted. The hang surfaces on Linux specifically.
+
+---
+
 ## [0.4.4] - 2026-05-05
 
 Closes the desktop-Tailscale gap. Until v0.4.3, the only way to authenticate Tailscale on a fresh install was either `install.sh` (Linux/macOS host-script users) or `docker exec` into the container manually. Windows .exe and macOS DMG users — the primary distribution path on the GitHub Release page — had no way to wire up Tailscale from inside the app despite the README explicitly promising *"Optional secure HTTPS access from your phone or another laptop via Tailscale"*. v0.4.4 closes both ends of this:
