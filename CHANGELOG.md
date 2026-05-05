@@ -7,6 +7,56 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.4.7] - 2026-05-05
+
+Hotfix release. Comprehensive QA pass on the v0.4.4–v0.4.6 features after the project owner asked the question: "Have we fully completed Ollama and Tailscale integrations? Is there literally anything left, untested, not working fully or where we came short?" Answer: yes, plenty. Two parallel review agents and one adversarial reviewer found 30+ real bugs across the freshly-shipped code. End-to-end testing against a real Docker container surfaced two more showstoppers: **the v0.4.4 desktop Tailscale flow had been silently broken — clicking Connect showed "Starting…" forever**.
+
+### Fixed (showstoppers found by real-container testing)
+
+- **Tailscale desktop auth flow now actually works (Wave G).** Two root causes:
+  - `tailscaled` runs as root for `NET_ADMIN`; the WebUI process runs as `foxinthebox` per `supervisord.conf`. Without `tailscale set --operator=foxinthebox`, every `tailscale` CLI call from the WebUI errored with `Access denied: login access denied`. Fix: `entrypoint.sh` runs `tailscale set --operator=foxinthebox` after the WebUI is healthy and the daemon is reachable, with a 60s budget. Every `tailscale up` invocation from `api/tailscale.py` now also includes `--operator=foxinthebox` because Tailscale requires non-default flags to be re-stated on every `up`.
+  - The auth URL never reached the UI. `tailscale up` block-buffers stdout when not attached to a TTY → Python's `readline()` returned nothing → state stuck at "Starting…" forever. Fix: scrape the `AuthURL` field from `tailscale status --json` (the daemon exposes it directly the moment a fresh `up` issues), instead of trying to read the subprocess's stdout. End-to-end test in a v0.4.7 container: auth URL surfaces in <3 seconds.
+
+### Fixed (P0 security)
+
+- **XSS in the wizard's `useLocalOllama` inline `onclick`.** Model names from a remote Ollama daemon were interpolated into a JS string literal inside an HTML attribute via `escapeHtml()`, which is HTML-attribute-safe but not safe for JS string literals. A backslash-plus-apostrophe in a model name could break out of the string and execute arbitrary code in the wizard. Fix: replace inline-onclick interpolation with a `data-action` / `data-model` attribute pair plus a single delegated click listener.
+- **Tailscale flag-injection via unvalidated power-user strings.** `--login-server`, advertise-routes, advertise-tags, exit-node values flowed straight into `tailscale up` argv without validation. shell=False prevented classic shell injection, but a malicious `/api/settings` POST could prefix a value with `-` to inject another flag, point `--login-server` at attacker-controlled headscale, or smuggle newlines/control characters. Fix: per-field regex validators (URL, CIDR list, `tag:` form, hostname RFC 1035, host charset) enforced at both `_build_up_argv` (argv-time gate) AND `save_settings` (POST-time gate, defense in depth). Validator error messages now reach the UI as proper 400 responses with the specific reason.
+
+### Fixed (P1 — concurrency, lifecycle, secrets)
+
+- **Six race conditions in the Tailscale state machine.** `_up_proc` and `_up_log` were mutated outside `_up_lock`, the daemon thread used the *global* `_up_proc` mid-loop (capture-by-reference bug — a second Connect could redirect the first thread's `wait()` to the new subprocess), `logout()` didn't kill the in-flight subprocess (orphan could resurrect "running" state minutes after the user disconnected), `start_up()` from terminal `failed`/`running` didn't reset the previous `_up_proc`, and `get_up_progress()` could write `state="running"` over a concurrent `logout()`'s reset because it didn't pass an `attempt_id`. Fix: introduce an `attempt_id` rotation pattern — each daemon thread captures its id on spawn; `_set_up_state(attempt_id, ...)` silently drops stale-thread updates; all `_up_proc`/`_up_log` access goes through `_up_lock`; `_up_subprocess` uses a local `proc` variable for all subprocess ops; `logout()` actively kills in-flight; `get_up_progress()` passes the snapshot's attempt_id.
+- **Hostname dropped on Reconnect.** `_load_persisted_opts` returned the six power-user fields but not hostname — so a saved `FOX_HOSTNAME` was silently replaced with whatever Tailscale's default-naming chose (typically the container ID) on every Reconnect. Fix: include hostname (read from `/data/config/hermes.env` via the existing #44 helper).
+- **`logout()` didn't clean Tailscale Serve config + Reconnect didn't auto-Serve.** Stale Serve binding pointed at the now-disconnected tunnel; after a fresh Connect under a new tailnet identity, Serve was missing until manual recovery. Fix: `logout()` runs `tailscale serve reset` (with `tailscale serve / off` fallback for older builds), and the daemon thread auto-calls `configure_serve()` after detecting `BackendState=Running`.
+- **`use_model` leaked stale provider keys.** Only `api_key` was popped from the existing `model_cfg`, leaving `azure_endpoint`/`azure_api_version`/`aws_region`/`aws_access_key_id`/`aws_secret_access_key`/`vertex_project`/`openai_organization`/custom headers in place when switching to local Ollama. At minimum a stale-secrets exposure in a config the user thought they had switched away from; at worst those keys riding along on Ollama requests. Fix: replace the model block wholesale.
+- **`bool("false") == True` settings footgun.** A `curl -X POST -d '{"hostname_prompted":"false"}' /api/settings` silently flipped the flag to True. Fix: explicit string-to-bool coercion accepting `true/1/yes/on` and `false/0/no/off/""`, rejecting other types.
+- **`_start_when_ready` ignored download failures.** The 10-minute watcher polled `_is_final_present()` every 1s but never checked the download job's actual state. If the job moved to `failed`/`cancelled`, the watcher silently slept until deadline and the user sat on the wizard's 30-minute polling clock. Fix: also poll `list_models()`; on `failed`/`cancelled`, log + bail.
+- **Recovery banner was OpenRouter-hardcoded.** Misleading for Anthropic-direct / OpenAI-direct / custom-provider users who could see "remote is back" when their actual provider was still down. Fix: probe OpenRouter, OpenAI, and Anthropic in turn; declare healthy if any responds (401/403 counts — network path works).
+
+### Fixed (P2 — frontend polish, UX, edge cases)
+
+- Reactive modal: `MODAL_DISMISSED` flag set on entry → moved to actual dismiss/success paths; added Escape-key close; tighter `_modalOpen` guard against rapid double-fire; `keydown` listener cleanup across all close paths.
+- Recovery banner: kept polling forever after shown → exits when banner visible; resumes only on dismiss/switch.
+- `apperror` SSE dispatch was inside the JSON.parse try block — malformed payloads (truncated stream, non-JSON frame) skipped the dispatch entirely. Fix: dispatch always fires; falls back to `{type:'unknown'}` if parse fails.
+- Hostname prompt fired pre-Running. `Self.HostName` is populated long before `BackendState` reaches `Running`, so the prompt fired during `NeedsLogin` and users dismissed it ("why are you asking? I haven't connected yet"); since Skip persists `prompted=true`, they never got the prompt again. Fix: `hostname.py` exposes `backend_state` in the GET response; `hostname-prompt.js` gates on `backend_state === 'Running'`.
+- Settings → Network tile didn't auto-refresh — 15s lightweight poll while visible.
+- Saved Tailscale advanced settings didn't auto-apply — confirm prompt for inline reconnect.
+- Wizard race: Next button enabled before probes returned — disabled "Detecting local options…" spinner until probes resolve.
+- Indeterminate progress bar when `bytes_total` unknown — animated stripe instead of frozen 0%-fill.
+- `install.sh` deadline-branch race in v0.4.5's bounded-poll fix — explicit `_ts_exit_reason` tracking; `set +e/-e` wrap on `_tailscale_backend_state` to survive transient docker-exec failures under `set -e`.
+- `_TS_HOST_RE` allowed `/` in `exit_node` (copy-paste from URL regex); `tailscale serve --remove /` was invalid CLI syntax (replaced with `tailscale serve / off`); `_remote_health_cache` lockless across threads (added a `threading.Lock`).
+- `completSetup` typo — renamed to `completeSetup`.
+
+### Methodology
+
+The owner asked for a diligent QA pass after noticing the prior PR test plans had been aspirational rather than executed. Per CLAUDE.md's Four Hats workflow:
+
+1. **Architect** — scoped to "verify what's shipped + fix what's broken; no new features."
+2. **Engineer** — 7 logical waves (A–G), one purpose per commit.
+3. **Code Review** — 2 parallel QA reviewer agents on the original code (18 bugs found); 1 adversarial reviewer on the fixes themselves (12 more bugs found, including 2 P1 regressions of the fixes).
+4. **QA** — built and ran a real Docker container on `port 8788` with a fresh data volume; ran end-to-end smoke matrix against actual `/api/*` endpoints with the real `tailscaled` and the validator/persistence layer. 17 of 17 corrected smoke-matrix items pass.
+
+---
+
 ## [0.4.6] - 2026-05-05
 
 Final v0.4.x release. Closes the loose ends on the local-AI fallback story (#9 polish) and the Tailscale Phase 2 power-user fields (#96 phase 2) — the last deliverables in the v0.4.x cadence before the strategic pause for v0.5 direction.
