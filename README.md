@@ -245,13 +245,14 @@ The app itself is free and open source. You only pay for AI usage at your provid
 What we're working on next. No promises on dates — this is a small team — but this is the direction.
 
 **Coming soon**
+- **Local AI fallback** — chat with a small on-device model when your provider is unavailable or rate-limited. Download infrastructure shipped in v0.4.0; the runtime + Settings toggle land in v0.4.1, conversational onboarding wires through in v0.4.2
 - Conversational onboarding when no local model is detected (currently the chat-driven welcome only kicks in if Ollama is already installed)
 - Hostname prompt during first-run when Tailscale is enabled (today the field lives in Settings only)
 
 **On the horizon**
-- Bundled local AI fallback — auto-download a small model so Fox keeps working when your provider is down or rate-limited (no Ollama required)
-- Safety guardrails — PII detection, content filtering, and input/output validation
+- Safety guardrails — PII detection, content filtering, and input/output validation (opt-in per workspace)
 - Scriptable workflows — teach Fox multi-step routines specific to your business
+- UI overhaul — clean, professional design system replacing the developer-tool look
 
 **Have an idea?** [Open a discussion](https://github.com/fox-in-the-box-ai/fox-in-the-box/discussions) or [file a feature request](https://github.com/fox-in-the-box-ai/fox-in-the-box/issues/new).
 
