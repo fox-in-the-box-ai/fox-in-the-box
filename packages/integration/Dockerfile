@@ -6,6 +6,10 @@ ARG TARGETARCH=amd64
 # Pin QDRANT_VERSION to match qdrant-client in hermes-agent (see task 03 docs).
 # Do NOT use "latest" in production builds.
 ARG QDRANT_VERSION=v1.9.4
+# Pin LLAMACPP_VERSION — daily build tags on ggml-org/llama.cpp ship pre-built
+# CPU binaries for both ubuntu-x64 and ubuntu-arm64. Avoid "latest"; pick a
+# tested tag and bump deliberately. (#9)
+ARG LLAMACPP_VERSION=b9026
 # FITB_VERSION: written to /app/version.txt for migrations and display.
 # hermes-agent / hermes-webui are copied from forks/ at build time (requires submodules).
 ARG FITB_VERSION=v0.1.0
@@ -13,6 +17,8 @@ ARG FITB_VERSION=v0.1.0
 ARG FITB_DEV=0
 
 # ── system dependencies ───────────────────────────────────────────────────────
+# libgomp1 + libcurl4 are runtime deps for the bundled llama.cpp llama-server
+# binary (issue #9). Both are small (libgomp1 ~150 KB, libcurl4 ~400 KB).
 RUN apt-get update && apt-get install -y --no-install-recommends \
         curl \
         ca-certificates \
@@ -21,6 +27,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         lsb-release \
         iproute2 \
         iptables \
+        libgomp1 \
+        libcurl4 \
     && rm -rf /var/lib/apt/lists/*
 
 # ── Node.js (LTS) — required for npx-based MCP servers (e.g. Brave Search) ───
@@ -56,6 +64,28 @@ RUN set -eux; \
         "https://github.com/qdrant/qdrant/releases/download/${QDRANT_VERSION}/qdrant-${ARCH}-unknown-linux-musl.tar.gz" \
         | tar -xzf - -C /app/qdrant; \
     chmod +x /app/qdrant/qdrant
+
+# ── llama.cpp llama-server binary ─────────────────────────────────────────────
+# Bundled per-arch CPU build. Used by issue #9's local-fallback runtime —
+# llama-server speaks /v1/chat/completions, /v1/models, /v1/embeddings
+# (drop-in OpenAI-compat). Tarball ships its own .so files; llama-server's
+# RUNPATH=$ORIGIN makes them resolve from /app/llama-cpp without any
+# LD_LIBRARY_PATH gymnastics.
+#
+# The supervisord [program:llama-server] block is autostart=false and only
+# spawns when api/local_fallback.py decides the user has opted in AND the
+# model file (#10's download manager) is present. No idle RAM cost when
+# the user hasn't enabled local fallback.
+RUN set -eux; \
+    mkdir -p /app/llama-cpp; \
+    case "${TARGETARCH}" in \
+        arm64) ARCH_SUFFIX="arm64" ;; \
+        *)     ARCH_SUFFIX="x64"  ;; \
+    esac; \
+    curl -fsSL \
+        "https://github.com/ggml-org/llama.cpp/releases/download/${LLAMACPP_VERSION}/llama-${LLAMACPP_VERSION}-bin-ubuntu-${ARCH_SUFFIX}.tar.gz" \
+        | tar -xzf - -C /app/llama-cpp --strip-components=1; \
+    chmod +x /app/llama-cpp/llama-server
 
 # ── non-root user ─────────────────────────────────────────────────────────────
 RUN useradd -r -s /bin/bash -d /app foxinthebox \
