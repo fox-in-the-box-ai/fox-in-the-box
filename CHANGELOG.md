@@ -7,6 +7,31 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.4.6] - 2026-05-05
+
+Final v0.4.x release. Closes the loose ends on the local-AI fallback story (#9 polish) and the Tailscale Phase 2 power-user fields (#96 phase 2) — the last deliverables in the v0.4.x cadence before the strategic pause for v0.5 direction.
+
+### Added
+
+- **Tailscale power-user fields in Settings → Network → Advanced (#96 phase 2).** Surfaces the 6 flags that #96 Phase 1's argv builder already accepted but the UI didn't expose: login server (custom control plane / headscale), advertise routes (subnet-router CIDRs), advertise tags (ACL identity), exit node (route via tailnet peer), accept routes (consume peers' subnet routes), accept DNS (MagicDNS toggle, default on). Persistence via `settings.json`; `start_up()` merges body opts on top of persisted (body wins per-key, empty falls through). Closes Persona 3 of #96.
+
+- **Reactive modal when remote provider fails and local fallback is OFF (#9 polish).** When a chat stream fails on a remote provider AND the user has not opted into local fallback, a one-time modal offers to enable it: *"Your provider is having trouble. Want to enable a local AI model as a fallback?"* Filters by error type — fires only for `stream_interrupted`, `rate_limit`, `no_response`, `unknown` (skips `auth_mismatch` / `model_not_found` / `quota_exhausted` since local can't fix those). One click → POST `/api/local-fallback/enable`, modal closes, the next remote failure silently uses local. The modal won't re-fire in the same session even if more errors arrive.
+
+- **Recovery banner when local fallback is ON and remote is reachable again (#9 polish).** When local fallback is enabled, a top banner appears once `openrouter.ai/api/v1/models` becomes reachable from the container — *"Your remote provider looks reachable again. Switch off local fallback to use it?"* One click → POST `/api/local-fallback/disable`. Implementation: new `GET /api/local-fallback/remote-health` endpoint probes OpenRouter's public `/models` with a 5s timeout (30s in-process cache so multi-tab polling stays cheap); frontend polls every 90s only when `local_fallback_enabled === true`. Both modal and banner use `sessionStorage` flags so the UI doesn't pester — state resets on page reload.
+
+### Architecture notes
+
+- The reactive modal hooks into the `apperror` SSE event via a surgical one-line `window.dispatchEvent(new CustomEvent('fitb:stream-error', ...))` in `messages.js`. The polish module (`static/fallback-polish.js`) listens via the public `window` event — no monkey-patching of upstream code.
+- The recovery banner intentionally probes a *generic remote-healthy* signal (OpenRouter's public `/models` endpoint) rather than per-provider probing. If that endpoint is up, the user has internet and the most common provider is reachable; their actual provider is *probably* up too. If not, the next chat will fail and the modal re-fires — self-healing UX.
+
+### Why this is the last v0.4.x release
+
+The v0.4.x cadence has shipped 7 releases in two days covering: local AI download manager (#10), local AI fallback runtime (#9), mid-stream error fix (#89), conversational onboarding without Ollama (#69), hostname post-wizard prompt (#68), Tailscale desktop auth (#96 phases 1–2), Linux install hang hotfix (#98), and #9 polish. Both pillars the README promised — local AI failover and Tailscale-from-anywhere — now actually deliver for desktop binary users.
+
+Next release direction is intentionally paused per the user's "we will contemplate" framing. Three open buckets: v0.5 guardrails track (#4 spike → #5/#7/#8 → #6), #96 phase 3 (wizard step injection + reactive disconnected banner + Serve retry), revenue track (#91 LLM proxy → #90 hosted cloud).
+
+---
+
 ## [0.4.5] - 2026-05-05
 
 Hotfix release. P0 user report from a fresh Linux install: `install.sh` was hanging indefinitely after the Tailscale login URL displayed, even when the user successfully authenticated in the browser. Reported as #98.
