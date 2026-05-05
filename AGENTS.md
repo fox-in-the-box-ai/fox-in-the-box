@@ -33,13 +33,14 @@ fox-in-the-box/             ← monorepo root
 │   ├── electron/           ← Electron desktop app
 │   └── scripts/            ← install.sh, dev utilities
 ├── docs/
-│   └── tasks/              ← One task doc per feature (your specs live here)
+│   ├── tasks/              ← One task doc per feature (your specs live here)
+│   ├── archive/            ← Frozen design docs (REQUIREMENTS.md, ROADMAP.md)
+│   └── GATEWAY.md, RESET.md, GETTING_STARTED.md, …
 ├── tests/
 │   ├── integration/        ← Full-stack tests
 │   ├── electron/           ← Electron unit tests (jest)
 │   └── container/          ← Shell/bats tests
-├── REQUIREMENTS.md         ← Read before starting any task
-├── ROADMAP.md
+├── README.md               ← Live roadmap lives in README's Roadmap section
 └── AGENTS.md               ← This file
 ```
 
@@ -81,7 +82,7 @@ Rules:
 For every task you receive:
 
 1. **Read the task doc** (`docs/tasks/NN-taskname.md`) in full before writing any code
-2. **Read REQUIREMENTS.md** — understand the broader system before touching anything
+2. **Read `docs/archive/REQUIREMENTS.md`** — frozen design doc that captures the broader-system intent. Cross-check anything material against the current code; the design doc is from before v0.1 and many specifics have evolved.
 3. **Write tests first** (TDD) — every acceptance criterion in the task doc maps to at least one test
 4. **Make tests pass** — implement until all AC tests are green
 5. **Self-review checklist** (before signalling done):
@@ -183,7 +184,7 @@ Never delete tests to make the suite pass. Fix the code, not the tests.
 ## 9. Out of Scope (Do Not Touch)
 
 - `forks/` submodule content — read-only for you
-- `REQUIREMENTS.md` and `ROADMAP.md` — Supervisor maintains these
+- `docs/archive/REQUIREMENTS.md` and `docs/archive/ROADMAP.md` — frozen design docs, do not edit. The live roadmap is the README's Roadmap section, maintained by Supervisor.
 - `main` branch — Supervisor commits to main after review
 - GitHub Actions secrets or org settings
 - Any OAuth credentials or Tailscale auth tokens
