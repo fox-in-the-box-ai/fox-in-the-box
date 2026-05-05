@@ -246,15 +246,14 @@ The app itself is free and open source. You only pay for AI usage at your provid
 
 What we're working on next. No promises on dates — this is a small team — but this is the direction.
 
-**Coming soon**
-- **Local AI fallback** — chat with a small on-device model when your provider is unavailable or rate-limited. Download infrastructure shipped in v0.4.0; the runtime + Settings toggle land in v0.4.1, conversational onboarding wires through in v0.4.2
-- Conversational onboarding when no local model is detected (currently the chat-driven welcome only kicks in if Ollama is already installed)
-- Hostname prompt during first-run when Tailscale is enabled (today the field lives in Settings only)
+**Coming soon (v0.5.x)**
+- **Safety guardrails — opt-in PII detection.** First layer in a guardrail plugin scaffold (Microsoft Presidio, rule-based, on-device, no LLM cost). Toggleable in Settings; <30 ms p95 when on.
+- Pydantic business-rule validators — short-circuit obviously-bad outputs before they reach you (length, schema, allowed-topic checks). Each rule is per-workspace toggle.
 
 **On the horizon**
-- Safety guardrails — PII detection, content filtering, and input/output validation (opt-in per workspace)
-- Scriptable workflows — teach Fox multi-step routines specific to your business
-- UI overhaul — clean, professional design system replacing the developer-tool look
+- UI overhaul — clean, professional design system replacing the developer-tool look (v0.6.0)
+- Llama Guard 3 1B content safety — local on-device classifier, async parallel to streaming, wipes unsafe responses in-place (v0.7.0)
+- Routines — teach Fox multi-step workflows via conversation, runs on a schedule, dry-run preview before activating (v0.8.0)
 
 **Have an idea?** [Open a discussion](https://github.com/fox-in-the-box-ai/fox-in-the-box/discussions) or [file a feature request](https://github.com/fox-in-the-box-ai/fox-in-the-box/issues/new).
 
