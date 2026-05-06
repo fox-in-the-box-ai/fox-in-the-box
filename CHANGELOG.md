@@ -7,6 +7,40 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.5.2] - 2026-05-06
+
+Local fallback finally lives up to its name. v0.5.2 closes the gap between "local fallback enabled" (model is downloaded and ready) and what users actually expected: when your cloud provider fails, the assistant transparently switches to your local model and tells you about it. No more frozen tabs, no more cryptic errors.
+
+This release also closes one Tailscale edge case from v0.5.1 verification.
+
+### Fixed / Improved
+
+- **Auto-failover to local model when cloud fails.** Before: "local fallback enabled" was just a label — the gateway didn't actually retry. After: bad API key, expired credits, network drop, slow provider — the assistant swaps to your downloaded local model in the background and shows a small "Switched to local — re-send to use it" notice. Eligibility is broad on purpose (auth, quota, no-response, model-not-found): chat must keep working.
+- **"Provider isn't responding" modal after 10s.** When a remote provider stalls without an error (slow LLM, transient network), a modal appears offering "Switch to local now" instead of letting you stare at a frozen tab. Default 10s, override via `localStorage.fitb.timeout_modal_ms`. Auto-dismisses if the response eventually arrives.
+- **Download-on-demand prompt when local isn't ready yet.** If your cloud fails and local fallback is enabled but the model isn't downloaded, you'll see a one-click "Download Phi-4-mini (~2.5 GB) and continue" prompt with progress UI inside the modal. When the download finishes the local model activates automatically.
+- **Tailscale operator-grant survives key expiry.** Before: when a tailnet auth key expired, tailscaled cleared its `OperatorUser` preference and the next "Connect" click returned `Access denied: checkprefs access denied` with no in-app recovery. After: a tiny supervisord watchdog re-asserts the operator grant every 30 seconds. Idempotent — no observable cost on a healthy tailnet.
+
+### Architecture
+
+- New backend endpoint `POST /api/local-fallback/activate` swaps the gateway's active model to the bundled llama.cpp endpoint with one call. Used by both the timeout modal and the auto-failover engine.
+- New `ready` field on `/api/local-fallback/status` (= installed AND server healthy) — the single boolean the failover loop checks.
+- New SSE event types: `provider_switched`, `partial_response_truncated`, `local_fallback_unprepared`. Both `apperror` sites in `api/streaming.py` route through a shared `_attempt_failover()` helper with a 4-branch decision tree.
+
+### Known limitations
+
+- The in-flight prompt is **not** auto-retried after `provider_switched` — you re-send manually. Tighter coupling with the chat-send flow is deferred to a later release; the gain wasn't worth the risk surface for v0.5.2.
+- Mid-stream failure mid-token-stream: any partial response is wiped (truncate policy). Trade-off: cleaner restart, at the cost of losing a few visible tokens.
+
+### Verified
+
+`/api/local-fallback/activate` endpoint behaves correctly (200 when ready, 400 with granular `reason` when not) · `_attempt_failover` decision tree all 4 branches · already-local guard prevents redundant `provider_switched` cascades · supervisord watchdog re-asserts `OperatorUser` within one 30s tick after force-clear · Tailscale `up` from foxinthebox user produces auth URL post-watchdog (was `Access denied: checkprefs`) · all v0.5.1 Section L regression checks pass.
+
+### What's next
+
+v0.5.3 (Phase 1 of the original roadmap, now slotted): `fox-guardrails` plugin scaffold (#4) + Microsoft Presidio PII detection (#5).
+
+---
+
 ## [0.5.1] - 2026-05-06
 
 Stabilization fix release. v0.5.0's clean-DMG smoke surfaced 7 issues across the wizard, Tailscale, and failover paths (issue #122). All seven addressed end-to-end against a real Docker container, a real tailnet, and a real Ollama daemon.
