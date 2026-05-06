@@ -254,11 +254,12 @@ The app itself is free and open source. You only pay for AI usage at your provid
 
 What we're working on next. No promises on dates — this is a small team — but this is the direction.
 
+**Just shipped (v0.5.3)**
+- **Custom Ollama URL** — point Fox at an Ollama daemon on your NAS, your LAN, anywhere reachable from the container. Settings → Providers → Local Ollama → "Custom Ollama URL (advanced)".
+
 **Coming soon (v0.5.x)**
-- **Real auto-failover to local model.** Today "local fallback" means the model is downloaded and ready — but the gateway doesn't actually retry against local when a cloud provider fails. Next release switches to silent mid-stream failover with a small "switched to local" badge so you keep working without lifting a finger.
-- **Slow-provider modal.** When a provider hangs without responding, you'll see a modal offering to swap to local immediately rather than waiting on a frozen tab.
-- **Safety guardrails — opt-in PII detection.** First layer in a guardrail plugin scaffold (Microsoft Presidio, rule-based, on-device, no LLM cost). Toggleable in Settings; <30 ms p95 when on.
-- Pydantic business-rule validators — short-circuit obviously-bad outputs before they reach you (length, schema, allowed-topic checks). Each rule is per-workspace toggle.
+- **Safety guardrails — opt-in PII detection** (v0.5.4) — first layer in a guardrail plugin scaffold (Microsoft Presidio, rule-based, on-device, no LLM cost). Toggleable in Settings; <30 ms p95 when on.
+- **Pydantic business-rule validators** (v0.5.5) — short-circuit obviously-bad outputs before they reach you (length, schema, allowed-topic checks). Each rule is per-workspace toggle.
 
 **On the horizon**
 - UI overhaul — clean, professional design system replacing the developer-tool look (v0.6.0)
