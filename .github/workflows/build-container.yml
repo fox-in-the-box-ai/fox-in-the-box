@@ -199,13 +199,14 @@ jobs:
           fi
           echo "✅ Both linux/amd64 and linux/arm64 confirmed in manifest list"
 
-      - name: Re-tag :stable on non-PR events
-        if: github.event_name != 'pull_request'
-        run: |
-          # `imagetools create` operates registry-side and preserves the
-          # manifest list. Don't use `docker pull && docker tag` — that
-          # collapses to a single-platform image. (#82)
-          docker buildx imagetools create -t "${IMAGE}:stable" "${IMAGE}:${{ steps.tag.outputs.tag }}"
+      # NOTE: :stable is intentionally NOT re-tagged here. It used to be
+      # auto-bumped from :latest on every push to main, which meant any
+      # post-release commit (including docs-only PRs) shipped a build to
+      # all DMG users via :stable without a release tag — surfaced by
+      # FITB#122 where :stable diverged from :v0.5.0 within hours of the
+      # release. :stable is now bumped exclusively by release.yml's
+      # imagetools step (pinned to the wait-for-container index digest)
+      # so it tracks released versions only. Do NOT restore this step.
 
   # ── Pull the published manifest by INDEX digest on each platform's
   # native runner and run the smoke test. This proves the digest pin
