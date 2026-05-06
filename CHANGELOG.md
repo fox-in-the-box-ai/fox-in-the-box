@@ -7,6 +7,32 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.5.3] - 2026-05-07
+
+Fox finds Ollama wherever it lives. Small focused release: one new feature, one issue closed-as-shipped.
+
+### Added
+
+- **Custom Ollama URL.** Point Fox at any Ollama daemon you can reach — a NAS at `192.168.1.50:11434`, a beefy desktop on your LAN, anything that speaks the Ollama API. Settings → Providers → Local Ollama → "Custom Ollama URL (advanced)". Empty (default) preserves the existing auto-detection. Validation rejects malformed URLs at save time so a typo never gets persisted; the cache invalidates immediately so the new probe result shows up the next time you open Settings (no 10-second wait).
+
+### Fixed / Verified
+
+- **Tailscale Serve retry button (#110)** — turns out this already shipped in v0.5.1 (the "Configure HTTPS" button in Settings → Tailscale tile). Closed as done after verifying in the v0.5.3 candidate.
+
+### Verified
+
+Full smoke checklist sections A–L re-run on a clean candidate container against `:latest`:
+- All v0.5.0 baseline checks (#114-#117, README HTTPS toggle)
+- All v0.5.1 #122 stabilization checks (wizard option-B flow, Tailscale Serve state, failover modal eligibility, recovery banner late-enable, `:stable` release-tag-only, FITB_VERSION populated)
+- All v0.5.2 #127/#128/#129 stabilization checks (operator watchdog, timeout modal, auto-failover, download-on-demand)
+- New v0.5.3 #109 checks (validator across 13 edge cases, atomic save, probe fallback, UI element + handler in served files)
+
+### What's next
+
+v0.5.4 starts Phase 1 of the original roadmap: `fox-guardrails` plugin scaffold (#4) + Microsoft Presidio PII detection (#5). Two-week effort. Per Rule 1, the original Phase 2 (Pydantic business rules #7) shifts to v0.5.5.
+
+---
+
 ## [0.5.2] - 2026-05-06
 
 Local fallback finally lives up to its name. v0.5.2 closes the gap between "local fallback enabled" (model is downloaded and ready) and what users actually expected: when your cloud provider fails, the assistant transparently switches to your local model and tells you about it. No more frozen tabs, no more cryptic errors.
