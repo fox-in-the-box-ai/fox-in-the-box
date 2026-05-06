@@ -167,8 +167,9 @@ These checklists were testing gates from previous phases. Re-run before any mino
 | Phase / Issue | Checks |
 |---|---|
 | #105 Phase 0 (v0.5.0) | All A–K above |
-| #4 + #5 Phase 1 (v0.5.1) | Plugin loads cleanly · PII masking detects SSN/CC/phone/email · <30 ms p95 latency · toggle off = no impact |
-| #7 Phase 2 (v0.5.2) | All 5 starter rules tested positive + negative · rules don't false-positive on normal conversation |
+| #122 v0.5.1 stabilization | (a) `/api/ollama/status` and `/api/local-fallback/status` return **200** (not 302) when onboarding incomplete · (b) "Use [model]" on Step 1 advances to Step 2 (NOT chat) and `onboarding.json` stays `completed: false` until Step 3's "Open Fox" · (c) Step 2 shows "Add OpenRouter (optional)" + "Continue with local only" button when state.localModel set · (d) `/api/tailscale/status` response includes `serve_state` + `serve_error` fields · (e) "Configure HTTPS" retry button visible in Settings → Tailscale tile after Connect · (f) Reactive modal fires on `auth_mismatch` and `quota_exhausted` (set OpenRouter key to garbage with fallback OFF, send chat) · (g) Recovery banner appears within 30s when fallback is enabled mid-session and provider is restored · (h) `:stable` digest equals `:vX.Y.Z` digest after release tag (no drift from main pushes) · (i) `/app/version.txt` populated with `dev-<sha>` or `vX.Y.Z` (never empty) |
+| #4 + #5 Phase 1 (v0.5.2 part) | Plugin loads cleanly · PII masking detects SSN/CC/phone/email · <30 ms p95 latency · toggle off = no impact |
+| #7 Phase 2 (v0.5.3) | All 5 starter rules tested positive + negative · rules don't false-positive on normal conversation |
 | #64 Phase 3 (v0.6.0) | Every page screenshot-compared · no overflow / truncation · mobile (375px) renders · onboarding still works |
 | #6 Phase 4 (v0.7.0) | Safe messages: zero impact · unsafe messages caught and wiped · hardware probe disables on 8 GB · all prior guards still work · cold start <10s |
 | #12 Phase 5 (v0.8.0) | Routine via conversation in <5 min · executes on schedule · failed routine surfaces clear error · all prior features unaffected |
@@ -190,4 +191,4 @@ These checklists were testing gates from previous phases. Re-run before any mino
 
 ---
 
-**Last updated:** v0.5.0 — Phase 0 stabilization. Update as new features ship and add their checks to Section L.
+**Last updated:** v0.5.1 — #122 follow-on stabilization. Verification methodology now requires running against released `:stable` (or candidate `:latest` for pre-tag verification), not against a local `docker build` — the v0.5.0 release missed all 7 of #122's failures because verification was done against a local rebuild that happened to have all the source-tree fixes; the published `:stable` had drifted. See `feedback_qa_methodology.md` for the rule.
