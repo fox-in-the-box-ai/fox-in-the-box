@@ -67,10 +67,16 @@ jobs:
       - name: Determine FITB_VERSION
         id: meta
         run: |
+          # Tag pushes use the version tag verbatim. Other events (push to
+          # main, PRs) carry a dev marker derived from the short SHA so the
+          # in-app version display is never blank — previously these built
+          # with FITB_VERSION="" which surfaced as empty version strings on
+          # :latest / :stable images. FITB#122 cosmetic.
           if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
             echo "fitb_version=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
           else
-            echo "fitb_version=" >> "$GITHUB_OUTPUT"
+            SHORT_SHA="$(echo "${{ github.sha }}" | cut -c1-7)"
+            echo "fitb_version=dev-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Build and push by digest
