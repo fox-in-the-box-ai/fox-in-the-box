@@ -7,6 +7,43 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.5.1] - 2026-05-06
+
+Stabilization fix release. v0.5.0's clean-DMG smoke surfaced 7 issues across the wizard, Tailscale, and failover paths (issue #122). All seven addressed end-to-end against a real Docker container, a real tailnet, and a real Ollama daemon.
+
+This release contains no new features — only fixes, plus two pieces of CI hygiene that prevent future drift.
+
+### Fixed
+
+- **Wizard's local-model fast-paths now actually render.** `setup.js` probes `/api/ollama/status` and `/api/local-fallback/status` during boot, but those endpoints were 302 redirecting to `/setup` (the onboarding gate didn't exempt them). `fetch` followed the redirect, JSON parse silently failed on the HTML, and the Ollama-detection box / bundled-local-model CTA never appeared even when Ollama was running. Both endpoints exempt now.
+- **Wizard no longer auto-completes when you pick a local model.** "Use [model]" used to call `/api/setup/complete` and redirect to chat instantly — skipping the OpenRouter step and the explicit "Open Fox" handoff. Reported as confusing ("clicking the input field redirects me to chat" — actually a race against an 800ms delayed redirect). Now: picking a local model sets the model, advances to Step 2 ("Add OpenRouter — optional"), and Step 3 is the only place that completes onboarding. Same for the bundled llama.cpp path.
+- **Race window in Step 1 closed.** The 800ms redirect that fired after "Use [model]" left the wizard fully interactive — clicks during that window could land on a stale Step 2 input. Wizard now replaces itself with a "Setting up [model]…" loading state synchronously on click.
+- **Tailscale Serve config now surfaces in the UI.** When the auto-`tailscale serve --bg 8787` failed (most often: HTTPS not enabled in the tailnet admin console), the failure was logged at DEBUG level and silently dropped. Now: the Settings → Tailscale tile shows "HTTPS configured ✓" or a "Configure HTTPS" retry button + the actual error. Works for both Connect-button auth and desktop-app auth flows.
+- **Reactive failover modal now fires on auth and quota errors** (`auth_mismatch`, `quota_exhausted`). Previously excluded with the rationale that "local fallback can't fix the user's wrong key" — but local fallback REPLACES broken cloud entirely. Auth/quota errors are exactly when the modal should offer to switch.
+- **Recovery banner now starts polling when fallback is enabled mid-session.** Previously polling only kicked off if fallback was already on at page load, so the most common flow (provider fails → enable fallback → restore key → expect banner) silently never started. Settings panel now dispatches an event the banner subscribes to.
+- **App version display no longer empty.** `:latest` and `:stable` images built off main pushes had `FITB_VERSION=""` (only tag pushes set it). Now non-tag builds get `dev-<short-sha>` so the in-app version is always populated.
+
+### CI hygiene
+
+- **`:stable` is now release-gated.** It used to auto-bump from `:latest` on every push to main, including post-release docs PRs. v0.5.0's `:stable` had drifted from `:v0.5.0` within hours of release. Now `:stable` only moves on tag pushes (`release.yml`'s digest-pinned re-tag).
+- Pre-release verification now uses `docker pull ghcr.io/...:stable` invoked the way the DMG's LaunchAgent does, not a local `docker build`. Captured in `qa/SMOKE_CHECKLIST.md` and the QA methodology memory.
+
+### Verified
+
+Wizard option-B flow with real host Ollama (gemma4:latest detected → Step 2 optional OpenRouter → Step 3 summary → Open Fox → real reply) · Tailscale Connect → auth → Serve auto-config → HTTPS URL serves FITB chat from a phone on the same tailnet · settings persist across `docker stop` + KeepAlive restart · local fallback download (~2.5 GB Phi-4-mini) → ready → recovery banner appears when remote provider restored · macOS DMG signed + notarized stapled · `:stable` digest verified to match `:v0.5.1` on tag push.
+
+### Known follow-ups (next release, v0.5.2)
+
+- #127 — Tailscale operator-grant doesn't survive key expiry. Edge case (only triggers when a tailnet key expires after FITB install). Workaround: `docker exec fox-in-the-box tailscale set --operator=foxinthebox`.
+- #128 — Timeout-based modal: offer local switch when a provider doesn't respond in N seconds. Better UX than the current "wait forever for an explicit error".
+- #129 — Real auto-failover engine. Today "local fallback enabled" means the model is downloaded and ready — but the gateway doesn't actually retry against local on remote failure. The companion architectural fix to #128.
+
+### What's next
+
+Phase 1 of the roadmap (v0.5.2): the items above plus the `fox-guardrails` plugin scaffold (#4) + Presidio PII detection (#5).
+
+---
+
 ## [0.5.0] - 2026-05-05
 
 Stabilization release. Real-hardware verification of v0.3.0–v0.4.6 features surfaced 5 latent bugs that had been silently shipping for months. All fixed and verified end-to-end against a real Docker container and a real Tailscale tailnet.
