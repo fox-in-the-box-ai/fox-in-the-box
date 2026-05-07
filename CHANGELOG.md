@@ -7,6 +7,30 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.5.4] - 2026-05-07
+
+Three stabilization fixes surfaced by real-world users in the days after v0.5.3 shipped. No new features — Phase 1 (#4 + #5) shifts to v0.5.5 per Rule 1.
+
+### Fixed
+
+- **Ollama models now appear in the chat picker immediately after "Use" (#138).** Before: clicking "Use this model" on an Ollama tile in Settings persisted the choice but the chat picker silently kept showing the previous provider's groups for up to five minutes. After: the in-memory available-models cache is evicted on every config change, so the picker reflects reality on the next open. Root cause was a half-fixed cache: the on-disk cache was being deleted on writes, but the parallel in-memory cache wasn't.
+- **Tailscale auth link works in Safari and other popup-blocking browsers (#139).** Before: `window.open()` was silently swallowed by Safari's default popup blocker, leaving users staring at "Waiting for you to finish auth in the browser tab…" with no way forward. After: the auth URL renders as a persistent clickable link in the Tailscale tile alongside the auto-open attempt. The link clears on success or failure.
+- **Tailscale Serve auto-configures even when authentication happens late (#140).** Before: if the user authenticated after the entrypoint's 15-minute boot window expired (or via `docker exec` outside the webui flow), `_attempt_configure_serve` was never called and the tailnet HTTPS URL stayed broken until the user clicked the manual "Configure HTTPS" retry button. After: `get_status()` triggers a one-shot configure when it sees `Running` + `serve_state == idle`. Idempotent on subsequent polls. Also adds a persistent inline hint pointing to the tailnet's admin console DNS page for the HTTPS Certificates toggle — the one prerequisite we cannot enable on the user's behalf.
+
+### Verified
+
+Full smoke checklist sections A–L re-run on a clean candidate container against `:latest`:
+- All v0.5.0/v0.5.1/v0.5.2/v0.5.3 baseline + stabilization checks (carry-forward)
+- New v0.5.4 #138 check: Ollama "Use" → chat picker immediately reflects the new model
+- New v0.5.4 #139 check: Tailscale Connect in Safari → link visible + clickable, full auth completes
+- New v0.5.4 #140 check: tailscaled authed mid-poll → `tailscale serve status` shows :8787 mapped without manual button click
+
+### What's next
+
+v0.5.5 picks up the original Phase 1 plan: `fox-guardrails` plugin scaffold (#4) + Microsoft Presidio PII detection (#5).
+
+---
+
 ## [0.5.3] - 2026-05-07
 
 Fox finds Ollama wherever it lives. Small focused release: one new feature, one issue closed-as-shipped.
