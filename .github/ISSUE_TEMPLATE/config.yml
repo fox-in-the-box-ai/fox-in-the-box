@@ -1,8 +1,8 @@
-blank_issues_enabled: false
+blank_issues_enabled: true
 contact_links:
-  - name: Documentation
-    url: https://github.com/fox-in-the-box-ai/fox-in-the-box/tree/main/docs
-    about: Read the docs before opening an issue
   - name: Discussions
     url: https://github.com/fox-in-the-box-ai/fox-in-the-box/discussions
-    about: Questions and general discussion
+    about: Questions, ideas, or general help — start here if you're not sure it's a bug
+  - name: Documentation
+    url: https://github.com/fox-in-the-box-ai/fox-in-the-box/tree/main/docs
+    about: Reading the docs may answer your question faster
