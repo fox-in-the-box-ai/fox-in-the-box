@@ -7,8 +7,10 @@ name: Sync Submodules to Latest
 # CI to run, instead of trying to push to main itself.
 
 on:
-  repository_dispatch:
-    types: [hermes-webui-updated, hermes-agent-updated]
+  # repository_dispatch trigger PAUSED for v0.6.0 upstream-separation migration
+  # (epic #155 / pre-flight #157). Auto-bumping the submodule pointer mid-migration
+  # would whipsaw the pin while phases 2-7 are in flight. Restored when v0.6.0
+  # ships and the submodules re-point at virgin upstream (Phase 8 #200).
   workflow_dispatch:
 
 permissions:
