@@ -31,7 +31,8 @@ fox-in-the-box/             ← monorepo root
 ├── packages/
 │   ├── integration/        ← Dockerfile, supervisord, entrypoint, default-configs
 │   ├── electron/           ← Electron desktop app
-│   └── scripts/            ← install.sh, dev utilities
+│   ├── scripts/            ← install.sh, dev utilities
+│   └── fox-overlay/        ← sibling overlay for hermes-{agent,webui} (v0.6.0 migration; phases 2-10 populate it)
 ├── docs/
 │   ├── tasks/              ← One task doc per feature (your specs live here)
 │   ├── archive/            ← Frozen design docs (REQUIREMENTS.md, ROADMAP.md)

@@ -1,2 +1,7 @@
 packages:
-  - "packages/*"
+  # Explicitly enumerate JS workspace members. Avoids `packages/*` accidentally
+  # picking up Python-only siblings like packages/fox-overlay/ (v0.6.0 migration
+  # scaffold) — pnpm tolerates dirs without package.json today, but explicit is
+  # safer for future contributors who may add a package.json under a Python
+  # package directory.
+  - "packages/electron"

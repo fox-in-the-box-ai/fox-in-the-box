@@ -1,0 +1,11 @@
+# Fox overlay inventory — what's overlaid, what's patched, what's removed.
+#
+# Empty in Phase 1; Phases 2-7 populate the sections below as content moves
+# into the overlay. The full categorization scheme is documented in
+# docs/architecture/upstream-migration-execution-plan.md §Phase 1 / §1 synthesis.
+
+[static]
+# Filled in Phase 2 (move Fox-only static assets out of forks/hermes-webui/static/).
+
+[python]
+# Filled in Phase 5 (additive webui modules) and Phase 6 (mid-file monkey-patches).

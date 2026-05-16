@@ -1,0 +1,17 @@
+[project]
+name = "fox-overlay"
+version = "0.0.1"
+description = "Fox in the Box overlay for hermes-agent and hermes-webui"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.entry-points."hermes_agent.plugins"]
+# fox_overlay = "fox_overlay:register"   # commented until Phase 3
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["fox_overlay*"]
