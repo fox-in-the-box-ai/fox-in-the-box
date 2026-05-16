@@ -1,9 +1,29 @@
 # One-path-per-line manifest of upstream files Fox does NOT ship.
 # Applied via `xargs rm -f` after the upstream COPY in packages/integration/Dockerfile.
-# Populated in Phase 2 (upstream onboarding tests) and Phase 7 (static/onboarding.js).
+# Populated incrementally across phases; consumer wired in Phase 7.
 #
 # Consumer convention: lines starting with `#` and blank lines MUST be
 # stripped before piping to xargs. Phase 7 / Phase 8 Dockerfile commands
 # use `grep -v '^\s*$\|^\s*#' .fox-removals | xargs -r rm -f --` for this.
 # Do not write paths beginning with `#` and do not allow free-form prose
 # inline with path entries.
+#
+# Currently no-ops against the fox fork submodule (these files don't exist
+# there — Fox already removed them in past commits). Becomes load-bearing
+# at Phase 8 when the submodule re-points at virgin upstream which DOES
+# ship these files.
+
+# Phase 2 — upstream onboarding tests Fox replaced with its own wizard:
+tests/test_issue1499_keyless_onboarding.py
+tests/test_issue1499_onboarding_probe.py
+tests/test_onboarding_existing_config.py
+tests/test_onboarding_mvp.py
+tests/test_onboarding_network.py
+tests/test_onboarding_static.py
+# Phase 2 — upstream onboarding script (Fox's setup wizard replaces it
+# wholesale; api/onboarding.py serves Fox's setup.html instead).
+# Phase 7 reconciliation note: this entry stays as-is when Phase 7 moves
+# setup.{html,css,js} and api/onboarding.py to the overlay — those Fox
+# files are not in upstream so they do NOT need .fox-removals entries;
+# only this upstream onboarding.js does.
+static/onboarding.js
