@@ -1,0 +1,9 @@
+# One-path-per-line manifest of upstream files Fox does NOT ship.
+# Applied via `xargs rm -f` after the upstream COPY in packages/integration/Dockerfile.
+# Populated in Phase 2 (upstream onboarding tests) and Phase 7 (static/onboarding.js).
+#
+# Consumer convention: lines starting with `#` and blank lines MUST be
+# stripped before piping to xargs. Phase 7 / Phase 8 Dockerfile commands
+# use `grep -v '^\s*$\|^\s*#' .fox-removals | xargs -r rm -f --` for this.
+# Do not write paths beginning with `#` and do not allow free-form prose
+# inline with path entries.
