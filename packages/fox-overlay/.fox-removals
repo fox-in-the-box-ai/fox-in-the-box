@@ -21,5 +21,9 @@ tests/test_onboarding_mvp.py
 tests/test_onboarding_network.py
 tests/test_onboarding_static.py
 # Phase 2 — upstream onboarding script (Fox's setup wizard replaces it
-# wholesale; api/onboarding.py serves Fox's setup.html instead):
+# wholesale; api/onboarding.py serves Fox's setup.html instead).
+# Phase 7 reconciliation note: this entry stays as-is when Phase 7 moves
+# setup.{html,css,js} and api/onboarding.py to the overlay — those Fox
+# files are not in upstream so they do NOT need .fox-removals entries;
+# only this upstream onboarding.js does.
 static/onboarding.js

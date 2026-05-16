@@ -126,18 +126,6 @@ RUN chmod +x /app/scripts/*.sh
 # ── Hermes app source (git submodules — init before build) ─────────────────────
 COPY forks/hermes-agent /app/hermes-agent
 COPY forks/hermes-webui /app/hermes-webui
-
-# ── Fox overlay: static files (Phase 2 of v0.6.0 migration) ───────────────────
-# webui_static/ holds Fox-only assets relocated out of the fork's static/ tree.
-# Upstream's api/extensions.py serves these under /extensions/ and injects the
-# CSS/JS tags into index.html at request time from the ENV-configured URL lists.
-# Cap is 32 URLs per env var; comma-separated. Order preserved from the pre-Phase-2
-# fork index.html script tags.
-COPY packages/fox-overlay/webui_static /app/fox-overlay/webui_static
-ENV HERMES_WEBUI_EXTENSION_DIR=/app/fox-overlay/webui_static \
-    HERMES_WEBUI_EXTENSION_SCRIPT_URLS=/extensions/onboarding-preview.js,/extensions/fox-overlay.js,/extensions/hostname-prompt.js,/extensions/fallback-polish.js \
-    HERMES_WEBUI_EXTENSION_STYLESHEET_URLS=/extensions/fox-in-the-box.css
-
 RUN set -eux; \
     pip install -e /app/hermes-agent --quiet --no-cache-dir; \
     if [ -f /app/hermes-webui/pyproject.toml ] || [ -f /app/hermes-webui/setup.py ]; then \
@@ -149,6 +137,20 @@ RUN set -eux; \
         exit 1; \
     fi; \
     chown -R foxinthebox:foxinthebox /app/hermes-agent /app/hermes-webui
+
+# ── Fox overlay: static files (Phase 2 of v0.6.0 migration) ───────────────────
+# webui_static/ holds Fox-only assets relocated out of the fork's static/ tree.
+# Upstream's api/extensions.py serves these under /extensions/ and injects the
+# CSS/JS tags into index.html at request time from the ENV-configured URL lists.
+# Cap is 32 URLs per env var; comma-separated. Order preserved from the pre-Phase-2
+# fork index.html script tags.
+#
+# Placed AFTER `pip install` so static-asset edits (frequent during Phase 7 UI
+# work) do not invalidate the slow pip install layer cache.
+COPY packages/fox-overlay/webui_static /app/fox-overlay/webui_static
+ENV HERMES_WEBUI_EXTENSION_DIR=/app/fox-overlay/webui_static \
+    HERMES_WEBUI_EXTENSION_SCRIPT_URLS=/extensions/onboarding-preview.js,/extensions/fox-overlay.js,/extensions/hostname-prompt.js,/extensions/fallback-polish.js \
+    HERMES_WEBUI_EXTENSION_STYLESHEET_URLS=/extensions/fox-in-the-box.css
 
 # ── entrypoint (full version — replaces Task 03 stub) ─────────────────────────
 COPY packages/integration/entrypoint.sh /app/entrypoint.sh
