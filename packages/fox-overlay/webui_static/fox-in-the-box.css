@@ -1,0 +1,1010 @@
+/* Fox in the Box — brand alignment for Hermes WebUI (app scale, denser than marketing site). */
+
+/* ── Variable fonts (paths relative to this file under static/) ─────────── */
+@font-face {
+  font-family: "Sora";
+  src: url("fonts/Sora[wght].woff2") format("woff2-variations");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Manrope";
+  src: url("fonts/Manrope[wght].woff2") format("woff2-variations");
+  font-weight: 200 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* App vs marketing: tighten type and spacing (~88% of landing rhythm). */
+:root {
+  --fitb-app-scale: 0.88;
+
+  /* Marketing tokens (source: Fox in the Box landing _tokens) */
+  --color-bg: #fbf9f4;
+  --color-surface: #fbf9f4;
+  --color-surface-strong: #171513;
+  --color-text: #171513;
+  --color-text-muted: rgb(23 21 19 / 72%);
+  --color-border: #b8a089;
+  --color-accent: #b8a089;
+  --color-footer-surface: rgb(184 160 137 / 25%);
+  --color-download-card-solid: #f8f5ef;
+  --color-wash-subtle: rgb(184 160 137 / 5%);
+  --color-wash-hover: rgb(184 160 137 / 15%);
+  --color-primary-fill: rgb(184 160 137 / 50%);
+
+  /* Typography names (handout) */
+  --font-heading: "Sora", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Manrope", "Segoe UI", system-ui, sans-serif;
+  --font-display: var(--font-heading);
+  --font-ui: var(--font-body);
+
+  /* Layout (scaled for app chrome, not 80rem marketing canvas) */
+  --layout-max: min(64rem, calc(100% - 2.5rem));
+  --layout-grid-gutter: calc(1.5rem * var(--fitb-app-scale));
+  --layout-grid-columns: 12;
+  --radius-image: calc(10px * var(--fitb-app-scale));
+  --radius-button: calc(5px * var(--fitb-app-scale));
+
+  /* Map Hermes semantic tokens → Fox palette (default / light) */
+  --bg: var(--color-bg);
+  --sidebar: color-mix(in srgb, var(--color-bg) 92%, var(--color-border) 8%);
+  --surface: var(--color-download-card-solid);
+  --border: var(--color-border);
+  --border2: rgb(23 21 19 / 14%);
+  --text: var(--color-text);
+  --muted: var(--color-text-muted);
+  --strong: var(--color-text);
+  --em: var(--color-text-muted);
+  --accent: var(--color-accent);
+  --gold: #9a8268;
+  --blue: #2e6f9e;
+  --code-bg: color-mix(in srgb, var(--color-download-card-solid) 85%, var(--color-border) 15%);
+  --code-text: #6b5344;
+  --code-inline-bg: var(--color-wash-subtle);
+  --pre-text: var(--color-text);
+  --topbar-bg: color-mix(in srgb, var(--color-bg) 94%, var(--color-border) 6%);
+  --main-bg: rgb(251 249 244 / 55%);
+  --input-bg: rgb(23 21 19 / 3%);
+  --hover-bg: var(--color-wash-hover);
+  --focus-ring: rgb(184 160 137 / 45%);
+  --focus-glow: rgb(184 160 137 / 12%);
+  --accent-hover: #a68f74;
+  --accent-bg: var(--color-wash-subtle);
+  --accent-bg-strong: var(--color-wash-hover);
+  --accent-text: #5c4d3d;
+  --error: #c62828;
+  --success: #3d8b40;
+  --warning: #e68a00;
+  --info: #2e6f9e;
+  --radius-sm: calc(4px * var(--fitb-app-scale));
+  --radius-md: calc(8px * var(--fitb-app-scale));
+  --radius-card: var(--radius-image);
+  --radius-lg: calc(12px * var(--fitb-app-scale));
+  --radius-pill: 999px;
+  --space-1: calc(4px * var(--fitb-app-scale));
+  --space-2: calc(8px * var(--fitb-app-scale));
+  --space-3: calc(11px * var(--fitb-app-scale));
+  --space-4: calc(14px * var(--fitb-app-scale));
+  --font-size-xs: calc(11px * var(--fitb-app-scale));
+  --font-size-sm: calc(12px * var(--fitb-app-scale));
+  --font-size-md: calc(14px * var(--fitb-app-scale));
+  --surface-subtle: var(--color-wash-subtle);
+  --surface-subtle-hover: var(--color-wash-hover);
+  --border-subtle: rgb(184 160 137 / 22%);
+  --border-muted: rgb(23 21 19 / 12%);
+
+  /* Base type: marketing body scaled down for app */
+  font-family: var(--font-ui);
+  font-size: calc(14px * var(--fitb-app-scale));
+  line-height: 1.5;
+  letter-spacing: 0.009375em;
+}
+
+/* Dark: invert around surface-strong (not in marketing handout; keeps contrast) */
+:root.dark {
+  --bg: #141210;
+  --sidebar: #1a1816;
+  --surface: #201e1b;
+  --border: #4a4239;
+  --border2: rgb(255 255 255 / 12%);
+  --text: #f5f2ec;
+  --muted: rgb(245 242 236 / 72%);
+  --strong: #faf7f2;
+  --em: rgb(245 242 236 / 78%);
+  --accent: #c9b49a;
+  --gold: #d4c4ae;
+  --blue: #8bb8d6;
+  --code-bg: #1f1d1a;
+  --code-text: #e0c9a8;
+  --code-inline-bg: rgb(255 255 255 / 6%);
+  --pre-text: #f5f2ec;
+  --topbar-bg: rgb(20 18 16 / 96%);
+  --main-bg: rgb(20 18 16 / 55%);
+  --input-bg: rgb(255 255 255 / 5%);
+  --hover-bg: rgb(201 180 154 / 12%);
+  --focus-ring: rgb(201 180 154 / 45%);
+  --focus-glow: rgb(201 180 154 / 10%);
+  --accent-hover: #dccbb5;
+  --accent-bg: rgb(201 180 154 / 10%);
+  --accent-bg-strong: rgb(201 180 154 / 20%);
+  --accent-text: #e8dcc8;
+  --surface-subtle: rgb(255 255 255 / 4%);
+  --surface-subtle-hover: rgb(201 180 154 / 14%);
+  --border-subtle: rgb(201 180 154 / 22%);
+  --border-muted: rgb(255 255 255 / 14%);
+}
+
+body {
+  font-family: var(--font-ui);
+  font-weight: 450;
+}
+
+/* Optional utilities mirroring landing heading scale, app-sized */
+.fitb-h1,
+.fitb-h-display {
+  font-family: var(--font-heading);
+  font-size: calc(1.5rem * var(--fitb-app-scale));
+  line-height: 1.125;
+  letter-spacing: -0.0145833333em;
+  font-weight: 320;
+}
+.fitb-h2,
+.fitb-h-section {
+  font-family: var(--font-heading);
+  font-size: calc(1.25rem * var(--fitb-app-scale));
+  line-height: 1.25;
+  letter-spacing: -0.0375em;
+  font-weight: 400;
+}
+.fitb-h3 {
+  font-family: var(--font-body);
+  font-size: calc(1.125rem * var(--fitb-app-scale));
+  line-height: 1.3571428571;
+  letter-spacing: 0.0017857143em;
+  font-weight: 500;
+}
+.fitb-h4,
+.fitb-h-card {
+  font-family: var(--font-body);
+  font-size: calc(1.05rem * var(--fitb-app-scale));
+  line-height: 1.3333333333;
+  letter-spacing: 0.0020833333em;
+  font-weight: 600;
+}
+.fitb-h5 {
+  font-family: var(--font-body);
+  font-size: calc(0.98rem * var(--fitb-app-scale));
+  line-height: 1.35;
+  font-weight: 500;
+}
+.fitb-hero-subtitle {
+  font-family: var(--font-body);
+  font-size: calc(1.05rem * var(--fitb-app-scale));
+  line-height: 1.5;
+  letter-spacing: 0.00625em;
+  font-weight: 460;
+  color: var(--muted);
+}
+
+/* Message column: heading scale + stacked prose rhythm */
+.msg-body p + p {
+  margin-top: 0.5em;
+}
+.msg-body h1 {
+  font-family: var(--font-heading);
+  font-size: calc(1.5rem * var(--fitb-app-scale));
+  line-height: 1.125;
+  letter-spacing: -0.0145833333em;
+  font-weight: 320;
+}
+.msg-body h2 {
+  font-family: var(--font-heading);
+  font-size: calc(1.25rem * var(--fitb-app-scale));
+  line-height: 1.25;
+  letter-spacing: -0.0375em;
+  font-weight: 400;
+}
+.msg-body h3 {
+  font-family: var(--font-body);
+  font-size: calc(1.125rem * var(--fitb-app-scale));
+  line-height: 1.3571428571;
+  letter-spacing: 0.0017857143em;
+  font-weight: 500;
+}
+.msg-body h4 {
+  font-family: var(--font-body);
+  font-size: calc(1.05rem * var(--fitb-app-scale));
+  line-height: 1.3333333333;
+  letter-spacing: 0.0020833333em;
+  font-weight: 600;
+}
+.msg-body h5,
+.msg-body h6 {
+  font-family: var(--font-body);
+  font-size: calc(0.98rem * var(--fitb-app-scale));
+  line-height: 1.35;
+  font-weight: 500;
+}
+
+/* Top bar hidden — title is redundant when sidebar is visible */
+.app-titlebar {
+  display: none;
+}
+
+/* Mobile: show titlebar for safe-area spacing, but hide inner content and border */
+@media (max-width: 767px) {
+  .app-titlebar {
+    display: flex;
+    border-bottom: none;
+  }
+  .app-titlebar-inner {
+    display: none;
+  }
+}
+
+/* Chrome: slightly denser title + nav (Manrope ~ landing nav) */
+.app-titlebar-title {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: calc(12px * var(--fitb-app-scale));
+}
+.app-titlebar-sub {
+  font-size: calc(10px * var(--fitb-app-scale));
+}
+.nav-tab {
+  font-family: var(--font-body);
+  font-size: calc(0.8125rem * var(--fitb-app-scale));
+  font-weight: 600;
+}
+
+/* Session list & composer: tighter vertical rhythm */
+.sidebar {
+  border-right: none;
+}
+
+.rail {
+  background: var(--hover-bg);
+  border-right: none;
+}
+
+button[data-panel="workspaces"],
+button[data-panel="profiles"] {
+  display: none;
+}
+
+#profileChipWrap,
+#composerWorkspaceChip {
+  display: none;
+}
+
+/* Sidebar panel headers: no bottom rule; “+” actions as filled chips */
+.panel-head {
+  border-bottom: none;
+}
+
+.panel-head-btn:has(svg > line[x1="12"][y1="5"]) {
+  width: calc(28px * var(--fitb-app-scale));
+  height: calc(28px * var(--fitb-app-scale));
+  min-width: calc(28px * var(--fitb-app-scale));
+  min-height: calc(28px * var(--fitb-app-scale));
+  border-radius: 5px;
+  box-shadow: 2px 2px 5px 0 rgb(184 160 137 / 40%);
+  outline: none;
+  transition: background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.panel-head-btn:has(svg > line[x1="12"][y1="5"]):focus,
+.panel-head-btn:has(svg > line[x1="12"][y1="5"]):focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-default);
+}
+
+:root:not(.dark):not([data-skin]) .panel-head-btn:has(svg > line[x1="12"][y1="5"]) {
+  background: var(--color-primary-fill);
+  color: var(--color-text);
+  border-color: var(--color-border);
+}
+
+:root:not(.dark):not([data-skin]) .panel-head-btn:has(svg > line[x1="12"][y1="5"]):hover {
+  background: var(--color-border);
+  color: var(--color-text);
+}
+
+:root.dark .panel-head-btn:has(svg > line[x1="12"][y1="5"]),
+:root:not(.dark)[data-skin] .panel-head-btn:has(svg > line[x1="12"][y1="5"]) {
+  background: var(--accent-bg-strong);
+  color: var(--text);
+}
+
+:root.dark .panel-head-btn:has(svg > line[x1="12"][y1="5"]):hover,
+:root:not(.dark)[data-skin] .panel-head-btn:has(svg > line[x1="12"][y1="5"]):hover {
+  background: var(--hover-bg);
+  color: var(--text);
+}
+
+.sidebar-header {
+  padding: calc(14px * var(--fitb-app-scale)) calc(16px * var(--fitb-app-scale))
+    calc(12px * var(--fitb-app-scale));
+  gap: calc(9px * var(--fitb-app-scale));
+}
+.session-item {
+  padding: calc(7px * var(--fitb-app-scale)) calc(7px * var(--fitb-app-scale));
+  font-size: calc(14px * var(--fitb-app-scale));
+  border-radius: var(--radius-md);
+}
+.session-meta {
+  display: none;
+}
+.new-chat-btn {
+  padding: calc(8px * var(--fitb-app-scale)) calc(11px * var(--fitb-app-scale));
+  font-size: calc(13px * var(--fitb-app-scale));
+  border-radius: var(--radius-md);
+  gap: calc(7px * var(--fitb-app-scale));
+  margin-bottom: calc(7px * var(--fitb-app-scale));
+}
+.sidebar-search input {
+  padding: calc(6px * var(--fitb-app-scale)) calc(9px * var(--fitb-app-scale))
+    calc(6px * var(--fitb-app-scale)) calc(28px * var(--fitb-app-scale));
+  font-size: calc(14px * var(--fitb-app-scale));
+  border-radius: var(--radius-md);
+}
+.composer-wrap {
+  padding: calc(10px * var(--fitb-app-scale)) calc(16px * var(--fitb-app-scale))
+    calc(14px * var(--fitb-app-scale));
+}
+.composer-box {
+  border-radius: var(--radius-lg);
+  max-width: var(--layout-max);
+}
+.composer-workspace-files-btn {
+  padding: 8px;
+  border: none;
+}
+.composer-workspace-group {
+  border: none;
+}
+textarea#msg {
+  font-size: calc(15px * var(--fitb-app-scale));
+  line-height: 1.5;
+  letter-spacing: 0.009375em;
+  font-weight: 450;
+}
+
+/* Buttons: handout metrics scaled — primary / outline variants */
+button.send-btn,
+.app-dialog-btn {
+  font-family: var(--font-body);
+  border-radius: var(--radius-button);
+  transition: background-color 0.3s ease, color 0.3s ease, box-shadow 0.3s ease,
+    border-color 0.3s ease;
+}
+.app-dialog-btn:focus-visible,
+button.send-btn:focus-visible {
+  outline: calc(0.125rem * var(--fitb-app-scale)) solid var(--color-border);
+  outline-offset: calc(0.125rem * var(--fitb-app-scale));
+}
+:root:not(.dark):not([data-skin]) button.send-btn {
+  background: var(--color-primary-fill);
+  color: var(--color-text);
+  border-color: var(--color-border);
+  font-weight: 800;
+  font-size: calc(0.8125rem * var(--fitb-app-scale));
+}
+:root:not(.dark):not([data-skin]) button.send-btn:hover {
+  background: var(--color-border);
+  color: var(--color-text);
+}
+:root.dark:not([data-skin]) button.send-btn {
+  font-weight: 800;
+  font-size: calc(0.8125rem * var(--fitb-app-scale));
+}
+
+/* Dialog: card panel + shadow from tokens */
+:root:not(.dark) .app-dialog {
+  background: var(--color-download-card-solid);
+  border-color: var(--color-border);
+  border-radius: var(--radius-image);
+  box-shadow: var(--shadow-default);
+}
+.app-dialog-title {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: calc(15px * var(--fitb-app-scale));
+}
+.app-dialog-desc {
+  font-size: calc(13px * var(--fitb-app-scale));
+}
+.app-dialog-input {
+  border-radius: var(--radius-image);
+  font-size: calc(13px * var(--fitb-app-scale));
+}
+:root:not(.dark) .app-dialog-input:focus-visible {
+  background-color: var(--color-footer-surface);
+}
+.app-dialog-btn {
+  font-size: calc(12.5px * var(--fitb-app-scale));
+  font-weight: 600;
+  min-width: calc(96px * var(--fitb-app-scale));
+  padding: calc(9px * var(--fitb-app-scale)) calc(12px * var(--fitb-app-scale));
+}
+:root:not(.dark) .app-dialog-btn.confirm {
+  background: var(--color-primary-fill);
+  color: var(--color-text);
+  border-color: var(--color-border);
+}
+:root:not(.dark) .app-dialog-btn.confirm:hover {
+  background: var(--color-border);
+  color: var(--color-text);
+}
+:root:not(.dark) .app-dialog-btn:not(.confirm) {
+  background: transparent;
+  color: var(--color-text);
+  box-shadow: inset 0 0 0 calc(0.125rem * var(--fitb-app-scale)) var(--color-border);
+  border-color: transparent;
+}
+:root:not(.dark) .app-dialog-btn:not(.confirm):hover {
+  background: var(--color-border);
+  color: var(--color-text);
+  box-shadow: none;
+}
+
+/* Tool / thinking cards: marketing card wash + shadow (light only) */
+.tool-card {
+  border-radius: var(--radius-image);
+}
+:root:not(.dark) .tool-card {
+  background: var(--color-wash-subtle);
+  box-shadow: var(--shadow-default);
+}
+
+/* Default skin only: Fox clay bubbles; alternate skins keep Hermes semantics */
+:root:not([data-skin]) {
+  --msg-rail: 0;
+  --msg-max: min(720px, var(--layout-max));
+  --user-bubble-bg: var(--color-primary-fill);
+  --user-bubble-border: var(--color-border);
+  --user-bubble-text: var(--color-text);
+  --user-bubble-placeholder: var(--color-text-muted);
+  --user-selection-bg: rgb(184 160 137 / 35%);
+  --user-selection-text: var(--color-text);
+}
+:root.dark:not([data-skin]) {
+  --user-bubble-bg: var(--accent-bg-strong);
+  --user-bubble-border: var(--accent-bg-strong);
+  --user-bubble-text: var(--text);
+  --user-bubble-placeholder: var(--muted);
+  --user-selection-bg: rgb(255 255 255 / 16%);
+  --user-selection-text: var(--text);
+}
+:root[data-skin]:not([data-skin="sienna"]) {
+  --msg-rail: 0;
+  --msg-max: min(720px, var(--layout-max));
+  --user-bubble-bg: var(--accent);
+  --user-bubble-border: var(--accent-hover);
+  --user-bubble-text: #fff;
+  --user-bubble-placeholder: rgb(255 255 255 / 70%);
+  --user-selection-bg: rgb(0 0 0 / 22%);
+  --user-selection-text: #fff;
+}
+:root.dark[data-skin]:not([data-skin="sienna"]) {
+  --user-bubble-bg: var(--accent-bg-strong);
+  --user-bubble-border: var(--accent-bg-strong);
+  --user-bubble-text: var(--text);
+  --user-bubble-placeholder: var(--muted);
+  --user-selection-bg: rgb(255 255 255 / 18%);
+  --user-selection-text: var(--text);
+}
+.suggestion {
+  display: flex;
+  gap: 10px;
+  font-family: var(--font-ui);
+  font-weight: 500;
+  font-size: 14px;
+  align-items: center;
+}
+.msg-row {
+  padding: calc(11px * var(--fitb-app-scale)) 0;
+}
+.msg-body {
+  max-width: var(--msg-max);
+  padding-top: calc(7px * var(--fitb-app-scale));
+}
+
+/* User messages: UI-style cards — frosted translucent fill + token shadow */
+.msg-row[data-role="user"] .msg-body {
+  border-radius: var(--radius-image);
+  border: 1px solid color-mix(in srgb, var(--user-bubble-border) 32%, transparent);
+  box-shadow: var(--shadow-default);
+  background: linear-gradient(
+      180deg,
+      rgb(255 255 255 / 28%),
+      rgb(255 255 255 / 0%)
+    ),
+    color-mix(in srgb, var(--user-bubble-bg) 36%, transparent);
+}
+
+:root.dark .msg-row[data-role="user"] .msg-body {
+  box-shadow: 0 2px 12px rgb(0 0 0 / 32%), 0 0 0 1px rgb(255 255 255 / 6%) inset;
+  border-color: color-mix(in srgb, var(--user-bubble-border) 42%, transparent);
+  background: linear-gradient(
+      180deg,
+      rgb(255 255 255 / 10%),
+      rgb(255 255 255 / 0%)
+    ),
+    color-mix(in srgb, var(--user-bubble-bg) 52%, transparent);
+}
+
+/* Stronger fill when bubble text is white (light + accent skins) */
+:root:not(.dark)[data-skin]:not([data-skin="sienna"]) .msg-row[data-role="user"] .msg-body {
+  background: linear-gradient(
+      180deg,
+      rgb(255 255 255 / 22%),
+      rgb(255 255 255 / 0%)
+    ),
+    color-mix(in srgb, var(--user-bubble-bg) 72%, transparent);
+}
+
+/* Default fox skin: align wash with tool-card tone */
+:root:not(.dark):not([data-skin]) .msg-row[data-role="user"] .msg-body {
+  background: linear-gradient(
+      180deg,
+      rgb(255 255 255 / 40%),
+      rgb(255 255 255 / 8%)
+    ),
+    var(--color-wash-subtle);
+}
+
+.msg-row[data-role="user"] .msg-body code {
+  background: color-mix(in srgb, var(--user-bubble-text) 12%, transparent);
+}
+
+.msg-row[data-role="user"][data-editing="1"] .msg-edit-area {
+  border-radius: var(--radius-image);
+  box-shadow: var(--shadow-default), 0 0 0 3px var(--focus-ring);
+  background: linear-gradient(
+      180deg,
+      rgb(255 255 255 / 28%),
+      rgb(255 255 255 / 0%)
+    ),
+    color-mix(in srgb, var(--user-bubble-bg) 36%, transparent);
+}
+
+:root.dark .msg-row[data-role="user"][data-editing="1"] .msg-edit-area {
+  box-shadow: 0 2px 12px rgb(0 0 0 / 32%), 0 0 0 1px rgb(255 255 255 / 6%) inset,
+    0 0 0 3px var(--focus-ring);
+  background: linear-gradient(
+      180deg,
+      rgb(255 255 255 / 10%),
+      rgb(255 255 255 / 0%)
+    ),
+    color-mix(in srgb, var(--user-bubble-bg) 52%, transparent);
+}
+
+:root:not(.dark):not([data-skin]) .msg-row[data-role="user"][data-editing="1"] .msg-edit-area {
+  background: linear-gradient(
+      180deg,
+      rgb(255 255 255 / 40%),
+      rgb(255 255 255 / 8%)
+    ),
+    var(--color-wash-subtle);
+}
+
+:root:not(.dark)[data-skin]:not([data-skin="sienna"])
+  .msg-row[data-role="user"][data-editing="1"]
+  .msg-edit-area {
+  background: linear-gradient(
+      180deg,
+      rgb(255 255 255 / 22%),
+      rgb(255 255 255 / 0%)
+    ),
+    color-mix(in srgb, var(--user-bubble-bg) 72%, transparent);
+}
+
+pre[class*=language-] {
+  margin: 0 auto 1.5em auto;
+}
+
+/* Skins: Hermes alternate accents (unchanged palette when user opts in) */
+:root[data-skin="ares"] {
+  --accent: #c0392b;
+  --accent-hover: #a93226;
+  --accent-bg: rgb(192 57 43 / 8%);
+  --accent-bg-strong: rgb(192 57 43 / 15%);
+  --accent-text: #922b21;
+}
+:root.dark[data-skin="ares"] {
+  --accent: #ff4444;
+  --accent-hover: #cc3333;
+  --accent-bg: rgb(255 68 68 / 8%);
+  --accent-bg-strong: rgb(255 68 68 / 15%);
+  --accent-text: #ff4444;
+}
+:root[data-skin="mono"] {
+  --accent: #666;
+  --accent-hover: #555;
+  --accent-bg: rgb(102 102 102 / 8%);
+  --accent-bg-strong: rgb(102 102 102 / 15%);
+  --accent-text: #555;
+}
+:root.dark[data-skin="mono"] {
+  --accent: #ccc;
+  --accent-hover: #999;
+  --accent-bg: rgb(204 204 204 / 8%);
+  --accent-bg-strong: rgb(204 204 204 / 15%);
+  --accent-text: #ccc;
+}
+:root[data-skin="slate"] {
+  --accent: #475569;
+  --accent-hover: #334155;
+  --accent-bg: rgb(71 85 105 / 8%);
+  --accent-bg-strong: rgb(71 85 105 / 15%);
+  --accent-text: #334155;
+}
+:root.dark[data-skin="slate"] {
+  --accent: #94a3b8;
+  --accent-hover: #64748b;
+  --accent-bg: rgb(148 163 184 / 8%);
+  --accent-bg-strong: rgb(148 163 184 / 15%);
+  --accent-text: #94a3b8;
+}
+:root[data-skin="poseidon"] {
+  --accent: #0369a1;
+  --accent-hover: #025080;
+  --accent-bg: rgb(3 105 161 / 8%);
+  --accent-bg-strong: rgb(3 105 161 / 15%);
+  --accent-text: #025080;
+}
+:root.dark[data-skin="poseidon"] {
+  --accent: #0ea5e9;
+  --accent-hover: #0284c7;
+  --accent-bg: rgb(14 165 233 / 8%);
+  --accent-bg-strong: rgb(14 165 233 / 15%);
+  --accent-text: #0ea5e9;
+}
+:root[data-skin="sisyphus"] {
+  --accent: #7c3aed;
+  --accent-hover: #6d28d9;
+  --accent-bg: rgb(124 58 237 / 8%);
+  --accent-bg-strong: rgb(124 58 237 / 15%);
+  --accent-text: #6d28d9;
+}
+:root.dark[data-skin="sisyphus"] {
+  --accent: #a78bfa;
+  --accent-hover: #8b5cf6;
+  --accent-bg: rgb(167 139 250 / 8%);
+  --accent-bg-strong: rgb(167 139 250 / 15%);
+  --accent-text: #a78bfa;
+}
+:root[data-skin="charizard"] {
+  --accent: #ea580c;
+  --accent-hover: #c2410c;
+  --accent-bg: rgb(234 88 12 / 8%);
+  --accent-bg-strong: rgb(234 88 12 / 15%);
+  --accent-text: #c2410c;
+}
+:root.dark[data-skin="charizard"] {
+  --accent: #fb923c;
+  --accent-hover: #f97316;
+  --accent-bg: rgb(251 146 60 / 8%);
+  --accent-bg-strong: rgb(251 146 60 / 15%);
+  --accent-text: #fb923c;
+}
+:root[data-skin="sienna"] {
+  --bg: #faf9f5;
+  --sidebar: #f0eee6;
+  --surface: #fff;
+  --border: #e7e4db;
+  --border2: #d7d3c7;
+  --text: #1f1e1c;
+  --muted: #6b6a63;
+  --strong: #141311;
+  --em: #3e3d39;
+  --accent: #d97757;
+  --accent-hover: #bf6545;
+  --accent-text: #a55237;
+  --accent-bg: rgb(217 119 87 / 9%);
+  --accent-bg-strong: rgb(217 119 87 / 18%);
+  --code-bg: #f5f3ec;
+  --code-inline-bg: rgb(20 19 17 / 6%);
+  --code-text: #8a3e1a;
+  --pre-text: #1f1e1c;
+  --topbar-bg: rgb(250 249 245 / 96%);
+  --main-bg: rgb(250 249 245 / 55%);
+  --input-bg: rgb(20 19 17 / 4%);
+  --hover-bg: rgb(20 19 17 / 5%);
+  --focus-ring: rgb(217 119 87 / 30%);
+  --focus-glow: rgb(217 119 87 / 10%);
+  --blue: #2e6f9e;
+  --gold: #a55237;
+  --user-bubble-bg: #ece9df;
+  --user-bubble-border: #ded9cc;
+  --user-bubble-text: #1f1e1c;
+  --user-bubble-placeholder: #6b6a63;
+  --user-selection-bg: rgb(217 119 87 / 28%);
+  --user-selection-text: #1f1e1c;
+}
+:root.dark[data-skin="sienna"] {
+  --bg: #1f1e1c;
+  --sidebar: #262522;
+  --surface: #2c2b28;
+  --border: #3a3935;
+  --border2: #4a4843;
+  --text: #edebe3;
+  --muted: #a3a197;
+  --strong: #f7f5ed;
+  --em: #c9c6bc;
+  --accent: #e0896d;
+  --accent-hover: #d97757;
+  --accent-text: #e6a88a;
+  --accent-bg: rgb(224 137 109 / 12%);
+  --accent-bg-strong: rgb(224 137 109 / 22%);
+  --code-bg: #2a2926;
+  --code-inline-bg: rgb(255 255 255 / 7%);
+  --code-text: #f0b593;
+  --pre-text: #edebe3;
+  --topbar-bg: rgb(38 37 34 / 96%);
+  --main-bg: rgb(31 30 28 / 55%);
+  --input-bg: rgb(255 255 255 / 5%);
+  --hover-bg: rgb(255 255 255 / 7%);
+  --focus-ring: rgb(224 137 109 / 35%);
+  --focus-glow: rgb(224 137 109 / 10%);
+  --blue: #8bb8d6;
+  --gold: #e6a88a;
+  --user-bubble-bg: #34322e;
+  --user-bubble-border: #42403b;
+  --user-bubble-text: #edebe3;
+  --user-bubble-placeholder: #a3a197;
+  --user-selection-bg: rgb(224 137 109 / 30%);
+  --user-selection-text: #f7f5ed;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-dialog-btn,
+  button.send-btn {
+    transition-duration: 0.01ms;
+  }
+}
+
+/* Preferences: assistant rename is fixed for Fox in the Box (see boot.js / panels.js). */
+.fox-in-the-box .fitb-settings-bot-name {
+  display: none !important;
+}
+
+/* ── Local-fallback polish: reactive modal + recovery banner (issue #9) ─ */
+
+.fitb-fb-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.fitb-fb-modal {
+  background: var(--bg-secondary, #1f2024);
+  color: var(--text-primary, #f0f0f2);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 24px 24px 20px;
+  width: 100%;
+  max-width: 460px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.fitb-fb-modal h2 {
+  margin: 0 0 8px;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.fitb-fb-modal p {
+  margin: 0 0 14px;
+  font-size: 13px;
+  opacity: 0.85;
+  line-height: 1.5;
+}
+
+.fitb-fb-modal-status {
+  font-size: 12px;
+  min-height: 16px;
+  margin: 8px 0 4px;
+  opacity: 0.8;
+}
+
+.fitb-fb-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.fitb-fb-banner {
+  position: fixed;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9997;
+  margin-top: 10px;
+  background: rgba(45, 212, 191, 0.12);
+  border: 1px solid rgba(45, 212, 191, 0.4);
+  border-radius: 8px;
+  padding: 10px 14px;
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  font-size: 13px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.3);
+  max-width: 90vw;
+}
+
+.fitb-fb-banner-text {
+  flex: 1;
+}
+
+.fitb-fb-banner-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.fitb-fb-banner .fitb-btn {
+  padding: 5px 10px;
+  font-size: 12px;
+}
+
+/* ── Tailscale connection tile (issue #96) ────────────────────────────── */
+
+.ts-badge {
+  display: inline-block;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.ts-badge-connected {
+  background: rgba(45, 212, 191, 0.15);
+  color: #2dd4bf;
+  border: 1px solid rgba(45, 212, 191, 0.4);
+}
+
+.ts-badge-connecting {
+  background: rgba(250, 204, 21, 0.15);
+  color: #facc15;
+  border: 1px solid rgba(250, 204, 21, 0.4);
+}
+
+.ts-badge-needs-login {
+  background: rgba(250, 204, 21, 0.15);
+  color: #facc15;
+  border: 1px solid rgba(250, 204, 21, 0.4);
+}
+
+.ts-badge-disconnected {
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.ts-badge-unknown {
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* ── Post-wizard hostname prompt (issue #68) ──────────────────────────── */
+
+.fitb-hostname-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.fitb-hostname-modal {
+  background: var(--bg-secondary, #1f2024);
+  color: var(--text-primary, #f0f0f2);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 24px 24px 20px;
+  width: 100%;
+  max-width: 420px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.fitb-hostname-modal h2 {
+  margin: 0 0 8px;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.fitb-hostname-modal p {
+  margin: 0 0 14px;
+  font-size: 13px;
+  opacity: 0.8;
+  line-height: 1.5;
+}
+
+.fitb-hostname-modal label {
+  display: block;
+  font-size: 12px;
+  margin-bottom: 6px;
+  opacity: 0.7;
+}
+
+.fitb-hostname-modal input[type="text"] {
+  width: 100%;
+  padding: 9px 11px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.25);
+  color: inherit;
+  font: inherit;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+}
+
+.fitb-hostname-modal input[type="text"]:focus {
+  outline: none;
+  border-color: #2dd4bf;
+}
+
+.fitb-hostname-status {
+  font-size: 12px;
+  min-height: 16px;
+  margin: 8px 0 4px;
+  opacity: 0.8;
+}
+
+.fitb-hostname-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.fitb-btn {
+  border: 0;
+  padding: 8px 14px;
+  border-radius: 6px;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.fitb-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.fitb-btn-primary {
+  background: #2dd4bf;
+  color: #0a0a0a;
+  font-weight: 600;
+}
+
+.fitb-btn-primary:hover:not(:disabled) {
+  background: #5eead4;
+}
+
+.fitb-btn-link {
+  background: transparent;
+  color: inherit;
+  opacity: 0.7;
+}
+
+.fitb-btn-link:hover:not(:disabled) {
+  opacity: 1;
+}

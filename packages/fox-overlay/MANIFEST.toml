@@ -5,7 +5,21 @@
 # docs/architecture/upstream-migration-execution-plan.md §Phase 1 / §1 synthesis.
 
 [static]
-# Filled in Phase 2 (move Fox-only static assets out of forks/hermes-webui/static/).
+# Phase 2 — Fox-only static assets moved out of forks/hermes-webui/static/,
+# served via upstream extensions.py at /extensions/<path>.
+# Setup wizard files (setup.html/css/js) deferred to Phase 7 (coupled to
+# api/onboarding.py's REPO_ROOT / "static" / "setup.html" path access).
+# Fox-branded favicons (apple-touch-icon.png + 5 favicon variants) deferred
+# to a dedicated future phase (coherent group, handle atomically with
+# manifest.json icon refs).
+"fox-in-the-box.css" = "fox-only"
+"fox-overlay.js" = "fox-only"
+"images/fox_avatar_cropped.jpg" = "fox-only"
+"fonts/Manrope[wght].woff2" = "fox-only"
+"fonts/Sora[wght].woff2" = "fox-only"
+"onboarding-preview.js" = "fox-only"
+"fallback-polish.js" = "fox-only"
+"hostname-prompt.js" = "fox-only"
 
 [python]
 # Filled in Phase 5 (additive webui modules) and Phase 6 (mid-file monkey-patches).
