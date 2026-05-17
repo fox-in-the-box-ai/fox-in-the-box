@@ -199,8 +199,8 @@ Most users start with **OpenRouter** — one key, hundreds of models. Add more f
 
 | Component | Purpose |
 |-----------|---------|
-| [Hermes Agent](https://github.com/fox-in-the-box-ai/hermes-agent) | AI agent core — LLM orchestration, tools, skills |
-| [Hermes WebUI](https://github.com/fox-in-the-box-ai/hermes-webui) | Browser-based chat interface |
+| [Hermes Agent](https://github.com/NousResearch/hermes-agent) | AI agent core — LLM orchestration, tools, skills (Fox tracks virgin upstream via overlay; see `docs/architecture/upstream-overlay.md`) |
+| [Hermes WebUI](https://github.com/nesquena/hermes-webui) | Browser-based chat interface (Fox tracks virgin upstream via overlay; see `docs/architecture/upstream-overlay.md`) |
 | mem0 + Qdrant | Persistent memory with local vector search |
 | Tailscale | Optional VPN tunneling and automatic HTTPS |
 | supervisord | Process management inside the container |

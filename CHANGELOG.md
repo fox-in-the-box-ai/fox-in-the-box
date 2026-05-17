@@ -7,6 +7,50 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.6.0] - 2026-05-18
+
+Upstream-separation migration. The `forks/hermes-webui` and `forks/hermes-agent` submodules now point at the virgin upstream repositories (`nesquena/hermes-webui` v0.51.84 and `NousResearch/hermes-agent` v2026.5.16). All Fox-specific behavior moved into the new `packages/fox-overlay/` package — applied at Docker build time as patch series + file-removals + a sibling Python package + pip-installed monkey-patches. Net: Fox can absorb upstream weekly instead of carrying 1,500+ commits of drift.
+
+### Added
+
+- **`packages/fox-overlay/` package** with four layering mechanisms: webui patch series (`patches/webui/`), agent patch series (`patches/agent/`), `.fox-removals` file-deletion manifest, and the `fox_overlay` Python package (`webui_modules/`, `webui_patches/`, `agent_plugins/`, `agent_memory_plugins/`). See `docs/architecture/upstream-overlay.md` for the full architecture.
+- **`packages/fox-overlay/versions.toml`** pins the upstream tag pair. The pinned tags are the canonical source of truth for what virgin upstream Fox is currently riding on.
+- **`packages/fox-overlay/scripts/check-overlay-basis.sh`** verifies every overlay artifact still applies cleanly against the current submodule pin. Runs as a CI gate before every Docker build via `.github/workflows/build-container.yml`.
+- **Nightly `upstream-watch.yml` workflow** queries upstream for newer tags, runs `check-overlay-basis.sh` against the proposed bump, and opens an issue tagged `upstream-update-available` (clean) or `upstream-drift` (refresh required). 05:17 UTC daily; manual `workflow_dispatch` also supported.
+- **`FITB_DISABLE_WEBUI_OVERLAY` and `FITB_DISABLE_AGENT_OVERLAY` build/runtime flags** for bisecting overlay-induced regressions during future bumps.
+
+### Changed
+
+- **`forks/hermes-webui` submodule URL** flipped from `fox-in-the-box-ai/hermes-webui` to `nesquena/hermes-webui` (virgin upstream). Same change for `forks/hermes-agent` → `NousResearch/hermes-agent`. The fork repos are archived but kept for history.
+- **Webui patch series trimmed to two patches, 9 lines total**: a `server.py` bootstrap shim that loads `fox_overlay` at boot, and a `routes.py` dispatch hook that routes Fox-claimed paths through the overlay's dispatcher.
+- **Phase 6 monkey-patch refresh against v0.51.84**: dropped redundant `get_config` patch (upstream native now does mtime checks); dropped the `models.py` patch wholesale (upstream v0.51.84 natively ships every Fox #1558 fix verbatim); refreshed the `reload_config` and `auxiliary_client` anchors against the new upstream code.
+- **Agent monkey-patch bootstrap** extracted from the fork (where it was a free-floating commit) into a managed patch (`patches/agent/001-gateway-bootstrap-shim.patch`) so the upstream re-point doesn't drop it on the floor.
+
+### Removed
+
+- **`fox-in-the-box-ai/hermes-webui` and `fox-in-the-box-ai/hermes-agent` fork dependencies.** Both submodules now point at virgin upstream. The fork repos remain on GitHub under an archive tag.
+- **`.github/workflows/sync-submodules.yml`** is gone — irrelevant in a virgin-upstream + overlay world; superseded by `upstream-watch.yml`.
+
+### Known regressions (deferred to v0.7.x)
+
+Two Fox features that depended on heavy in-place patches of upstream's streaming/self-heal flow could not be carried forward as textual substitutions against v0.51.84's refactored code. Both are tracked and will be re-implemented in v0.7.x using a downstream event-subscription pattern (subscribing to `put('apperror', ...)`) instead of in-place substitution:
+
+- **#254 — Mid-stream break detection** (FITB#89): Fox's "Stream interrupted" label + partial-text preservation on mid-stream errors is unavailable. Upstream's native error classification still surfaces an error, just with upstream's wording and without partial-text preservation.
+- **#255 — Silent auto-failover to local on auth/quota errors** (FITB#129b): on `auth_mismatch` / `quota_exhausted` the failover modal is unavailable. Manual provider switch via Settings → Providers still works (FITB#9 plumbing preserved).
+
+### Verified
+
+Full smoke checklist sections A–L re-run on a clean container built from main post-migration:
+- All v0.5.0/v0.5.1/v0.5.2/v0.5.3/v0.5.4 baseline checks (carry-forward)
+- New Section L v0.6.0 row: webui boots with `[fox-overlay] bootstrap installed: dispatcher frozen, N GET + M POST handlers registered`, agent boots without `fox-overlay-failed` warnings, mem0_oss installed in `/app/hermes-agent/plugins/memory/`, every Fox-claimed `/api/*` endpoint returns 200
+- The two regressions above were verified intentional (not crashes) — UX degrades to upstream's defaults rather than failing
+
+### What's next
+
+v0.6.1 (or v0.7.0) re-implements #254 + #255 using the event-subscription pattern documented in `docs/architecture/upstream-overlay.md`. Then v0.7.x Phase 4 (Llama Guard 3 1B, original roadmap #6) resumes.
+
+---
+
 ## [0.5.4] - 2026-05-07
 
 Three stabilization fixes surfaced by real-world users in the days after v0.5.3 shipped. No new features — Phase 1 (#4 + #5) shifts to v0.5.5 per Rule 1.
