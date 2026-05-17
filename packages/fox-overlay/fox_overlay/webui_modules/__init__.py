@@ -12,8 +12,9 @@ session_recovery lands last (longest smoke + #129 failover-engine
 coupling). See `docs/architecture/v0.6.0-github-breakdown-v2.md` §item
 14.
 """
+from . import onboarding  # noqa: F401  -- registers /setup (bare) + /api/setup/; provides _write_env_key for hostname
 from . import ollama  # noqa: F401  -- registers /api/ollama/ at import
 from . import tailscale  # noqa: F401  -- registers /api/tailscale/ at import
 from . import local_fallback  # noqa: F401  -- registers /api/local-fallback/ at import
 from . import models_download  # noqa: F401  -- registers /api/local-models (bare) at import
-from . import hostname  # noqa: F401  -- registers /api/settings/hostname (bare) at import
+from . import hostname  # noqa: F401  -- registers /api/settings/hostname (bare); imports _write_env_key from onboarding

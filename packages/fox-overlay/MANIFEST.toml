@@ -20,6 +20,10 @@
 "onboarding-preview.js" = "fox-only"
 "fallback-polish.js" = "fox-only"
 "hostname-prompt.js" = "fox-only"
+# Phase 7 — Fox onboarding wizard static files (moved from fork's static/setup.* after Phase 7a removed them):
+"setup.html" = "fox-only"
+"setup.css" = "fox-only"
+"setup.js" = "fox-only"
 
 [python]
 # Phase 3 — agent-side overlay. Three monkey-patch modules applied via
@@ -52,6 +56,7 @@
 "fox_overlay.webui_modules.local_fallback" = "fox-only-additive"  # claims /api/local-fallback/ (was forks/hermes-webui/api/local_fallback.py)
 "fox_overlay.webui_modules.models_download" = "fox-only-additive"  # claims /api/local-models (bare + sub-paths) (was forks/hermes-webui/api/models_download.py)
 "fox_overlay.webui_modules.hostname" = "fox-only-additive"  # claims /api/settings/hostname (bare + /dismiss-prompt) (was forks/hermes-webui/api/hostname.py)
+"fox_overlay.webui_modules.onboarding" = "fox-only-additive"  # Phase 7: claims /setup (bare) + /api/setup/; exports _write_env_key for hostname (was forks/hermes-webui/api/onboarding.py)
 
 # Phase 6 — webui mid-file monkey-patches. Fork files are restored to
 # virgin upstream content; these modules re-apply Fox behavior at runtime

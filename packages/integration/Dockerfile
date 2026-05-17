@@ -190,6 +190,41 @@ RUN set -eu; \
     done; \
     rm -rf /tmp/fox-webui-patches
 
+# ── .fox-removals consumer (Phase 7 of v0.6.0 migration) ──────────────────────
+# Apply the .fox-removals manifest to /app/hermes-webui. Each line names a
+# fork-relative path Fox does NOT ship (e.g. upstream onboarding tests that
+# Fox replaced with its own wizard). xargs invokes rm -f so missing files
+# are silent (the file's load-bearing only at Phase 8 when the submodule
+# re-points at virgin upstream; pre-Phase-8 the entries are no-ops because
+# Fox already removed those files from the fork in past commits).
+#
+# Same parse convention as the webui patch series above: strip blanks +
+# comments via `grep -vE '^\s*$|^\s*#'`, strip CRLF, pass through xargs.
+COPY packages/fox-overlay/.fox-removals /tmp/fox-removals
+RUN set -eu; \
+    if [ "${FITB_DISABLE_WEBUI_OVERLAY}" = "1" ]; then \
+        echo "[fox-removals] FITB_DISABLE_WEBUI_OVERLAY=1 — skipping removals"; \
+        rm -f /tmp/fox-removals; \
+        exit 0; \
+    fi; \
+    cd /app/hermes-webui; \
+    removals=$(tr -d '\r' < /tmp/fox-removals | grep -vE '^\s*$|^\s*#' || true); \
+    if [ -z "$removals" ]; then \
+        echo "[fox-removals] manifest empty; nothing to remove"; \
+        rm -f /tmp/fox-removals; \
+        exit 0; \
+    fi; \
+    echo "$removals" | while IFS= read -r p; do \
+        [ -z "$p" ] && continue; \
+        if [ -e "$p" ]; then \
+            echo "[fox-removals] rm $p"; \
+            rm -f -- "$p"; \
+        else \
+            echo "[fox-removals] (absent — no-op) $p"; \
+        fi; \
+    done; \
+    rm -f /tmp/fox-removals
+
 RUN set -eux; \
     pip install -e /app/hermes-agent --quiet --no-cache-dir; \
     if [ -f /app/hermes-webui/pyproject.toml ] || [ -f /app/hermes-webui/setup.py ]; then \
