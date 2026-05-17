@@ -20,7 +20,10 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from api.onboarding import _write_env_key
+# Phase 7 (v0.6.0): _write_env_key moved from api.onboarding (fork removed
+# the file) to fox_overlay.webui_modules.onboarding. Same function, same
+# behavior — just relocated to the overlay package.
+from fox_overlay.webui_modules.onboarding import _write_env_key
 
 logger = logging.getLogger(__name__)
 
@@ -285,10 +288,9 @@ def handle_dismiss_hostname_prompt(handler, body: dict) -> dict[str, Any]:
 # /api/settings/hostname (GET + POST) and the /dismiss-prompt sub-path
 # (POST). Wrapper does its own boundary check.
 #
-# Pre-existing coupling: `from api.onboarding import _write_env_key`
-# at module top stays intact. Phase 7 (wholesale-replace onboarding
-# via overlay) will need to keep _write_env_key reachable or update
-# this import.
+# Phase 7 update: `_write_env_key` now imported from
+# fox_overlay.webui_modules.onboarding (was: api.onboarding before
+# fork removed the file in Phase 7a). Same function, no behavior change.
 # ──────────────────────────────────────────────────────────────────────
 from fox_overlay import dispatch  # noqa: E402
 
