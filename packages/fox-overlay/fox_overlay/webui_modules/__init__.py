@@ -13,3 +13,4 @@ coupling). See `docs/architecture/v0.6.0-github-breakdown-v2.md` §item
 14.
 """
 from . import ollama  # noqa: F401  -- registers /api/ollama/ at import
+from . import tailscale  # noqa: F401  -- registers /api/tailscale/ at import
