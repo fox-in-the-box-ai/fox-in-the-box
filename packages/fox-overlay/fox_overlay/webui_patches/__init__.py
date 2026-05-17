@@ -27,12 +27,13 @@ def apply_all() -> None:
     """Apply every Fox webui monkey-patch. Called once from bootstrap.install()."""
     from . import providers
     providers.apply()
+    from . import models
+    models.apply()
     # Phase 6 adds more modules here:
     # from . import streaming; streaming.apply()
-    # from . import models; models.apply()
     # from . import config; config.apply()
     # from . import updates; updates.apply()
     _log.warning(
         "[fox-overlay] webui_patches.apply_all() complete (%d patch modules)",
-        1,  # update as modules are added
+        2,  # update as modules are added
     )
