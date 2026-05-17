@@ -111,16 +111,19 @@ class _BootstrapState:
     frozen: bool = False
 
 
-def _validate_prefix(path_prefix: str) -> None:
+def _validate_prefix(path_prefix: str, allow_bare: bool = False) -> None:
     if not isinstance(path_prefix, str):
         raise TypeError(f"path_prefix must be str, got {type(path_prefix).__name__}")
     if not path_prefix.startswith("/"):
         raise ValueError(f"path_prefix must start with '/': {path_prefix!r}")
-    if not path_prefix.endswith("/"):
+    if not allow_bare and not path_prefix.endswith("/"):
         raise ValueError(
             f"path_prefix must end with '/' so startswith() can't match "
             f"adjacent paths (e.g. '/api/fox' matches '/api/fox-evil'): "
-            f"{path_prefix!r}"
+            f"{path_prefix!r}. If you need to dispatch both the bare path "
+            f"and sub-paths (e.g. /api/foo for list, /api/foo/<id> for item), "
+            f"pass allow_bare=True and do your own boundary check inside the "
+            f"handler."
         )
     if path_prefix == "/":
         raise ValueError("path_prefix '/' would shadow every upstream route")
@@ -134,13 +137,14 @@ def _validate_prefix(path_prefix: str) -> None:
             )
 
 
-def _register(table: dict[str, HandlerFn], path_prefix: str, handler: HandlerFn) -> None:
+def _register(table: dict[str, HandlerFn], path_prefix: str, handler: HandlerFn,
+              allow_bare: bool = False) -> None:
     if _BootstrapState.frozen:
         raise RuntimeError(
             f"dispatcher table frozen; register {path_prefix!r} during "
             f"fox_overlay.bootstrap, not after serve_forever()"
         )
-    _validate_prefix(path_prefix)
+    _validate_prefix(path_prefix, allow_bare=allow_bare)
     if path_prefix in table:
         logger.warning(
             "fox_overlay.dispatch: overwriting handler for %r "
@@ -158,14 +162,25 @@ def _register(table: dict[str, HandlerFn], path_prefix: str, handler: HandlerFn)
     table[path_prefix] = handler
 
 
-def register_get(path_prefix: str, handler: HandlerFn) -> None:
-    """Register a GET handler for the given path prefix."""
-    _register(_GET_TABLE, path_prefix, handler)
+def register_get(path_prefix: str, handler: HandlerFn, *, allow_bare: bool = False) -> None:
+    """Register a GET handler for the given path prefix.
+
+    ``allow_bare=True`` lets the prefix omit the trailing ``/``, which is
+    required for modules that need to handle BOTH a bare path (e.g.
+    ``/api/local-models`` for a list endpoint) AND sub-paths (e.g.
+    ``/api/local-models/<id>/progress``). In that mode, the handler MUST
+    do its own boundary check (reject paths like ``/api/local-modelsX``)
+    because ``startswith()`` cannot enforce the segment boundary alone.
+    """
+    _register(_GET_TABLE, path_prefix, handler, allow_bare=allow_bare)
 
 
-def register_post(path_prefix: str, handler: HandlerFn) -> None:
-    """Register a POST handler for the given path prefix."""
-    _register(_POST_TABLE, path_prefix, handler)
+def register_post(path_prefix: str, handler: HandlerFn, *, allow_bare: bool = False) -> None:
+    """Register a POST handler for the given path prefix.
+
+    See ``register_get`` for the ``allow_bare`` semantics.
+    """
+    _register(_POST_TABLE, path_prefix, handler, allow_bare=allow_bare)
 
 
 def freeze() -> None:
