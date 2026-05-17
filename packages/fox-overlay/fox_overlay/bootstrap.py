@@ -19,23 +19,40 @@ state isolation.
 """
 import logging
 import os
+import threading
 
 _log = logging.getLogger("fox_overlay.bootstrap")
 _INSTALLED = False
+_INSTALL_LOCK = threading.Lock()
 
 
 def install() -> None:
-    """Apply Fox overlay to a running hermes-webui process. Idempotent."""
+    """Apply Fox overlay to a running hermes-webui process. Idempotent + thread-safe."""
     global _INSTALLED
-    if _INSTALLED:
-        return
-    _INSTALLED = True
-    # Phase 5+ will import webui_modules here (e.g.
-    # `from fox_overlay import webui_modules`) so they can call
-    # register_get/post() at module-load time before freeze().
-    from fox_overlay import dispatch
-    dispatch.freeze()
-    _log.info("[fox-overlay] bootstrap installed (dispatcher frozen, table empty in Phase 4)")
+    with _INSTALL_LOCK:
+        if _INSTALLED:
+            return
+        # Phase 5+: import webui_modules — each sub-module calls
+        # dispatch.register_get/register_post() at module-load time. Wrap
+        # in ImportError so a missing sub-module surfaces as a warning but
+        # doesn't kill webui boot (matches the pattern in server.py and
+        # api/routes.py for the dispatcher hook itself).
+        try:
+            from fox_overlay import webui_modules  # noqa: F401
+        except ImportError as e:
+            _log.warning("[fox-overlay] webui_modules import failed (%s); Fox routes degraded", e)
+        from fox_overlay import dispatch
+        dispatch.freeze()
+        # WARNING level so the line surfaces in webui's default logging
+        # config — INFO is filtered by the stdlib default (WARNING) and
+        # hermes-webui doesn't call basicConfig. This line is the "did
+        # Fox load?" signal for ops smoke checks.
+        _log.warning(
+            "[fox-overlay] bootstrap installed: dispatcher frozen, "
+            "%d GET + %d POST handlers registered",
+            len(dispatch.GET_TABLE), len(dispatch.POST_TABLE),
+        )
+        _INSTALLED = True
 
 
 if os.environ.get("FOX_OVERLAY_AUTOINSTALL", "1") != "0":

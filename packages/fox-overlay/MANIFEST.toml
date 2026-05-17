@@ -38,3 +38,13 @@
 "fox_overlay.agent_plugins.fox_overlay_plugin.monkey_patches.auxiliary_client" = "fox-only-additive"
 "fox_overlay.agent_plugins.fox_overlay_plugin.monkey_patches.cron_diagnostics" = "fox-only-additive"
 "fox_overlay.agent_plugins.fox_overlay_plugin.monkey_patches._helpers" = "fox-only-additive"
+
+# Phase 4 — dispatcher mechanism + bootstrap.
+"fox_overlay.dispatch" = "fox-only-additive"  # /api/* dispatcher table called from patched routes.py
+"fox_overlay.bootstrap" = "fox-only-additive"  # imported by patched server.py to wire dispatcher
+
+# Phase 5 — additive webui modules. Each claims a /api/<prefix>/ at the
+# dispatcher; Phase 5 fork PRs `git rm` the corresponding api/<name>.py
+# from forks/hermes-webui and remove the inline routes.py blocks.
+"fox_overlay.webui_modules" = "fox-only-additive"
+"fox_overlay.webui_modules.ollama" = "fox-only-additive"  # claims /api/ollama/ (was forks/hermes-webui/api/ollama.py)
