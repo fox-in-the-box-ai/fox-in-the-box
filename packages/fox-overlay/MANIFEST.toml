@@ -48,3 +48,4 @@
 # from forks/hermes-webui and remove the inline routes.py blocks.
 "fox_overlay.webui_modules" = "fox-only-additive"
 "fox_overlay.webui_modules.ollama" = "fox-only-additive"  # claims /api/ollama/ (was forks/hermes-webui/api/ollama.py)
+"fox_overlay.webui_modules.tailscale" = "fox-only-additive"  # claims /api/tailscale/ (was forks/hermes-webui/api/tailscale.py)
