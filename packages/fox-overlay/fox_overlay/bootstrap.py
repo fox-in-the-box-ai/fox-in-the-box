@@ -32,15 +32,29 @@ def install() -> None:
     with _INSTALL_LOCK:
         if _INSTALLED:
             return
-        # Phase 5+: import webui_modules — each sub-module calls
+        # Phase 5: import webui_modules — each sub-module calls
         # dispatch.register_get/register_post() at module-load time. Wrap
         # in ImportError so a missing sub-module surfaces as a warning but
-        # doesn't kill webui boot (matches the pattern in server.py and
-        # api/routes.py for the dispatcher hook itself).
+        # doesn't kill webui boot.
         try:
             from fox_overlay import webui_modules  # noqa: F401
         except ImportError as e:
             _log.warning("[fox-overlay] webui_modules import failed (%s); Fox routes degraded", e)
+
+        # Phase 6: apply monkey-patches to upstream mid-file edits.
+        # Each patch is idempotent (sentinel attribute guard inside
+        # substitute_function). Wrap in Exception so a single patch
+        # failure (e.g. anchor drift) degrades that one patch but
+        # doesn't kill webui boot — the AssertionError detail still
+        # lands in webui stderr for ops to find.
+        try:
+            from fox_overlay import webui_patches
+            webui_patches.apply_all()
+        except ImportError as e:
+            _log.warning("[fox-overlay] webui_patches import failed (%s); Fox mid-file edits degraded", e)
+        except Exception as e:  # AssertionError on anchor drift, etc.
+            _log.warning("[fox-overlay] webui_patches.apply_all() failed (%s); some Fox mid-file edits degraded", e)
+
         from fox_overlay import dispatch
         dispatch.freeze()
         # WARNING level so the line surfaces in webui's default logging
