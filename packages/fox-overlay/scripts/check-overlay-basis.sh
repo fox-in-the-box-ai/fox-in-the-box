@@ -1,10 +1,114 @@
-#!/bin/bash
-# Detect upstream rename/delete of any file referenced in .fox-removals.
+#!/usr/bin/env bash
 #
-# Runs as a CI gate before the Docker build (wired in Phase 8). Failure
-# means the submodule pin needs to be rolled back to the previous tag
-# and the overlay/migration plan updated for the upstream restructure.
+# check-overlay-basis.sh — overlay basis sanity check for v0.6.0+.
 #
-# Phase 1: no-op stub returning 0. Phase 8 makes it real.
+# Detect upstream rename/delete of any file the overlay depends on:
+#
+# 1. .fox-removals entries — each path MUST exist in the webui submodule
+#    (otherwise the manifest is stale; upstream renamed/removed it out
+#    from under us, and the next container build silently won't perform
+#    the intended removal).
+# 2. patches/webui/series + patches/agent/series — each .patch MUST apply
+#    --check cleanly against the current submodule pointer (otherwise
+#    upstream's churn invalidated the anchor).
+#
+# Runs as a CI gate BEFORE the Docker build. Failure means: either
+# (a) the submodule pin needs to be rolled back to the previous tag
+# the overlay tracked, or (b) the manifest/patches need refresh for
+# the new upstream tag.
+#
+# Made real in Phase 8 follow-up #246 (was an empty `exit 0` stub
+# from Phase 1).
+#
+# Exit codes:
+#   0 = overlay basis is clean against current submodule pointers
+#   1 = at least one mismatch — diagnostics printed to stderr; CI fails
 
-exit 0
+set -eu
+
+REPO_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
+OVERLAY="$REPO_ROOT/packages/fox-overlay"
+WEBUI="$REPO_ROOT/forks/hermes-webui"
+AGENT="$REPO_ROOT/forks/hermes-agent"
+
+failed=0
+
+note() { printf '[check-overlay-basis] %s\n' "$*"; }
+fail() { printf '[check-overlay-basis] FAIL: %s\n' "$*" >&2; failed=1; }
+
+# ── 1. .fox-removals entries must exist in the webui submodule ──────────────
+removals_file="$OVERLAY/.fox-removals"
+if [ ! -f "$removals_file" ]; then
+    fail "missing manifest: $removals_file"
+else
+    note "checking .fox-removals entries against $WEBUI"
+    while IFS= read -r entry; do
+        # Strip blanks + comments (same convention as the Dockerfile consumer).
+        entry="${entry%%#*}"
+        entry="$(printf '%s' "$entry" | tr -d '\r' | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
+        [ -z "$entry" ] && continue
+        if [ ! -e "$WEBUI/$entry" ]; then
+            fail ".fox-removals entry missing in upstream: $entry"
+        fi
+    done < "$removals_file"
+fi
+
+# ── 2. webui patch series must apply --check against current submodule ──────
+webui_series="$OVERLAY/patches/webui/series"
+if [ -f "$webui_series" ]; then
+    note "checking webui patch series against $WEBUI ($(cd "$WEBUI" && git describe --tags --always 2>/dev/null || echo unknown))"
+    while IFS= read -r patch; do
+        patch="${patch%%#*}"
+        patch="$(printf '%s' "$patch" | tr -d '\r' | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
+        [ -z "$patch" ] && continue
+        patch_path="$OVERLAY/patches/webui/$patch"
+        if [ ! -f "$patch_path" ]; then
+            fail "webui series references missing patch: $patch"
+            continue
+        fi
+        if ! (cd "$WEBUI" && git apply --check "$patch_path") 2>/dev/null; then
+            fail "webui patch fails --check: $patch"
+            (cd "$WEBUI" && git apply --check "$patch_path" 2>&1 | sed 's/^/    /') >&2 || true
+        fi
+    done < "$webui_series"
+fi
+
+# ── 3. agent patch series must apply --check against current submodule ──────
+agent_series="$OVERLAY/patches/agent/series"
+if [ -f "$agent_series" ]; then
+    note "checking agent patch series against $AGENT ($(cd "$AGENT" && git describe --tags --always 2>/dev/null || echo unknown))"
+    while IFS= read -r patch; do
+        patch="${patch%%#*}"
+        patch="$(printf '%s' "$patch" | tr -d '\r' | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
+        [ -z "$patch" ] && continue
+        patch_path="$OVERLAY/patches/agent/$patch"
+        if [ ! -f "$patch_path" ]; then
+            fail "agent series references missing patch: $patch"
+            continue
+        fi
+        if ! (cd "$AGENT" && git apply --check "$patch_path") 2>/dev/null; then
+            fail "agent patch fails --check: $patch"
+            (cd "$AGENT" && git apply --check "$patch_path" 2>&1 | sed 's/^/    /') >&2 || true
+        fi
+    done < "$agent_series"
+fi
+
+if [ "$failed" -eq 0 ]; then
+    note "OK — overlay basis clean against current submodule pointers"
+    exit 0
+fi
+
+cat >&2 <<'BANNER'
+[check-overlay-basis] one or more overlay/submodule basis mismatches
+[check-overlay-basis] detected. Likely causes:
+[check-overlay-basis]   * Upstream churn since the last submodule bump
+[check-overlay-basis]     renamed/removed a file the overlay depends on.
+[check-overlay-basis]   * The submodule pointer was bumped without the
+[check-overlay-basis]     matching overlay refresh.
+[check-overlay-basis] Resolution:
+[check-overlay-basis]   * Revert the submodule pointer to the last clean tag
+[check-overlay-basis]     AND open an issue to refresh anchors/manifest, OR
+[check-overlay-basis]   * Refresh the failing anchor/manifest entry first,
+[check-overlay-basis]     then re-bump the submodule.
+BANNER
+exit 1
