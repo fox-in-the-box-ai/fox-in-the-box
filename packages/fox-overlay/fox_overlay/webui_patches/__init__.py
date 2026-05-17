@@ -37,10 +37,11 @@ def apply_all() -> None:
     providers.apply()
     from . import models
     models.apply()
+    from . import streaming
+    streaming.apply()
     # Phase 6 adds more modules here:
-    # from . import streaming; streaming.apply()
     # from . import updates; updates.apply()
     _log.warning(
         "[fox-overlay] webui_patches.apply_all() complete (%d patch modules)",
-        3,  # update as modules are added
+        4,  # update as modules are added
     )
