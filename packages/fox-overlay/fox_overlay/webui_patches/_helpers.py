@@ -25,6 +25,7 @@ present.
 """
 import inspect
 import logging
+import textwrap
 from types import ModuleType
 from typing import Any, Dict, Optional, Sequence, Tuple
 
@@ -95,5 +96,91 @@ def substitute_function(
         "[fox-overlay] patched %s.%s (%d substitutions)",
         upstream_module.__name__,
         function_name,
+        len(substitutions),
+    )
+
+
+def substitute_method(
+    upstream_module: ModuleType,
+    class_name: str,
+    method_name: str,
+    substitutions: Sequence[Tuple[str, str]],
+    sentinel: str,
+    extra_globals: Optional[Dict[str, Any]] = None,
+) -> None:
+    """Replace ``upstream_module.<class_name>.<method_name>`` with a patched version.
+
+    Class-method counterpart to :func:`substitute_function`.
+    ``inspect.getsource(SomeClass.method)`` returns the method body with
+    the surrounding class indentation (4 spaces); raw substitution
+    anchors must match that indentation. After all substitutions are
+    applied, the source is uniformly dedented (via :func:`textwrap.dedent`)
+    so :func:`compile` accepts it at module scope.
+
+    The Phase 3 ``dedent normalizes blank lines, breaking anchors``
+    warning does NOT apply here — dedent runs AFTER anchor matching is
+    complete, so any whitespace normalization can't break anchors.
+
+    The patched method is assigned to the class (not the module) via
+    :func:`setattr` on ``getattr(upstream_module, class_name)``.
+    Idempotency sentinel and ``extra_globals`` semantics match
+    ``substitute_function``.
+    """
+    cls = getattr(upstream_module, class_name)
+    # Read the raw descriptor (classmethod/staticmethod/function) rather
+    # than the resolved attribute — the resolved attribute strips the
+    # classmethod wrapper and we'd lose our sentinel after re-assignment.
+    raw_descriptor = vars(cls).get(method_name)
+    upstream_method = raw_descriptor if raw_descriptor is not None else getattr(cls, method_name)
+    # Sentinel may live on the descriptor OR on its underlying __func__.
+    if getattr(upstream_method, sentinel, False) or getattr(
+        getattr(upstream_method, "__func__", upstream_method), sentinel, False
+    ):
+        return
+
+    # inspect.getsource works on either the descriptor or the bound resolution.
+    src = inspect.getsource(getattr(cls, method_name))
+
+    for idx, (old, new) in enumerate(substitutions):
+        count = src.count(old)
+        if count != 1:
+            raise AssertionError(
+                "[fox-overlay] monkey-patch %s.%s.%s substitution #%d: "
+                "anchor expected EXACTLY ONCE, found %dx. Upstream may have "
+                "refactored this method — refresh the anchor in the "
+                "fox-overlay webui_patches module. Anchor:\n%s"
+                % (upstream_module.__name__, class_name, method_name, idx + 1, count, old)
+            )
+        src = src.replace(old, new)
+
+    # Dedent so compile() accepts the method source at module scope.
+    # Safe to dedent here — anchor matching is already complete above.
+    src = textwrap.dedent(src)
+
+    namespace = dict(upstream_module.__dict__)
+    if extra_globals:
+        namespace.update(extra_globals)
+    code = compile(
+        src,
+        "<fox-overlay %s.%s.%s>" % (upstream_module.__name__, class_name, method_name),
+        "exec",
+    )
+    exec(code, namespace)  # noqa: S102
+
+    patched_method = namespace[method_name]
+    # If the patched result is a descriptor (e.g. classmethod), set the
+    # sentinel on its underlying function so the next apply() can detect
+    # the already-patched state — descriptor lookup via cls.method
+    # returns the underlying function, not the descriptor, so a sentinel
+    # set on the descriptor alone is invisible.
+    sentinel_target = getattr(patched_method, "__func__", patched_method)
+    setattr(sentinel_target, sentinel, True)
+    setattr(cls, method_name, patched_method)
+
+    _log.info(
+        "[fox-overlay] patched %s.%s.%s (%d substitutions)",
+        upstream_module.__name__,
+        class_name,
+        method_name,
         len(substitutions),
     )

@@ -60,3 +60,4 @@
 "fox_overlay.webui_patches" = "fox-only-additive"  # apply_all() called from bootstrap
 "fox_overlay.webui_patches._helpers" = "fox-only-additive"  # substitute_function (webui-side; mirror of agent_plugins helper)
 "fox_overlay.webui_patches.providers" = "fox-only-additive"  # patches api.providers.set_provider_key — adds gateway hot-reload
+"fox_overlay.webui_patches.models" = "fox-only-additive"  # patches api.models.Session.{save,load_metadata_only} + new_session — #1558 P0 guard + .bak backup + project_id pass-through
