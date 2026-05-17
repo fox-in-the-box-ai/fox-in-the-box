@@ -35,13 +35,14 @@ def apply_all() -> None:
     config.apply()
     from . import providers
     providers.apply()
-    from . import models
-    models.apply()
+    # models.py patch removed in Phase 8 follow-up #239 — upstream v0.51.84
+    # now provides Fox's #1558 P0 guard + .bak backup + load_metadata_only
+    # flag setter NATIVELY (Phase 0 PR campaign success, or upstream
+    # independent reimplementation; either way the monkey-patch is
+    # redundant against current upstream).
     from . import streaming
     streaming.apply()
-    # Phase 6 adds more modules here:
-    # from . import updates; updates.apply()
     _log.warning(
         "[fox-overlay] webui_patches.apply_all() complete (%d patch modules)",
-        4,  # update as modules are added
+        3,  # config + providers + streaming (models patch removed; updates DELETE PATH per Phase 6)
     )
