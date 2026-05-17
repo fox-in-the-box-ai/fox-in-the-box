@@ -1,0 +1,38 @@
+diff --git a/gateway/run.py b/gateway/run.py
+index f9a282a41..aad5d58cb 100644
+--- a/gateway/run.py
++++ b/gateway/run.py
+@@ -3497,6 +3497,33 @@ class GatewayRunner:
+                 exc_info=True,
+             )
+ 
++        # === FITB ===
++        # Trigger fox-overlay's agent plugins so the monkey-patches and
++        # mem0_oss plugin actually fire at gateway boot. Upstream's
++        # PluginManager (which discovers hermes_agent.plugins entry-points)
++        # is invoked only from `hermes` CLI commands, not from this gateway
++        # startup path. Bootstrap shim restores the Phase 3 behavior on
++        # virgin upstream content (post-Phase-8 re-point).
++        #
++        # Set FITB_DISABLE_AGENT_OVERLAY=1 to disable in production without
++        # rebuilding the image.
++        if os.environ.get("FITB_DISABLE_AGENT_OVERLAY", "").lower() not in ("1", "true", "yes"):
++            try:
++                from fox_overlay.agent_plugins import register as _fitb_register
++                _fitb_register(None)
++            except ImportError:
++                logger.debug(
++                    "fox-overlay not installed; skipping agent-plugin bootstrap"
++                )
++            except Exception:
++                logger.warning(
++                    "fox-overlay agent-plugin bootstrap failed; gateway will "
++                    "boot without Fox monkey-patches (target_model fix, "
++                    "auxiliary.default fallback, cron failure diagnostics)",
++                    exc_info=True,
++                )
++        # === /FITB ===
++
+         # Discover and load event hooks
+         self.hooks.discover_and_load()
+ 
