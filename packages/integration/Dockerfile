@@ -236,6 +236,37 @@ RUN set -eu; \
     done; \
     rm -rf /tmp/fox-agent-patches
 
+# ── Fox agent memory plugins (Phase 8 of v0.6.0 migration) ───────────────────
+# COPY Fox-only memory provider plugins into upstream agent's
+# `plugins/memory/` directory. Upstream hermes-agent discovers memory
+# providers via directory-scan (separate path from the entry-point
+# discovery used for general plugins) — see Phase 3 deferral note in
+# fox_overlay/MANIFEST.toml. Each subdirectory under
+# packages/fox-overlay/agent_memory_plugins/ becomes a sibling of
+# upstream's plugins/memory/byterover, /hindsight, etc.
+#
+# FITB_DISABLE_AGENT_OVERLAY=1 short-circuits this step too (consistent
+# with the agent patch series above).
+COPY packages/fox-overlay/agent_memory_plugins /tmp/fox-agent-mem-plugins
+RUN set -eu; \
+    if [ "${FITB_DISABLE_AGENT_OVERLAY}" = "1" ]; then \
+        echo "[fox-mem] FITB_DISABLE_AGENT_OVERLAY=1 — skipping agent memory plugins"; \
+        rm -rf /tmp/fox-agent-mem-plugins; \
+        exit 0; \
+    fi; \
+    target=/app/hermes-agent/plugins/memory; \
+    if [ ! -d "$target" ]; then \
+        echo "::error::upstream agent missing plugins/memory/ directory — refused to create"; \
+        exit 1; \
+    fi; \
+    for src in /tmp/fox-agent-mem-plugins/*/; do \
+        [ -d "$src" ] || continue; \
+        name=$(basename "$src"); \
+        echo "[fox-mem] installing $name → $target/"; \
+        cp -R "$src" "$target/"; \
+    done; \
+    rm -rf /tmp/fox-agent-mem-plugins
+
 # ── .fox-removals consumer (Phase 7 of v0.6.0 migration) ──────────────────────
 # Apply the .fox-removals manifest to /app/hermes-webui. Each line names a
 # fork-relative path Fox does NOT ship (e.g. upstream onboarding tests that
