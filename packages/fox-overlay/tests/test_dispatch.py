@@ -47,6 +47,55 @@ def test_register_rejects_prefix_without_trailing_slash(dispatch):
         dispatch.register_get("/api/fox", lambda h, p: True)
 
 
+def test_register_allow_bare_accepts_no_trailing_slash(dispatch):
+    """allow_bare=True lets a module register a path that handles both
+    the bare path and sub-paths (e.g. /api/local-models for list +
+    /api/local-models/<id>/progress for SSE)."""
+    dispatch.register_get("/api/local-models", lambda h, p: True, allow_bare=True)
+    assert "/api/local-models" in dispatch.GET_TABLE
+
+
+def test_register_allow_bare_post(dispatch):
+    dispatch.register_post("/api/local-models", lambda h, p: True, allow_bare=True)
+    assert "/api/local-models" in dispatch.POST_TABLE
+
+
+def test_register_allow_bare_still_rejects_other_violations(dispatch):
+    """allow_bare doesn't bypass other validations."""
+    with pytest.raises(ValueError, match="must start with '/'"):
+        dispatch.register_get("api/foo", lambda h, p: True, allow_bare=True)
+    with pytest.raises(ValueError, match="shadow every upstream route"):
+        dispatch.register_get("/", lambda h, p: True, allow_bare=True)
+    with pytest.raises(ValueError, match="auth-public namespace"):
+        dispatch.register_get("/login", lambda h, p: True, allow_bare=True)
+
+
+def test_allow_bare_prefix_matches_both_bare_and_subpath(dispatch):
+    """startswith() semantics: bare-prefix matches both '/foo' and '/foo/...'.
+    Handler is responsible for distinguishing and for rejecting '/fooX'."""
+    from urllib.parse import urlparse
+    calls = []
+    def h(handler, parsed):
+        calls.append(parsed.path)
+        # Boundary check: accept exact bare OR /api/local-models/...
+        if parsed.path == "/api/local-models":
+            return True
+        if parsed.path.startswith("/api/local-models/"):
+            return True
+        return False  # /api/local-modelsX etc.
+
+    dispatch.register_get("/api/local-models", h, allow_bare=True)
+    assert dispatch.handle_get(None, urlparse("/api/local-models")) is True
+    assert dispatch.handle_get(None, urlparse("/api/local-models/foo/progress")) is True
+    # Boundary attack: must NOT match /api/local-modelsX
+    assert dispatch.handle_get(None, urlparse("/api/local-modelsX")) is False
+    assert calls == [
+        "/api/local-models",
+        "/api/local-models/foo/progress",
+        "/api/local-modelsX",  # handler called, but returned False
+    ]
+
+
 def test_register_rejects_root_prefix(dispatch):
     with pytest.raises(ValueError, match="shadow every upstream route"):
         dispatch.register_get("/", lambda h, p: True)

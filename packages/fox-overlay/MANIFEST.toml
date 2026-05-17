@@ -50,3 +50,4 @@
 "fox_overlay.webui_modules.ollama" = "fox-only-additive"  # claims /api/ollama/ (was forks/hermes-webui/api/ollama.py)
 "fox_overlay.webui_modules.tailscale" = "fox-only-additive"  # claims /api/tailscale/ (was forks/hermes-webui/api/tailscale.py)
 "fox_overlay.webui_modules.local_fallback" = "fox-only-additive"  # claims /api/local-fallback/ (was forks/hermes-webui/api/local_fallback.py)
+"fox_overlay.webui_modules.models_download" = "fox-only-additive"  # claims /api/local-models (bare + sub-paths) (was forks/hermes-webui/api/models_download.py)
