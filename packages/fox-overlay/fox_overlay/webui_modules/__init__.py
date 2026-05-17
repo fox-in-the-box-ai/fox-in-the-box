@@ -14,3 +14,4 @@ coupling). See `docs/architecture/v0.6.0-github-breakdown-v2.md` §item
 """
 from . import ollama  # noqa: F401  -- registers /api/ollama/ at import
 from . import tailscale  # noqa: F401  -- registers /api/tailscale/ at import
+from . import local_fallback  # noqa: F401  -- registers /api/local-fallback/ at import
