@@ -1,0 +1,6 @@
+name: mem0_oss
+version: 1.0.0
+description: "Mem0 OSS — self-hosted LLM fact extraction with local Qdrant vector store. No cloud account required."
+pip_dependencies:
+  - mem0ai
+  - qdrant-client

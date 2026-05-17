@@ -30,13 +30,12 @@
 # the `hermes_agent.plugins` entry-point group.
 # Phase 5 and Phase 6 add webui-side entries below.
 #
-# mem0_oss relocation deferred: Engineer discovered during Phase 3b PR
-# review that upstream's memory-provider discovery is a separate
-# directory-scan path (plugins/memory/__init__.py) with its own
-# FakePluginContext exposing register_memory_provider — incompatible
-# with the standard PluginContext that entry-points use. mem0_oss
-# remains a bundled fork plugin until a dedicated future phase
-# properly relocates memory providers.
+# mem0_oss relocation completed in Phase 8 follow-up #243 (2026-05-17):
+# Files live at packages/fox-overlay/agent_memory_plugins/mem0_oss/ and
+# get COPYd into /app/hermes-agent/plugins/memory/mem0_oss/ at Docker
+# build time by a dedicated RUN block. Upstream's directory-scan memory-
+# provider discovery picks them up natively — no entry-point coupling.
+# FITB_DISABLE_AGENT_OVERLAY=1 also short-circuits this step.
 "fox_overlay.agent_plugins" = "fox-only-additive"  # register(ctx) entry-point
 "fox_overlay.agent_plugins.fox_overlay_plugin.monkey_patches.runtime_provider" = "fox-only-additive"
 "fox_overlay.agent_plugins.fox_overlay_plugin.monkey_patches.auxiliary_client" = "fox-only-additive"
@@ -69,3 +68,10 @@
 # #1558 P0 guard + .bak backup + load_metadata_only flag setter natively.
 "fox_overlay.webui_patches.config" = "fox-only-additive"  # patches api.config — Fox _SETTINGS_DEFAULTS + _SETTINGS_BOOL_KEYS + get_config mtime invalidation + reload_config models-cache eviction + save_settings TS/Ollama validation + bool-string coercion
 "fox_overlay.webui_patches.streaming" = "fox-only-additive"  # patches api.streaming — adds _FAILOVER_ELIGIBLE_TYPES + _attempt_failover (#129b silent failover); 6 substitutions in _run_agent_streaming for FITB#9 local-fallback plumbing + FITB#89 mid-stream break + FITB#129b apperror gating
+
+# Phase 8 — Fox-only agent memory providers (Phase 3 deferral closed in #243).
+# Copied into /app/hermes-agent/plugins/memory/ at Docker build time;
+# upstream's directory-scan discovery picks them up natively.
+"agent_memory_plugins/mem0_oss/__init__.py" = "fox-only-additive"  # 1011 LOC mem0ai-backed memory provider
+"agent_memory_plugins/mem0_oss/plugin.yaml" = "fox-only-additive"
+"agent_memory_plugins/mem0_oss/README.md" = "fox-only-additive"
