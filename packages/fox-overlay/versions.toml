@@ -1,0 +1,22 @@
+# Pinned upstream versions for v0.6.0 onwards.
+#
+# Phase 9 nightly upstream-watch CI (#201/#202) diffs HEAD vs these
+# entries to surface available updates. Phase 8 ATOMIC ships with the
+# tag pair below; subsequent submodule bumps update this file to
+# document the new pin.
+#
+# Format: TOML for trivial parsing from shell (`grep`/`awk`) AND from
+# Python (`tomllib` stdlib in 3.11+). Keep keys lowercase + snake_case
+# for shell-friendly grepping.
+
+[upstream]
+hermes_webui_tag = "v0.51.84"
+hermes_webui_url = "https://github.com/nesquena/hermes-webui"
+hermes_agent_tag = "v2026.5.16"
+hermes_agent_url = "https://github.com/NousResearch/hermes-agent"
+
+[meta]
+pinned_at = "2026-05-17"
+pinned_in_pr = "fox-in-the-box-ai/fox-in-the-box#237"  # Phase 8 ATOMIC
+phase = "Phase 8"
+notes = "First overlay-based pin. Webui patch series + agent bootstrap shim verified clean against this pair."
