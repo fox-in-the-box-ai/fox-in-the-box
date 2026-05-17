@@ -1,10 +1,10 @@
 [submodule "forks/hermes-agent"]
 	path = forks/hermes-agent
-	url = https://github.com/fox-in-the-box-ai/hermes-agent.git
+	url = https://github.com/NousResearch/hermes-agent.git
 	branch = main
 [submodule "forks/hermes-webui"]
 	path = forks/hermes-webui
-	url = https://github.com/fox-in-the-box-ai/hermes-webui.git
+	url = https://github.com/nesquena/hermes-webui.git
 	branch = master
 [submodule "forks/figma-mcp"]
 	path = forks/figma-mcp

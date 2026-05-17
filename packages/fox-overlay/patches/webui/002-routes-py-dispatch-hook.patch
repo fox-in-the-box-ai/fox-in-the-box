@@ -1,8 +1,8 @@
 diff --git a/api/routes.py b/api/routes.py
-index 97be718..4f3c677 100644
+index 93900d7..0e26b1d 100644
 --- a/api/routes.py
 +++ b/api/routes.py
-@@ -1503,6 +1503,14 @@ def _handle_insights(handler, parsed) -> bool:
+@@ -3261,6 +3261,14 @@ def _serve_manifest(handler) -> bool:
  def handle_get(handler, parsed) -> bool:
      """Handle all GET routes. Returns True if handled, False for 404."""
  
@@ -17,9 +17,9 @@ index 97be718..4f3c677 100644
      if parsed.path.startswith("/session/static/"):
          # Strip the leading "/session" so _serve_static() sees a path that
          # starts with "/static/" (its required prefix). _serve_static enforces
-@@ -2343,6 +2351,14 @@ def handle_post(handler, parsed) -> bool:
-     if not _check_csrf(handler):
-         return j(handler, {"error": "Cross-origin request rejected"}, status=403)
+@@ -4328,6 +4336,14 @@ def handle_post(handler, parsed) -> bool:
+             if diag:
+                 diag.finish()
  
 +    try:
 +        from fox_overlay.dispatch import handle_post as _fox_post
