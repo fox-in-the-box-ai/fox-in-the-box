@@ -65,6 +65,7 @@
 "fox_overlay.webui_patches" = "fox-only-additive"  # apply_all() called from bootstrap
 "fox_overlay.webui_patches._helpers" = "fox-only-additive"  # substitute_function (webui-side; mirror of agent_plugins helper)
 "fox_overlay.webui_patches.providers" = "fox-only-additive"  # patches api.providers.set_provider_key — adds gateway hot-reload
-"fox_overlay.webui_patches.models" = "fox-only-additive"  # patches api.models.Session.{save,load_metadata_only} + new_session — #1558 P0 guard + .bak backup + project_id pass-through
+# Phase 8 follow-up #239: models patch removed — upstream v0.51.84 provides
+# #1558 P0 guard + .bak backup + load_metadata_only flag setter natively.
 "fox_overlay.webui_patches.config" = "fox-only-additive"  # patches api.config — Fox _SETTINGS_DEFAULTS + _SETTINGS_BOOL_KEYS + get_config mtime invalidation + reload_config models-cache eviction + save_settings TS/Ollama validation + bool-string coercion
 "fox_overlay.webui_patches.streaming" = "fox-only-additive"  # patches api.streaming — adds _FAILOVER_ELIGIBLE_TYPES + _attempt_failover (#129b silent failover); 6 substitutions in _run_agent_streaming for FITB#9 local-fallback plumbing + FITB#89 mid-stream break + FITB#129b apperror gating
