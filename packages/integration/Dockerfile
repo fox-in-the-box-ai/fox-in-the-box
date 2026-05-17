@@ -138,16 +138,20 @@ RUN set -eux; \
     fi; \
     chown -R foxinthebox:foxinthebox /app/hermes-agent /app/hermes-webui
 
-# ── Fox overlay: static files (Phase 2 of v0.6.0 migration) ───────────────────
-# webui_static/ holds Fox-only assets relocated out of the fork's static/ tree.
-# Upstream's api/extensions.py serves these under /extensions/ and injects the
-# CSS/JS tags into index.html at request time from the ENV-configured URL lists.
-# Cap is 32 URLs per env var; comma-separated. Order preserved from the pre-Phase-2
-# fork index.html script tags.
+# ── Fox overlay: install package + serve static via api/extensions.py ─────────
+# Phase 3 of v0.6.0 migration: COPY the whole overlay (Python modules + static
+# webui assets) and pip install -e it. The pip install registers fox-overlay
+# for import — the hermes_agent.plugins entry-points in fox-overlay's
+# pyproject.toml wire into hermes-agent's PluginManager so register(ctx) fires
+# at agent startup (applies the 3 monkey-patches: target_model fix, auxiliary
+# default fallback, cron failure diagnostics). The same COPY makes
+# webui_static/ available for the Phase-2 HERMES_WEBUI_EXTENSION_DIR-based
+# static-asset serving.
 #
-# Placed AFTER `pip install` so static-asset edits (frequent during Phase 7 UI
-# work) do not invalidate the slow pip install layer cache.
-COPY packages/fox-overlay/webui_static /app/fox-overlay/webui_static
+# Placed AFTER the upstream pip install so static-asset OR overlay-code edits
+# don't invalidate the (slow) upstream pip install layer cache.
+COPY packages/fox-overlay /app/fox-overlay
+RUN pip install --no-cache-dir -e /app/fox-overlay
 ENV HERMES_WEBUI_EXTENSION_DIR=/app/fox-overlay/webui_static \
     HERMES_WEBUI_EXTENSION_SCRIPT_URLS=/extensions/onboarding-preview.js,/extensions/fox-overlay.js,/extensions/hostname-prompt.js,/extensions/fallback-polish.js \
     HERMES_WEBUI_EXTENSION_STYLESHEET_URLS=/extensions/fox-in-the-box.css

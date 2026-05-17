@@ -6,7 +6,12 @@ requires-python = ">=3.11"
 dependencies = []
 
 [project.entry-points."hermes_agent.plugins"]
-# fox_overlay = "fox_overlay:register"   # commented until Phase 3
+# Discovered by hermes_cli.plugins.PluginManager.discover_and_load via
+# importlib.metadata.entry_points(group="hermes_agent.plugins"). Each
+# entry-point points at a `register(ctx: PluginContext) -> None` callable
+# that hermes-agent invokes once per process at plugin-load time.
+fox_overlay = "fox_overlay.agent_plugins:register"
+mem0_oss = "fox_overlay.agent_plugins.mem0_oss:register"
 
 [build-system]
 requires = ["setuptools>=68", "wheel"]
