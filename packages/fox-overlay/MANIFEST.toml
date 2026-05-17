@@ -52,3 +52,11 @@
 "fox_overlay.webui_modules.local_fallback" = "fox-only-additive"  # claims /api/local-fallback/ (was forks/hermes-webui/api/local_fallback.py)
 "fox_overlay.webui_modules.models_download" = "fox-only-additive"  # claims /api/local-models (bare + sub-paths) (was forks/hermes-webui/api/models_download.py)
 "fox_overlay.webui_modules.hostname" = "fox-only-additive"  # claims /api/settings/hostname (bare + /dismiss-prompt) (was forks/hermes-webui/api/hostname.py)
+
+# Phase 6 — webui mid-file monkey-patches. Fork files are restored to
+# virgin upstream content; these modules re-apply Fox behavior at runtime
+# via inspect.getsource + anchored textual substitution. Anchor drift
+# fails fast at boot — Phase 9 nightly upstream-watch catches it earlier.
+"fox_overlay.webui_patches" = "fox-only-additive"  # apply_all() called from bootstrap
+"fox_overlay.webui_patches._helpers" = "fox-only-additive"  # substitute_function (webui-side; mirror of agent_plugins helper)
+"fox_overlay.webui_patches.providers" = "fox-only-additive"  # patches api.providers.set_provider_key — adds gateway hot-reload
