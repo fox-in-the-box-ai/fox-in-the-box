@@ -22,4 +22,19 @@
 "hostname-prompt.js" = "fox-only"
 
 [python]
-# Filled in Phase 5 (additive webui modules) and Phase 6 (mid-file monkey-patches).
+# Phase 3 — agent-side overlay. Three monkey-patch modules applied via
+# the `hermes_agent.plugins` entry-point group.
+# Phase 5 and Phase 6 add webui-side entries below.
+#
+# mem0_oss relocation deferred: Engineer discovered during Phase 3b PR
+# review that upstream's memory-provider discovery is a separate
+# directory-scan path (plugins/memory/__init__.py) with its own
+# FakePluginContext exposing register_memory_provider — incompatible
+# with the standard PluginContext that entry-points use. mem0_oss
+# remains a bundled fork plugin until a dedicated future phase
+# properly relocates memory providers.
+"fox_overlay.agent_plugins" = "fox-only-additive"  # register(ctx) entry-point
+"fox_overlay.agent_plugins.fox_overlay_plugin.monkey_patches.runtime_provider" = "fox-only-additive"
+"fox_overlay.agent_plugins.fox_overlay_plugin.monkey_patches.auxiliary_client" = "fox-only-additive"
+"fox_overlay.agent_plugins.fox_overlay_plugin.monkey_patches.cron_diagnostics" = "fox-only-additive"
+"fox_overlay.agent_plugins.fox_overlay_plugin.monkey_patches._helpers" = "fox-only-additive"

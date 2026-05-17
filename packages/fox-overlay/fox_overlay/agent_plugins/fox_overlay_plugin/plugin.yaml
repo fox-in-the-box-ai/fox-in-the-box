@@ -1,0 +1,4 @@
+name: fox_overlay
+version: 0.0.1
+kind: backend
+description: "Fox in the Box overlay — agent-side monkey-patches that restore Fox bug fixes (target_model Bedrock fix, auxiliary.default fallback, cron failure diagnostics) on top of virgin upstream hermes-agent. v0.6.0 upstream-separation migration."
