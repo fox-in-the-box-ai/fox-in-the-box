@@ -1,2 +1,3 @@
 # Intentionally empty — hermes-agent customizations live as monkey-patches via
 # the hermes_agent.plugins entry-point (Phase 3), not as patch-series files.
+001-gateway-bootstrap-shim.patch

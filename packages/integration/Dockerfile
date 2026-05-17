@@ -190,6 +190,52 @@ RUN set -eu; \
     done; \
     rm -rf /tmp/fox-webui-patches
 
+# ── Fox agent patch series (Phase 8 of v0.6.0 migration) ─────────────────────
+# Mirrors the webui patch series above. First non-empty consumer of the
+# agent series at Phase 8: the gateway/run.py bootstrap shim that calls
+# fox_overlay.agent_plugins.register() — without this, hermes-agent's
+# PluginManager.discover_and_load() is only invoked from `hermes` CLI
+# commands (not from the gateway startup path), so Phase 3 monkey-patches
+# never fire when running as a daemon.
+#
+# FITB_DISABLE_AGENT_OVERLAY=1 short-circuits both the patch loop here
+# AND the patched shim's runtime path (gated by env var inside the shim).
+ARG FITB_DISABLE_AGENT_OVERLAY=0
+COPY packages/fox-overlay/patches/agent /tmp/fox-agent-patches
+RUN set -eu; \
+    if [ "${FITB_DISABLE_AGENT_OVERLAY}" = "1" ]; then \
+        echo "[fox-patch] FITB_DISABLE_AGENT_OVERLAY=1 — skipping agent patch series"; \
+        rm -rf /tmp/fox-agent-patches; \
+        exit 0; \
+    fi; \
+    cd /app/hermes-agent; \
+    rm -f .git; \
+    series_file=/tmp/fox-agent-patches/series; \
+    if [ ! -f "$series_file" ]; then \
+        echo "[fox-patch] no agent series — skipping"; \
+        rm -rf /tmp/fox-agent-patches; \
+        exit 0; \
+    fi; \
+    patches=$(tr -d '\r' < "$series_file" | grep -vE '^\s*$|^\s*#' || true); \
+    if [ -z "$patches" ]; then \
+        echo "[fox-patch] agent series file empty; nothing to apply"; \
+        rm -rf /tmp/fox-agent-patches; \
+        exit 0; \
+    fi; \
+    echo "$patches" | while IFS= read -r p; do \
+        [ -z "$p" ] && continue; \
+        echo "[fox-patch] applying agent/$p"; \
+        if ! err=$(git apply --check "/tmp/fox-agent-patches/$p" 2>&1); then \
+            echo "::error::patch agent/$p failed --check"; \
+            echo "----- git apply --check output -----"; \
+            echo "$err"; \
+            echo "------------------------------------"; \
+            exit 1; \
+        fi; \
+        git apply "/tmp/fox-agent-patches/$p"; \
+    done; \
+    rm -rf /tmp/fox-agent-patches
+
 # ── .fox-removals consumer (Phase 7 of v0.6.0 migration) ──────────────────────
 # Apply the .fox-removals manifest to /app/hermes-webui. Each line names a
 # fork-relative path Fox does NOT ship (e.g. upstream onboarding tests that
