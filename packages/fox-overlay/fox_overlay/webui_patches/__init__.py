@@ -24,16 +24,23 @@ _log = logging.getLogger("fox_overlay.webui_patches")
 
 
 def apply_all() -> None:
-    """Apply every Fox webui monkey-patch. Called once from bootstrap.install()."""
+    """Apply every Fox webui monkey-patch. Called once from bootstrap.install().
+
+    Ordering: config FIRST per issue #190 — Phase 5 webui modules read
+    settings whose defaults config.py provides. (For Phase 6 internal
+    ordering only — historical providers/models PRs already shipped and
+    don't read config keys.)
+    """
+    from . import config
+    config.apply()
     from . import providers
     providers.apply()
     from . import models
     models.apply()
     # Phase 6 adds more modules here:
     # from . import streaming; streaming.apply()
-    # from . import config; config.apply()
     # from . import updates; updates.apply()
     _log.warning(
         "[fox-overlay] webui_patches.apply_all() complete (%d patch modules)",
-        2,  # update as modules are added
+        3,  # update as modules are added
     )
