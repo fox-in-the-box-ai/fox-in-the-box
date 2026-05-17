@@ -126,6 +126,70 @@ RUN chmod +x /app/scripts/*.sh
 # ── Hermes app source (git submodules — init before build) ─────────────────────
 COPY forks/hermes-agent /app/hermes-agent
 COPY forks/hermes-webui /app/hermes-webui
+
+# ── Fox webui patch series (Phase 4 of v0.6.0 migration) ──────────────────────
+# Apply the patch series to /app/hermes-webui BEFORE pip install so the editable
+# install registers the patched source. Submodule COPY brings in a `.git`
+# gitlink file pointing at the superproject's .git/modules/... which doesn't
+# exist in the container; `git apply` chokes on the broken pointer. The
+# gitlink is useless inside the container anyway (nothing reads it), so we
+# delete it before the apply loop — no rename/restore dance, no half-state
+# risk if a patch fails mid-loop.
+#
+# `git apply --check` runs first on every patch — fuzz-tolerance failure
+# surfaces here as a build-time error with a readable diagnostic rather than
+# silently degrading runtime behavior. Phase 9 nightly upstream-watch CI uses
+# the same `--check` against new upstream tags.
+#
+# FITB_DISABLE_WEBUI_OVERLAY=1 short-circuits the entire patch loop.
+# Useful for bisecting overlay-induced regressions (compare patched vs
+# vanilla container behavior) and for emergency rollback if a fresh
+# upstream tag breaks anchor matching before the patches have been
+# regenerated. The dispatcher hook in api/routes.py is the only runtime
+# coupling; routes.py without it is just Fox's routes.py which works
+# fine without the dispatcher (no Phase 5+ overlay handlers, but Fox's
+# fork-side handlers still serve every existing route).
+#
+# Submodule pointer drift: any drift surfaces as a `git apply --check`
+# anchor mismatch with the verbose error block below. Stronger pre-flight
+# (assert submodule SHA matches a build-arg) is not feasible inside the
+# container because the COPY'd submodule's `.git` is a broken gitlink.
+# Monorepo CI is the right gate — it runs `git submodule status` before
+# docker build; a stale submodule fails the workflow before we get here.
+ARG FITB_DISABLE_WEBUI_OVERLAY=0
+COPY packages/fox-overlay/patches/webui /tmp/fox-webui-patches
+RUN set -eu; \
+    if [ "${FITB_DISABLE_WEBUI_OVERLAY}" = "1" ]; then \
+        echo "[fox-patch] FITB_DISABLE_WEBUI_OVERLAY=1 — skipping webui patch series"; \
+        rm -rf /tmp/fox-webui-patches; \
+        exit 0; \
+    fi; \
+    cd /app/hermes-webui; \
+    rm -f .git; \
+    series_file=/tmp/fox-webui-patches/series; \
+    if [ ! -f "$series_file" ]; then \
+        echo "::error::missing series file: $series_file"; exit 1; \
+    fi; \
+    patches=$(tr -d '\r' < "$series_file" | grep -vE '^\s*$|^\s*#' || true); \
+    if [ -z "$patches" ]; then \
+        echo "[fox-patch] series file empty; nothing to apply"; \
+        rm -rf /tmp/fox-webui-patches; \
+        exit 0; \
+    fi; \
+    echo "$patches" | while IFS= read -r p; do \
+        [ -z "$p" ] && continue; \
+        echo "[fox-patch] applying webui/$p"; \
+        if ! err=$(git apply --check "/tmp/fox-webui-patches/$p" 2>&1); then \
+            echo "::error::patch webui/$p failed --check"; \
+            echo "----- git apply --check output -----"; \
+            echo "$err"; \
+            echo "------------------------------------"; \
+            exit 1; \
+        fi; \
+        git apply "/tmp/fox-webui-patches/$p"; \
+    done; \
+    rm -rf /tmp/fox-webui-patches
+
 RUN set -eux; \
     pip install -e /app/hermes-agent --quiet --no-cache-dir; \
     if [ -f /app/hermes-webui/pyproject.toml ] || [ -f /app/hermes-webui/setup.py ]; then \
