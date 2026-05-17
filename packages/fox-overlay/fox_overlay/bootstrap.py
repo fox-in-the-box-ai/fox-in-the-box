@@ -30,7 +30,12 @@ def install() -> None:
     if _INSTALLED:
         return
     _INSTALLED = True
-    _log.info("[fox-overlay] bootstrap installed (no-op skeleton)")
+    # Phase 5+ will import webui_modules here (e.g.
+    # `from fox_overlay import webui_modules`) so they can call
+    # register_get/post() at module-load time before freeze().
+    from fox_overlay import dispatch
+    dispatch.freeze()
+    _log.info("[fox-overlay] bootstrap installed (dispatcher frozen, table empty in Phase 4)")
 
 
 if os.environ.get("FOX_OVERLAY_AUTOINSTALL", "1") != "0":

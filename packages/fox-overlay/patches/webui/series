@@ -1,1 +1,12 @@
-# Phase 4 populates: 001-server-py-bootstrap.patch, 002-routes-py-dispatch-hook.patch
+# Quilt-style ordered patch series for hermes-webui.
+# Each line names a `.patch` file in this directory (relative path).
+# Lines starting with `#` and blank lines are stripped by the Dockerfile
+# consumer (see packages/integration/Dockerfile).
+#
+# Applied in order via `git apply --check` (anchor pre-flight) then
+# `git apply` against /app/hermes-webui at image build time.
+# Phase 9 nightly upstream-watch CI runs the same `git apply --check`
+# against new upstream tags — anchor drift fails fast.
+
+001-server-py-bootstrap.patch
+002-routes-py-dispatch-hook.patch
