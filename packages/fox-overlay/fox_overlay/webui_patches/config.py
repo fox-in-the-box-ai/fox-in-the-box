@@ -1,34 +1,37 @@
 """Fox webui patch: config.py — settings defaults + cache invalidation + save-gate validation.
 
-Re-applies the Fox edits to ``api/config.py`` reverted to upstream
-merge-base in fork PR fox-in-the-box-ai/hermes-webui#NN (Phase 6
-fork-side, parent #189). Closes monorepo issue #190.
+Re-applies the Fox edits to ``api/config.py``. Originally targeted Fox
+merge-base 9e31a2a; refreshed for v0.51.84 in Phase 8 follow-up #238.
+
+## Phase 8 refresh notes
+
+v0.51.84's upstream changes:
+
+1. **``get_config()``** — upstream NOW implements mtime-based cache
+   invalidation NATIVELY (with a more sophisticated ``_cfg_fingerprint``
+   mechanism). Fox's patch is REDUNDANT. The get_config substitution
+   is dropped from this version.
+2. **``reload_config()``** — upstream expanded the ``global`` declaration
+   from ``_cfg_mtime`` only to ``_cfg_mtime, _cfg_path, _cfg_fingerprint``.
+   Fox's anchor updated accordingly.
+3. **``save_settings()``** — unchanged in v0.51.84; all 3 substitutions
+   apply with their original anchors.
+4. **``_SETTINGS_DEFAULTS`` + ``_SETTINGS_BOOL_KEYS``** — still
+   module-scope; dict/set additions still work.
 
 ## Fox edits restored
 
-### Module-scope additions (direct dict/set mutation, no substitution)
+### Module-scope additions (direct dict/set mutation)
 
-* ``_SETTINGS_DEFAULTS`` gains 9 Fox keys:
-  ``local_fallback_enabled``, ``hostname_prompted``,
-  ``tailscale_login_server``, ``tailscale_advertise_routes``,
-  ``tailscale_advertise_tags``, ``tailscale_accept_routes``,
-  ``tailscale_accept_dns``, ``tailscale_exit_node``,
-  ``ollama_custom_url``.
+* ``_SETTINGS_DEFAULTS`` gains 9 Fox keys (local_fallback_enabled,
+  hostname_prompted, 6 Tailscale flags, ollama_custom_url).
 * ``_SETTINGS_BOOL_KEYS`` gains 4 Fox keys (the bool ones above).
-
-These are persistent settings the Phase 5 webui modules (ollama,
-tailscale, local_fallback, hostname) read at module-load. **Issue #190
-flagged this PR as "MERGE FIRST"** — without these keys present,
-Phase 5 modules would read missing settings and silently default to
-None / KeyError on first run.
 
 ### Function patches
 
-* ``get_config()`` — add mtime-based cache invalidation so config
-  changes from out-of-process writers (gateway, supervisor) reach
-  the webui without restart.
-* ``reload_config()`` — also evict the in-memory ``_available_models_cache``
-  (#138 chat-model-picker stale-after-Ollama-switch fix).
+* ``reload_config()`` — evict the in-memory ``_available_models_cache``
+  after on-disk cache delete (#138 chat-model-picker stale-after-
+  Ollama-switch fix).
 * ``save_settings()`` — three additions:
   - Validate Tailscale power-user fields at the save gate
   - Validate Ollama custom URL + normalize + remember the change
@@ -38,11 +41,9 @@ None / KeyError on first run.
 
 ## Self-checks
 
-* ``inspect.signature`` self-check on all 3 functions
-* Anchor self-check via ``substitute_function`` (each anchor MUST
-  appear exactly once)
-* Idempotent via per-patch sentinels + a module-attribute flag for the
-  dict/set additions
+* ``inspect.signature`` self-check on patched functions
+* Anchor self-check via ``substitute_function``
+* Per-patch sentinels + module-attribute flag for dict/set additions
 """
 import inspect
 import logging
@@ -51,12 +52,10 @@ from ._helpers import substitute_function
 
 _log = logging.getLogger("fox_overlay.webui_patches.config")
 
-_GET_CONFIG_SENTINEL = "_fox_patched_get_config"
 _RELOAD_CONFIG_SENTINEL = "_fox_patched_reload_config"
 _SAVE_SETTINGS_SENTINEL = "_fox_patched_save_settings"
 _MODULE_DEFAULTS_FLAG = "_fox_settings_defaults_applied"
 
-_EXPECTED_GET_CONFIG_SIG = "() -> dict"
 _EXPECTED_RELOAD_CONFIG_SIG = "() -> None"
 _EXPECTED_SAVE_SETTINGS_SIG = "(settings: dict) -> dict"
 
@@ -103,12 +102,13 @@ def _check_signature(callable_obj, expected: str, label: str) -> None:
 def apply() -> None:
     from api import config as _u
 
-    # Apply-level idempotency: bail if get_config already patched.
-    if getattr(_u.get_config, _GET_CONFIG_SENTINEL, False):
+    # Apply-level idempotency: bail if reload_config already patched.
+    # (get_config patch was dropped in Phase 8 follow-up #238 — upstream
+    # v0.51.84 implements mtime-based cache invalidation natively.)
+    if getattr(_u.reload_config, _RELOAD_CONFIG_SENTINEL, False):
         return
 
     # ── Signature self-checks ───────────────────────────────────────────
-    _check_signature(_u.get_config, _EXPECTED_GET_CONFIG_SIG, "get_config")
     _check_signature(_u.reload_config, _EXPECTED_RELOAD_CONFIG_SIG, "reload_config")
     _check_signature(_u.save_settings, _EXPECTED_SAVE_SETTINGS_SIG, "save_settings")
 
@@ -126,45 +126,18 @@ def apply() -> None:
             len(_FOX_DEFAULTS), len(_FOX_BOOL_KEYS),
         )
 
-    # ── Patch get_config: add mtime-based cache invalidation ────────────
-    substitute_function(
-        upstream_module=_u,
-        function_name="get_config",
-        substitutions=[
-            (
-                "    if not _cfg_cache:\n"
-                "        reload_config()\n"
-                "    return _cfg_cache\n",
-                "    if not _cfg_cache:\n"
-                "        reload_config()\n"
-                "        return _cfg_cache\n"
-                "\n"
-                "    # Fox: file-mtime check — pick up out-of-process config writes\n"
-                "    # (e.g. supervisorctl-managed gateway) without a webui restart.\n"
-                "    try:\n"
-                "        if _get_config_path().stat().st_mtime != _cfg_mtime:\n"
-                "            with _cfg_lock:\n"
-                "                if _get_config_path().stat().st_mtime != _cfg_mtime:\n"
-                "                    reload_config()\n"
-                "    except OSError:\n"
-                "        pass\n"
-                "\n"
-                "    return _cfg_cache\n",
-            ),
-        ],
-        sentinel=_GET_CONFIG_SENTINEL,
-    )
-
     # ── Patch reload_config: add in-memory models-cache eviction ────────
+    # v0.51.84: upstream expanded `global _cfg_mtime` to `global _cfg_mtime,
+    # _cfg_path, _cfg_fingerprint`. Anchor updated to match.
     substitute_function(
         upstream_module=_u,
         function_name="reload_config",
         substitutions=[
             (
                 # Expand global declaration to include the models-cache vars.
-                "    global _cfg_mtime\n"
+                "    global _cfg_mtime, _cfg_path, _cfg_fingerprint\n"
                 "    with _cfg_lock:\n",
-                "    global _cfg_mtime, _available_models_cache, _available_models_cache_ts\n"
+                "    global _cfg_mtime, _cfg_path, _cfg_fingerprint, _available_models_cache, _available_models_cache_ts\n"
                 "    with _cfg_lock:\n",
             ),
             (

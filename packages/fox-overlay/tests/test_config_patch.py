@@ -62,9 +62,13 @@ def get_config() -> dict:
     return _cfg_cache
 
 
+_cfg_path = None
+_cfg_fingerprint = None
+
+
 def reload_config() -> None:
     """Reload config.yaml from the active profile's directory."""
-    global _cfg_mtime
+    global _cfg_mtime, _cfg_path, _cfg_fingerprint
     with _cfg_lock:
         _cfg_cache.clear()
         config_path = _get_config_path()
@@ -140,11 +144,13 @@ def fresh_config(tmp_path, monkeypatch):
 # ── apply() applies all 3 function patches + module-scope additions ──────
 
 def test_apply_marks_all_function_sentinels(fresh_config):
+    """Phase 8 (v0.51.84) — get_config patch dropped (upstream native mtime check)."""
     _u, patch_mod = fresh_config
     patch_mod.apply()
-    assert getattr(_u.get_config, "_fox_patched_get_config", False) is True
     assert getattr(_u.reload_config, "_fox_patched_reload_config", False) is True
     assert getattr(_u.save_settings, "_fox_patched_save_settings", False) is True
+    # Sanity: get_config NOT patched anymore
+    assert getattr(_u.get_config, "_fox_patched_get_config", False) is False
 
 
 def test_apply_adds_fox_defaults(fresh_config):
@@ -219,10 +225,11 @@ def test_bool_unrecognized_string_is_skipped(fresh_config):
 
 # ── Anchor drift detection ───────────────────────────────────────────────
 
-def test_anchor_drift_in_get_config_fails_fast(tmp_path, monkeypatch):
+def test_anchor_drift_in_reload_config_fails_fast(tmp_path, monkeypatch):
+    """Drop the multi-var global declaration → patch can't find new anchor."""
     drifted = _UPSTREAM_CONFIG_SOURCE.replace(
-        "    if not _cfg_cache:\n        reload_config()\n    return _cfg_cache\n",
-        "    return _cfg_cache  # upstream simplified\n",
+        "    global _cfg_mtime, _cfg_path, _cfg_fingerprint\n    with _cfg_lock:\n",
+        "    with _cfg_lock:\n",
     )
     _install_stub(tmp_path, drifted, monkeypatch)
     import fox_overlay.webui_patches.config as patch_mod
