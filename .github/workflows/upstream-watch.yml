@@ -1,0 +1,256 @@
+# .github/workflows/upstream-watch.yml
+#
+# Nightly upstream-watch (Phase 9 of v0.6.0 migration, issue #202).
+#
+# Once a day:
+#   1. Read packages/fox-overlay/versions.toml to discover the pinned
+#      upstream tag pair (webui + agent).
+#   2. Query GitHub for each upstream's latest published tag.
+#   3. If pin matches latest → no-op (clean run, no notification).
+#   4. If a newer tag exists, temporarily check out that tag in the
+#      submodule and run check-overlay-basis.sh against it. The script
+#      verifies .fox-removals entries still exist AND every patch in the
+#      webui/agent series applies --check cleanly.
+#   5a. If overlay basis stays CLEAN → open an issue (label
+#       `upstream-update-available`) tagging Dennis. Manual decision on
+#       when to bump.
+#   5b. If overlay basis DRIFTS → open an issue (labels `upstream-drift`
+#       + `P2`) listing the specific anchor/manifest mismatches.
+#       Refresh required before bumping.
+#
+# Failure mode: workflow itself failing (network, API rate limit, etc.)
+# also opens an issue (label `upstream-watch-error` + `P2`) so silent
+# failures don't accumulate.
+
+name: Upstream Watch
+
+on:
+  schedule:
+    # 05:17 UTC daily — off-peak, after most upstream tag pushes settle.
+    - cron: "17 5 * * *"
+  workflow_dispatch:
+    inputs:
+      force_tag_webui:
+        description: "Force-test against this webui tag (overrides 'latest' lookup)"
+        required: false
+        default: ""
+      force_tag_agent:
+        description: "Force-test against this agent tag (overrides 'latest' lookup)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  watch:
+    name: Check upstream tags + overlay basis
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0  # need full history for git apply --check vs arbitrary tags
+
+      - name: Read pinned versions
+        id: pinned
+        run: |
+          # Parse versions.toml with grep/awk — tomllib would also work but
+          # this keeps the workflow free of Python deps.
+          set -eu
+          file=packages/fox-overlay/versions.toml
+          if [ ! -f "$file" ]; then
+              echo "::error::versions.toml missing — Phase 8 #245 incomplete"
+              exit 1
+          fi
+          webui_tag=$(grep -E '^hermes_webui_tag\s*=' "$file" | awk -F'"' '{print $2}')
+          agent_tag=$(grep -E '^hermes_agent_tag\s*=' "$file" | awk -F'"' '{print $2}')
+          webui_url=$(grep -E '^hermes_webui_url\s*=' "$file" | awk -F'"' '{print $2}')
+          agent_url=$(grep -E '^hermes_agent_url\s*=' "$file" | awk -F'"' '{print $2}')
+          echo "webui_tag=$webui_tag" >> "$GITHUB_OUTPUT"
+          echo "agent_tag=$agent_tag" >> "$GITHUB_OUTPUT"
+          echo "webui_url=$webui_url" >> "$GITHUB_OUTPUT"
+          echo "agent_url=$agent_url" >> "$GITHUB_OUTPUT"
+          # Derive owner/repo from URL for the GitHub API call below.
+          echo "webui_repo=$(echo "$webui_url" | sed -E 's#https?://github.com/##; s#\.git$##')" >> "$GITHUB_OUTPUT"
+          echo "agent_repo=$(echo "$agent_url" | sed -E 's#https?://github.com/##; s#\.git$##')" >> "$GITHUB_OUTPUT"
+          echo "pinned: webui=$webui_tag, agent=$agent_tag"
+
+      - name: Resolve latest upstream tags
+        id: latest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -eu
+          # If workflow_dispatch supplied a forced tag, use it. Otherwise
+          # query GitHub for the latest release tag of each upstream.
+          forced_webui="${{ inputs.force_tag_webui }}"
+          forced_agent="${{ inputs.force_tag_agent }}"
+
+          if [ -n "$forced_webui" ]; then
+              latest_webui="$forced_webui"
+          else
+              # `releases/latest` works on repos that publish formal releases.
+              # Fall back to `git ls-remote --tags` sort if no releases endpoint.
+              latest_webui=$(gh release view --repo "${{ steps.pinned.outputs.webui_repo }}" --json tagName -q .tagName 2>/dev/null || true)
+              if [ -z "$latest_webui" ]; then
+                  latest_webui=$(git ls-remote --tags --refs --sort='-v:refname' \
+                      "${{ steps.pinned.outputs.webui_url }}" 'v*' \
+                      | head -1 | awk '{sub("refs/tags/", "", $2); print $2}')
+              fi
+          fi
+
+          if [ -n "$forced_agent" ]; then
+              latest_agent="$forced_agent"
+          else
+              latest_agent=$(gh release view --repo "${{ steps.pinned.outputs.agent_repo }}" --json tagName -q .tagName 2>/dev/null || true)
+              if [ -z "$latest_agent" ]; then
+                  latest_agent=$(git ls-remote --tags --refs --sort='-v:refname' \
+                      "${{ steps.pinned.outputs.agent_url }}" 'v*' \
+                      | head -1 | awk '{sub("refs/tags/", "", $2); print $2}')
+              fi
+          fi
+
+          echo "webui=$latest_webui" >> "$GITHUB_OUTPUT"
+          echo "agent=$latest_agent" >> "$GITHUB_OUTPUT"
+          echo "latest: webui=$latest_webui, agent=$latest_agent"
+
+      - name: Determine drift
+        id: drift
+        run: |
+          set -eu
+          pinned_webui="${{ steps.pinned.outputs.webui_tag }}"
+          pinned_agent="${{ steps.pinned.outputs.agent_tag }}"
+          latest_webui="${{ steps.latest.outputs.webui }}"
+          latest_agent="${{ steps.latest.outputs.agent }}"
+
+          webui_drift="no"; agent_drift="no"
+          if [ "$pinned_webui" != "$latest_webui" ] && [ -n "$latest_webui" ]; then
+              webui_drift="yes"
+          fi
+          if [ "$pinned_agent" != "$latest_agent" ] && [ -n "$latest_agent" ]; then
+              agent_drift="yes"
+          fi
+
+          echo "webui_drift=$webui_drift" >> "$GITHUB_OUTPUT"
+          echo "agent_drift=$agent_drift" >> "$GITHUB_OUTPUT"
+          if [ "$webui_drift" = "no" ] && [ "$agent_drift" = "no" ]; then
+              echo "no_drift=yes" >> "$GITHUB_OUTPUT"
+              echo "[upstream-watch] both pins match latest; nothing to do"
+          else
+              echo "no_drift=no" >> "$GITHUB_OUTPUT"
+              [ "$webui_drift" = "yes" ] && echo "[upstream-watch] webui drift: $pinned_webui → $latest_webui"
+              [ "$agent_drift" = "yes" ] && echo "[upstream-watch] agent drift: $pinned_agent → $latest_agent"
+          fi
+
+      - name: Check overlay basis against latest tags
+        id: basis
+        if: steps.drift.outputs.no_drift != 'yes'
+        run: |
+          set +e  # we want to capture rather than fail-fast
+          # Temporarily check out the latest tag in each submodule that drifted.
+          if [ "${{ steps.drift.outputs.webui_drift }}" = "yes" ]; then
+              ( cd forks/hermes-webui && \
+                git fetch origin --tags --quiet && \
+                git checkout "${{ steps.latest.outputs.webui }}" --quiet )
+          fi
+          if [ "${{ steps.drift.outputs.agent_drift }}" = "yes" ]; then
+              ( cd forks/hermes-agent && \
+                git fetch origin --tags --quiet && \
+                git checkout "${{ steps.latest.outputs.agent }}" --quiet )
+          fi
+
+          # Run the overlay basis check.
+          ./packages/fox-overlay/scripts/check-overlay-basis.sh > /tmp/basis-output.txt 2>&1
+          rc=$?
+
+          {
+              echo 'basis_output<<BASIS_EOF'
+              cat /tmp/basis-output.txt
+              echo 'BASIS_EOF'
+              echo "basis_rc=$rc"
+          } >> "$GITHUB_OUTPUT"
+
+          if [ "$rc" -eq 0 ]; then
+              echo "[upstream-watch] overlay basis CLEAN against latest tags"
+          else
+              echo "[upstream-watch] overlay basis DRIFTED against latest tags (see issue)"
+          fi
+          exit 0  # never fail this step; the issue-creation steps below act on rc
+
+      - name: Open issue — update available (basis clean)
+        if: steps.drift.outputs.no_drift != 'yes' && steps.basis.outputs.basis_rc == '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -eu
+          title="[upstream-watch] Update available: webui ${{ steps.pinned.outputs.webui_tag }} → ${{ steps.latest.outputs.webui }}, agent ${{ steps.pinned.outputs.agent_tag }} → ${{ steps.latest.outputs.agent }}"
+          body=$(cat <<EOF
+          ## Upstream tag updates available
+
+          | Component | Pinned | Latest | Drift |
+          |-----------|--------|--------|-------|
+          | webui     | ${{ steps.pinned.outputs.webui_tag }} | ${{ steps.latest.outputs.webui }} | ${{ steps.drift.outputs.webui_drift }} |
+          | agent     | ${{ steps.pinned.outputs.agent_tag }} | ${{ steps.latest.outputs.agent }} | ${{ steps.drift.outputs.agent_drift }} |
+
+          \`check-overlay-basis.sh\` against the new tags returned 0 — overlay anchors + \`.fox-removals\` entries are all stable against the proposed bump.
+
+          ## To bump
+
+          \`\`\`
+          cd forks/hermes-webui && git fetch origin --tags && git checkout ${{ steps.latest.outputs.webui }}
+          cd forks/hermes-agent && git fetch origin --tags && git checkout ${{ steps.latest.outputs.agent }}
+          # Then edit packages/fox-overlay/versions.toml + open a PR
+          \`\`\`
+
+          Workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          EOF
+          )
+          gh issue create --title "$title" --body "$body" --label "upstream-update-available"
+
+      - name: Open issue — basis drift (refresh required)
+        if: steps.drift.outputs.no_drift != 'yes' && steps.basis.outputs.basis_rc != '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -eu
+          title="[upstream-drift] Overlay anchors drift against webui ${{ steps.latest.outputs.webui }} / agent ${{ steps.latest.outputs.agent }}"
+          body=$(cat <<EOF
+          ## Overlay basis drift detected
+
+          | Component | Pinned | Latest |
+          |-----------|--------|--------|
+          | webui     | ${{ steps.pinned.outputs.webui_tag }} | ${{ steps.latest.outputs.webui }} |
+          | agent     | ${{ steps.pinned.outputs.agent_tag }} | ${{ steps.latest.outputs.agent }} |
+
+          \`check-overlay-basis.sh\` against the proposed new tags returned non-zero. **Anchor/manifest refresh required BEFORE bumping the submodule pointer**.
+
+          ## check-overlay-basis output
+
+          \`\`\`
+          ${{ steps.basis.outputs.basis_output }}
+          \`\`\`
+
+          ## Resolution playbook (per script's exit-banner)
+
+          * Refresh the failing anchor/manifest entry first
+          * Re-run \`./packages/fox-overlay/scripts/check-overlay-basis.sh\` locally to confirm clean
+          * Then bump the submodule + \`versions.toml\` in a single PR
+
+          Workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          EOF
+          )
+          gh issue create --title "$title" --body "$body" --label "upstream-drift" --label "P2"
+
+      - name: Open issue — workflow itself failed
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue create \
+            --title "[upstream-watch-error] Nightly workflow run ${{ github.run_id }} failed" \
+            --body "The upstream-watch workflow itself failed (not a drift/update issue — the watcher couldn't complete). See ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }} for the failing step. Common causes: GitHub API rate limit, network blip, upstream URL changed." \
+            --label "upstream-watch-error" \
+            --label "P2"
