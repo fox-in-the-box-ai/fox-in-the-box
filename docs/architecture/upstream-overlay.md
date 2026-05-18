@@ -153,6 +153,25 @@ If `check-overlay-basis.sh` reported drift, an open issue (label
 `upstream-drift`) lists the failing anchor(s) — refresh in a preceding
 PR, then bump.
 
+### Tripwires (upstream-dependency monitoring)
+
+`.github/workflows/upstream-tripwires.yml` runs daily at 06:00 UTC (43 min after `upstream-watch.yml`) and exposes 10 independent monitoring jobs. Each opens (or re-fires on) an issue labeled `tripwire-fire + tripwire/<name>` when its condition triggers. Workflow-self-failure (network, API rate limit, script bug) opens a separate `tripwire-self-health` issue.
+
+| Job | Label | What it watches | Where to resolve |
+|-----|-------|----------------|------------------|
+| `upstream_commit_digest` (#207) | `tripwire/digest` | 24h commits on either upstream; flags keyword/conflict-file hits | Inspect listed commits; pre-emptive anchor refresh if any will conflict |
+| `license_watch` (#208) | `tripwire/license` | LICENSE blob SHA drift | Review diff; update `.github/state/upstream-licenses.json` baseline once intentional change is accepted |
+| `branch_creation_watch` (#209) | `tripwire/branch` | New upstream branch matching rewrite-regex (`react|vue|...|major`) | Inspect branch; strategic review if it's a rewrite-in-progress |
+| `nousresearch_ui_watch` (#210) | `tripwire/nous-ui` | `webui/`, `frontend/`, `static/` dir appearing at root of agent repo | Pivot review per Architect 3 §8 Scenario B |
+| `maintainer_absence` (#211) | `tripwire/absence` | `nesquena` silent for 5+ days on webui | Check public activity; close if explained by known context |
+| `cve_feed` (#212) | `tripwire/cve`, `security` | New GitHub Security Advisory on either upstream | Determine if pinned tag affected; emergency bump if so |
+| `stage_batch_gap` (#213) | `tripwire/stage-batch` | nesquena's `Stamp CHANGELOG` cadence breaks >48h with unreleased work | Check upstream CI; surface to upstream if real stall |
+| `e2e_pair_test` (#214) | `tripwire/e2e-pair` | Sanity check that `build-container.yml` still does the pair-test (already shipped) | Restore missing invariant or update tripwire expectations |
+| `patch_rebase_clock` (#215) | `tripwire/rebase-clock` | Overlay patch file untouched for >90 days | Refresh against current pin OR document why anchor is intentionally stable |
+| `open_issue_age` (#216) | `tripwire/issue-age` | Oldest open upstream issue >90d while upstream <12mo old | Inspect; re-evaluate dependence if upstream triage degrading |
+
+The full implementation lives in `.github/workflows/upstream-tripwires.yml` + `.github/scripts/tripwire-*.sh` (one script per tripwire — bash-based, no runtime deps beyond `gh` + `jq`). Per-tripwire dedupe is by exact issue title, so re-fires comment on the existing issue rather than stack new ones. Bootstrap baseline state for stateful tripwires (license + future ones): `.github/state/`.
+
 ### Build-time flags
 
 - `FITB_DISABLE_WEBUI_OVERLAY=1` (build arg) — skip the webui patch
