@@ -224,18 +224,30 @@ jobs:
     if: always() && contains(needs.*.result, 'failure')
     runs-on: ubuntu-latest
     steps:
+      # `gh` needs a git context for repo-scoped commands, and the
+      # `tripwire_label_color` helper needs the common script on disk.
+      # Without checkout this job dies with "fatal: not a git repository"
+      # before it can even open the self-health issue.
+      - uses: actions/checkout@v4
       - env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          title="[tripwire-self-health] one or more upstream-tripwire jobs failed in run ${{ github.run_id }}"
-          existing=$(gh issue list --repo "${{ github.repository }}" \
-                       --label tripwire-self-health --state open \
-                       --search "in:title \"tripwire-self-health\"" \
-                       --json number -q '.[0].number' 2>/dev/null || echo "")
-          body="Tripwire job(s) failed (not a real upstream condition — workflow itself broke). See ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }} for the failing job. Common causes: GitHub API rate limit, network blip, upstream URL change, script regression. Resolve by fixing the script or transient retry; close this issue when next run is green."
-          if [ -n "$existing" ]; then
-              gh issue comment "$existing" --body "Re-fired on run ${{ github.run_id }}. $body"
-          else
-              gh issue create --title "$title" --body "$body" \
-                --label tripwire-self-health --label P2
-          fi
+          # Use the shared helper to ensure the self-health label exists,
+          # then open or re-fire the issue.
+          source .github/scripts/tripwire-common.sh
+          title="[tripwire-self-health] one or more upstream-tripwire jobs failed (rolling)"
+          body=$(cat <<EOF
+          ## At least one tripwire job failed in run \`${{ github.run_id }}\`
+
+          A tripwire-job-level failure usually means the workflow itself broke (script regression, GitHub API rate limit, network blip, upstream URL changed) — NOT a real upstream condition fire.
+
+          See: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+          ## Resolution
+
+          - Inspect the failing job's log; fix the script if it's a regression
+          - If transient (rate limit / network), close this issue and wait for the next run
+          - If multiple jobs are failing concurrently, suspect a shared cause (label permissions, token expiry)
+          EOF
+          )
+          tripwire_fire "$title" "$body" "tripwire-self-health,P2"

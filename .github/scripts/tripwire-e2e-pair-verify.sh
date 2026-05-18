@@ -14,22 +14,35 @@ set -eu
 source "$(dirname "$0")/tripwire-common.sh"
 
 failures=()
+wf=.github/workflows/build-container.yml
 
 # 1. build-container.yml exists.
-if [ ! -f .github/workflows/build-container.yml ]; then
-    failures+=("missing: .github/workflows/build-container.yml")
+if [ ! -f "$wf" ]; then
+    failures+=("missing: $wf")
 fi
 
-# 2. It still references both Smoke jobs.
-for arch in amd64 arm64; do
-    if ! grep -qE "Smoke.*$arch|smoke.*$arch" .github/workflows/build-container.yml; then
-        failures+=("build-container.yml no longer references Smoke ($arch)")
-    fi
-done
+# 2. It defines a `smoke:` job (lowercase YAML key — the job that actually
+#    runs the assembled container, distinct from the build-and-push jobs).
+if [ -f "$wf" ] && ! grep -qE '^[[:space:]]+smoke:' "$wf"; then
+    failures+=("$wf no longer defines a 'smoke:' job — pair-test entry point gone")
+fi
 
-# 3. It still includes the check-overlay-basis gate (proves it's exercising the overlay).
-if ! grep -q 'check-overlay-basis.sh' .github/workflows/build-container.yml; then
-    failures+=("build-container.yml no longer runs check-overlay-basis.sh — pair test may not be exercising overlay properly")
+# 3. It runs on both archs via matrix entries. The exact format is
+#    `short: amd64` / `short: arm64` in the matrix list (rendered into
+#    the visible job name `Smoke (amd64)` / `Smoke (arm64)`), not a
+#    single line. Check each matrix entry.
+if [ -f "$wf" ]; then
+    for arch in amd64 arm64; do
+        if ! grep -qE "short:[[:space:]]+$arch" "$wf"; then
+            failures+=("$wf matrix no longer includes arch '$arch' (looked for 'short: $arch')")
+        fi
+    done
+fi
+
+# 4. It still includes the check-overlay-basis gate (proves the build
+#    actually exercises the overlay).
+if [ -f "$wf" ] && ! grep -q 'check-overlay-basis.sh' "$wf"; then
+    failures+=("$wf no longer runs check-overlay-basis.sh — pair test may not be exercising overlay properly")
 fi
 
 if [ ${#failures[@]} -eq 0 ]; then
