@@ -1008,3 +1008,36 @@ pre[class*=language-] {
 .fitb-btn-link:hover:not(:disabled) {
   opacity: 1;
 }
+
+/* Stream-error retry panel (v0.6.1, FITB #254 + #255).
+ * Renders inline at the bottom of #chat after an apperror SSE event.
+ * Visual treatment: subdued surface, no modal-style backdrop — the
+ * conversation is preserved underneath; this is an inline call-to-action,
+ * not a blocker. */
+.fitb-retry-panel {
+  margin: 12px 16px 18px;
+  padding: 14px 16px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.fitb-retry-panel-title {
+  font-weight: 600;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.fitb-retry-panel-body {
+  opacity: 0.8;
+  margin-bottom: 12px;
+}
+
+.fitb-retry-panel-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+

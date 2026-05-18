@@ -329,7 +329,7 @@ RUN set -eux; \
 COPY packages/fox-overlay /app/fox-overlay
 RUN pip install --no-cache-dir -e /app/fox-overlay
 ENV HERMES_WEBUI_EXTENSION_DIR=/app/fox-overlay/webui_static \
-    HERMES_WEBUI_EXTENSION_SCRIPT_URLS=/extensions/onboarding-preview.js,/extensions/fox-overlay.js,/extensions/hostname-prompt.js,/extensions/fallback-polish.js \
+    HERMES_WEBUI_EXTENSION_SCRIPT_URLS=/extensions/onboarding-preview.js,/extensions/fox-overlay.js,/extensions/hostname-prompt.js,/extensions/fallback-polish.js,/extensions/stream-error-retry.js \
     HERMES_WEBUI_EXTENSION_STYLESHEET_URLS=/extensions/fox-in-the-box.css
 
 # ── entrypoint (full version — replaces Task 03 stub) ─────────────────────────
