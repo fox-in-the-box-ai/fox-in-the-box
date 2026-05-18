@@ -5,13 +5,31 @@
 **How long it takes:** ~30 minutes if everything passes. Plan ~2 hours if something fails (fix → rebuild → re-run from the failed step).
 
 **Setup:**
-1. Build the candidate image: `docker build -f packages/integration/Dockerfile -t fitb:smoke .`
-2. Reset state: `docker rm -f fitb-smoke 2>/dev/null; docker volume rm fitb-smoke-data 2>/dev/null; docker volume create fitb-smoke-data`
-3. Start: `docker run -d --name fitb-smoke --cap-add=NET_ADMIN --device /dev/net/tun --sysctl net.ipv4.ip_forward=1 -p 127.0.0.1:8788:8787 -v fitb-smoke-data:/data fitb:smoke`
-4. Wait: `until curl -fsS http://127.0.0.1:8788/health >/dev/null; do sleep 2; done`
-5. Wait 15 seconds more for entrypoint to finish (operator grant, etc.)
 
-**The container is at `http://127.0.0.1:8788`. The user's real install (port 8787) is unaffected.**
+Pull the image you're testing — **don't `docker build` locally** (a local build can mask CI-only behavior; we always smoke what users actually ship). The setup uses port 8788 on the host so the smoke container doesn't collide with a real install on 8787.
+
+```bash
+# Pick ONE of the three IMAGE variants below depending on what you're smoking:
+IMAGE=ghcr.io/fox-in-the-box-ai/cloud:stable      # the just-released version (today: v0.6.1)
+# IMAGE=ghcr.io/fox-in-the-box-ai/cloud:v0.6.1    # explicit pin (use during a multi-version comparison)
+# IMAGE=ghcr.io/fox-in-the-box-ai/cloud:latest    # the candidate built from main, pre-tag
+
+docker pull "$IMAGE"
+docker rm -f fitb-smoke 2>/dev/null
+docker volume rm fitb-smoke-data 2>/dev/null
+docker volume create fitb-smoke-data
+docker run -d --name fitb-smoke \
+  --cap-add=NET_ADMIN --device /dev/net/tun --sysctl net.ipv4.ip_forward=1 \
+  -p 127.0.0.1:8788:8787 \
+  -v fitb-smoke-data:/data \
+  "$IMAGE"
+until curl -fsS http://127.0.0.1:8788/health >/dev/null; do sleep 2; done
+sleep 15   # extra time for entrypoint operator-grant + supervisord settle
+```
+
+**The smoke container is at `http://127.0.0.1:8788`. Your real install (port 8787) is unaffected.**
+
+**Currently testing:** v0.6.1 (= `:stable` as of 2026-05-18). Container digest expected: `sha256:296436733b...` — verify with `docker manifest inspect "$IMAGE" | jq -r '.manifests[0].digest'`.
 
 ---
 
@@ -93,30 +111,25 @@ Requires a real Tailscale account.
 
 ---
 
-## Section G — Reactive failover modal (3 min)
+## Section G — Reactive failover modal (SUPERSEDED in v0.6.1 — see Section L "v0.6.1 stream-error-retry" row instead)
 
-Requires local fallback to be **OFF** for this section.
+> **v0.6.1 retired this flow.** The reactive failover modal that shipped in v0.5.x was tightly coupled to upstream-webui's streaming-error path. When upstream refactored that path in v0.51.84, the modal stopped firing (tracked as #255). v0.6.1 replaced it with a simpler universal **"Something went wrong, please try again"** panel that handles every streaming-error class via one surface — see the **v0.6.1 stream-error-retry** row in Section L below for the current test gates.
+>
+> **If you're smoking a pre-v0.6.1 image** (`:v0.5.4` or older), the G1–G8 gates below still apply. **If you're smoking `:stable` (v0.6.1+) or `:latest`, skip Section G entirely** — run the v0.6.1 Section L row instead.
 
-- [ ] **G1.** Use a configured remote provider that's healthy → send a chat → normal response
-- [ ] **G2.** Force a failure: temporarily set the OR base_url to a dead endpoint (or use an invalid key) → send a chat → error appears in the chat: "No response received: HTTP 4xx" or "Stream interrupted"
-- [ ] **G3.** **Reactive modal appears**: "Your provider is having trouble. Want to enable a local AI model as a fallback?"
-- [ ] **G4.** Click "Not now" → modal closes
-- [ ] **G5.** Trigger another failure in the same tab → modal does NOT re-fire (sessionStorage flag)
-- [ ] **G6.** Reload page (clears session flag) → trigger failure → modal CAN fire again
-- [ ] **G7.** This time click "Enable" → POST `/api/local-fallback/enable` fires, modal shows "Enabled. Your next failure will silently use local."
-- [ ] **G8.** With local now enabled, trigger another remote failure → silent failover, real local response in chat (no error to user)
+- [ ] ~~**G1.**~~ ~~Use a configured remote provider that's healthy → send a chat → normal response~~ _(v0.6.1: covered by Section D and the new retry-panel happy-path)_
+- [ ] ~~**G2.**~~ ~~Force a failure...~~ _(v0.6.1: covered by Section L "v0.6.1" row item (a))_
+- [ ] ~~**G3–G8.**~~ ~~Reactive modal "Enable local fallback?"~~ _(v0.6.1: replaced; manual switch via Settings → Providers is the documented path now)_
 
 ---
 
-## Section H — Recovery banner (3 min)
+## Section H — Recovery banner (SUPERSEDED in v0.6.1)
 
-Requires local fallback to be **ON** AND a recent remote failure (set up in Section G).
+> **v0.6.1 retired this flow** for the same reason as Section G. The recovery banner was the second half of the auto-failover UX — it nudged the user back to remote when remote recovered. v0.6.1's retry-panel approach inverts the model: the user retries when ready, no banner needed.
+>
+> **If smoking pre-v0.6.1**, the H1–H5 gates below still apply. **For v0.6.1+, skip Section H entirely.**
 
-- [ ] **H1.** With local fallback ON, restore the remote provider to working state
-- [ ] **H2.** Within ~90s, top banner appears: "Your remote provider looks reachable again. Switch off local fallback to use it?"
-- [ ] **H3.** Click "Keep local" → banner closes, no re-appearance this session
-- [ ] **H4.** Reload page → banner can re-appear once
-- [ ] **H5.** This time click "Switch back" → POST `/api/local-fallback/disable` fires, banner closes, polling stops
+- [ ] ~~**H1–H5.**~~ ~~Recovery banner "Switch back to remote?"~~ _(v0.6.1: replaced by the Retry button in the stream-error-retry panel — user re-sends via the panel after fixing the underlying issue)_
 
 ---
 
@@ -167,11 +180,11 @@ These checklists were testing gates from previous phases. Re-run before any mino
 | Phase / Issue | Checks |
 |---|---|
 | #105 Phase 0 (v0.5.0) | All A–K above |
-| #122 v0.5.1 stabilization | (a) `/api/ollama/status` and `/api/local-fallback/status` return **200** (not 302) when onboarding incomplete · (b) "Use [model]" on Step 1 advances to Step 2 (NOT chat) and `onboarding.json` stays `completed: false` until Step 3's "Open Fox" · (c) Step 2 shows "Add OpenRouter (optional)" + "Continue with local only" button when state.localModel set · (d) `/api/tailscale/status` response includes `serve_state` + `serve_error` fields · (e) "Configure HTTPS" retry button visible in Settings → Tailscale tile after Connect · (f) Reactive modal fires on `auth_mismatch` and `quota_exhausted` (set OpenRouter key to garbage with fallback OFF, send chat) · (g) Recovery banner appears within 30s when fallback is enabled mid-session and provider is restored · (h) `:stable` digest equals `:vX.Y.Z` digest after release tag (no drift from main pushes) · (i) `/app/version.txt` populated with `dev-<sha>` or `vX.Y.Z` (never empty) |
-| #127 / #128 / #129 v0.5.2 stabilization | **#127:** (a) `ts-operator-watchdog` RUNNING in supervisord status · (b) Force-clear OperatorUser → restored within 35s · (c) `tailscale up` after force-logout produces auth URL (not `Access denied: checkprefs`). **#128:** (d) `localStorage.setItem('fitb.timeout_modal_ms','5000')` → bad provider key → modal in 5s · (e) "Switch now" with fallback OFF → 400 + reason=disabled with actionable copy · (f) With fallback READY → click Switch now → success + dismiss in ~2.5s · (g) Real SSE arrival post-modal → auto-dismisses. **#129:** (h) Bad cloud key + fallback ready → response includes `*Switched to phi4-mini — re-send your message…*` system note (NO red error) · (i) Fallback enabled but model NOT installed → confirm modal "Download local model to keep working?" with size hint · (j) Click Download → progress poll updates inline · (k) On ready → activate → "Ready. Re-send your message…" · (l) Already-local guard: with active = phi4, force a local-side failure → original error surfaces (no redundant `provider_switched`) · (m) Mid-stream truncate: partial tokens then fail → partial cleared, system note appended · (n) `/api/local-fallback/status` includes top-level `ready` field · (o) `/api/local-fallback/activate` registered (200 when ready, 400 + granular `reason` when not) |
+| #122 v0.5.1 stabilization | (a) `/api/ollama/status` and `/api/local-fallback/status` return **200** (not 302) when onboarding incomplete · (b) "Use [model]" on Step 1 advances to Step 2 (NOT chat) and `onboarding.json` stays `completed: false` until Step 3's "Open Fox" · (c) Step 2 shows "Add OpenRouter (optional)" + "Continue with local only" button when state.localModel set · (d) `/api/tailscale/status` response includes `serve_state` + `serve_error` fields · (e) "Configure HTTPS" retry button visible in Settings → Tailscale tile after Connect · ~~(f) Reactive modal fires on `auth_mismatch` and `quota_exhausted`~~ **(SUPERSEDED v0.6.1 — see v0.6.1 row; this flow no longer exists)** · ~~(g) Recovery banner appears within 30s when fallback is enabled mid-session~~ **(SUPERSEDED v0.6.1)** · (h) `:stable` digest equals `:vX.Y.Z` digest after release tag (no drift from main pushes) · (i) `/app/version.txt` populated with `dev-<sha>` or `vX.Y.Z` (never empty) |
+| #127 / #128 / #129 v0.5.2 stabilization | **#127:** (a) `ts-operator-watchdog` RUNNING in supervisord status · (b) Force-clear OperatorUser → restored within 35s · (c) `tailscale up` after force-logout produces auth URL (not `Access denied: checkprefs`). **#128:** ~~(d) `localStorage.setItem('fitb.timeout_modal_ms','5000')` → bad provider key → modal in 5s~~ **(SUPERSEDED v0.6.1 — timeout-modal flow replaced by stream-error-retry panel; see v0.6.1 row)** · ~~(e) "Switch now" with fallback OFF → 400 + reason=disabled~~ **(SUPERSEDED v0.6.1)** · ~~(f) With fallback READY → click Switch now → success + dismiss in ~2.5s~~ **(SUPERSEDED v0.6.1)** · ~~(g) Real SSE arrival post-modal → auto-dismisses~~ **(SUPERSEDED v0.6.1)**. **#129:** ~~(h) Bad cloud key + fallback ready → response includes `*Switched to phi4-mini — re-send your message…*` system note (NO red error)~~ **(SUPERSEDED v0.6.1 — silent auto-failover replaced by explicit Retry panel; user clicks Retry after switching provider in Settings)** · (i) Fallback enabled but model NOT installed → confirm modal "Download local model to keep working?" with size hint · (j) Click Download → progress poll updates inline · (k) On ready → activate → "Ready. Re-send your message…" · (l) Already-local guard: with active = phi4, force a local-side failure → original error surfaces (no redundant `provider_switched`) · ~~(m) Mid-stream truncate: partial tokens then fail → partial cleared, system note appended~~ **(SUPERSEDED v0.6.1 — partial-text wipe now handled by retry panel; see v0.6.1 row item (d))** · (n) `/api/local-fallback/status` includes top-level `ready` field · (o) `/api/local-fallback/activate` registered (200 when ready, 400 + granular `reason` when not) |
 | #109 v0.5.3 (custom Ollama URL) | (a) Settings → Providers → Ollama tile has a "Custom Ollama URL" input · (b) Save with `http://192.168.1.50:11434` → probe uses the new URL · (c) Wizard's Ollama detection respects the custom URL · (d) Empty value falls back to host.docker.internal default. **#110** (Tailscale Serve retry button) was already shipped in v0.5.1 hermes-webui#9 — confirm working and close. |
-| v0.6.1 stream-error-retry (#254 + #255) | (a) Force `auth_mismatch`: in Settings → Providers, set OpenRouter key to `sk-or-v1-invalid`; send a chat message → upstream's inline error markdown does NOT appear in the transcript; Fox "Something went wrong, please try again" panel appears at the bottom of chat with a Retry button. · (b) Click Retry → the previous user message appears in the composer + auto-sends; chat continues normally (will fail again until a real key is configured — that's expected). · (c) Click Dismiss instead → panel disappears, last user message stays in transcript, no retry. · (d) Force `interrupted` (mid-stream break): start a long-running chat response; from another terminal run `docker exec <container> pkill -KILL -f hermes-gateway` mid-response → panel appears, partial assistant tokens wiped from transcript. · (e) User-cancelled (`type:cancelled`): start a streaming response, click the Stop button → NO Fox panel should appear (cancel is user-initiated, not an error). · (f) Multiple errors in a row: after panel fires once, send another message that also errors → panel appears again (no once-per-session lockout). · (g) `[data-fitb-retry-panel]` element present in DOM after fire, with `[data-fitb-retry-action="retry"]` and `[data-fitb-retry-action="dismiss"]` buttons (these will be the Playwright selectors when E2E lands). |
-| v0.6.0 upstream-separation migration | (a) `forks/hermes-webui` HEAD == pinned tag in `packages/fox-overlay/versions.toml` (and same for `forks/hermes-agent`) · (b) `./packages/fox-overlay/scripts/check-overlay-basis.sh` exits 0 locally · (c) Container boot log includes `[fox-overlay] bootstrap installed: dispatcher frozen, N GET + M POST handlers registered` (N + M match the current `webui_modules/` registrations) · (d) Container boot log includes `[fox-overlay] webui_patches.apply_all() complete` with the current patch count · (e) Agent boot log has **zero** `fox-overlay-failed` warnings · (f) `ls /app/hermes-agent/plugins/memory/` shows `mem0_oss/` (Dockerfile COPY landed) · (g) Fox-claimed endpoints all return 200: `/setup`, `/api/profiles`, `/api/ollama/status`, `/api/tailscale/status`, `/api/local-fallback/status`, `/api/local-models`, `/api/settings/hostname` · (h) `FITB_DISABLE_WEBUI_OVERLAY=1` + `FITB_DISABLE_AGENT_OVERLAY=1` build still produces a container that boots (bisect-flag smoke) · (i) **Known regressions** intentional, NOT crashes — verify: mid-stream gateway break shows upstream's apperror surface (no "Stream interrupted" label / no partial-text preservation — #254 deferred); `auth_mismatch`/`quota_exhausted` shows upstream apperror, no auto-failover modal (#255 deferred) — manual switch via Settings → Providers still works. |
+| v0.6.1 stream-error-retry (#254 + #255) | (a) Force `auth_mismatch`: in Settings → Providers, set OpenRouter key to `sk-or-v1-invalid`; send a chat message → Fox **"Something went wrong, please try again"** panel appears at the bottom of chat with a **Retry** + **Dismiss** button. **Known polish gap (filed):** upstream's inline `**Provider mismatch:** …` error message ALSO stays visible in the transcript above the panel until you click Retry; it then gets wiped. v0.6.2 will pop the upstream message immediately on apperror so only the Fox panel shows. · (b) Click Retry → upstream error message gets wiped from transcript, prior user message appears in the composer + auto-sends; chat continues normally (will fail again until a real key is configured — that's expected). · (c) Click Dismiss instead → Fox panel disappears, last user message + upstream error stay in transcript, no retry. · (d) Force `interrupted` (mid-stream break): start a long-running chat response; from another terminal run `docker exec fitb-smoke pkill -KILL -f hermes-gateway` mid-response → panel appears, partial assistant tokens stay in transcript (Retry wipes them). · (e) User-cancelled (`type:cancelled`): start a streaming response, click the Stop button → NO Fox panel should appear (cancel is user-initiated, not an error). · (f) Multiple errors in a row: after panel fires once, click Dismiss; send another message that also errors → panel appears again (no once-per-session lockout). · (g) DOM selectors present after fire: `[data-fitb-retry-panel]` root, `[data-fitb-retry-action="retry"]` button, `[data-fitb-retry-action="dismiss"]` button (these become the Playwright selectors when phase-1 E2E lands per #265). |
+| v0.6.0 upstream-separation migration | (a) `forks/hermes-webui` HEAD == pinned tag in `packages/fox-overlay/versions.toml` (and same for `forks/hermes-agent`) · (b) `./packages/fox-overlay/scripts/check-overlay-basis.sh` exits 0 locally · (c) Container boot log includes `[fox-overlay] bootstrap installed: dispatcher frozen, N GET + M POST handlers registered` (N + M match the current `webui_modules/` registrations) · (d) Container boot log includes `[fox-overlay] webui_patches.apply_all() complete` with the current patch count · (e) Agent boot log has **zero** `fox-overlay-failed` warnings · (f) `ls /app/hermes-agent/plugins/memory/` shows `mem0_oss/` (Dockerfile COPY landed) · (g) Fox-claimed endpoints all return 200: `/setup`, `/api/profiles`, `/api/ollama/status`, `/api/tailscale/status`, `/api/local-fallback/status`, `/api/local-models`, `/api/settings/hostname` · (h) `FITB_DISABLE_WEBUI_OVERLAY=1` + `FITB_DISABLE_AGENT_OVERLAY=1` build still produces a container that boots (bisect-flag smoke) · (i) ~~**Known regressions** intentional~~ **OBSOLETE as of v0.6.1**: #254 + #255 are now fixed via the universal stream-error retry panel (see v0.6.1 row below). When smoking `:stable` (v0.6.1+) skip item (i); when smoking a `:v0.6.0` image specifically the regressions are intentional. |
 | #138 / #139 / #140 v0.5.4 stabilization | **#138:** (a) Settings → Ollama tile → click "Use this model" → chat picker reflects the new model on next open (no 5-min wait, no reload required) · (b) `_available_models_cache` evicts on real config change (mtime-gated, not first load). **#139:** (c) Open Settings → Tailscale tile in **Safari** → click Connect → fallback link `Click to authenticate Tailscale` is visible in the tile · (d) Click the link → auth completes, status flips to Connected, link disappears · (e) Re-Connect after disconnect → fresh link appears, no leftover from prior attempt. **#140:** (f) Authenticate Tailscale via desktop app or `docker exec ... tailscale up` (bypassing the webui Connect button) → within ~15 seconds of opening Settings, `tailscale serve status` shows :8787 mapped without manual "Configure HTTPS" click · (g) HTTPS-toggle hint visible in the Tailscale tile pointing to admin/dns. |
 | Phase 2 v0.6.0 (static overlay) | (a) `curl http://127.0.0.1:8788/extensions/fox-in-the-box.css` returns 200 · (b) `curl --globoff http://127.0.0.1:8788/extensions/fonts/Manrope[wght].woff2` returns 200 · (c) `curl http://127.0.0.1:8788/extensions/images/fox_avatar_cropped.jpg` returns 200 · (d) `curl http://127.0.0.1:8788/extensions/fox-overlay.js` and the 3 other Fox JS files (onboarding-preview, hostname-prompt, fallback-polish) all return 200 · (e) view-source of `/` (post `/api/setup/skip`) shows exactly 1 `<link rel="stylesheet" href="/extensions/fox-in-the-box.css">` and 4 `<script src="/extensions/*.js" defer>` tags injected by `api/extensions.py` · (f) SHA256 of each served `/extensions/*` asset matches the source file under `packages/fox-overlay/webui_static/` · (g) chat empty-state + assistant-message avatars render (no broken-image icon) — visual confirmation that `extensions/images/fox_avatar_cropped.jpg` resolves from `static/index.html` and `static/ui.js`. |
 | #4 + #5 Phase 1 (v0.5.5) | Plugin loads cleanly · PII masking detects SSN/CC/phone/email · <30 ms p95 latency · toggle off = no impact |
