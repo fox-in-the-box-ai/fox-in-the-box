@@ -1,0 +1,7 @@
+{
+  "_comment": "License-watch baseline (tripwire #208). Blob SHAs of LICENSE on each upstream's default branch at the time of v0.6.0 ship. Update via PR when an intentional license change is reviewed and accepted; the workflow goes quiet once the SHAs match.",
+  "_recorded_at": "2026-05-18 (v0.6.0)",
+  "_recorded_by": "tripwire-license-watch.sh — bootstrap entry",
+  "webui": "b1beedc34d88c427425f732a3669e5b2ee6ee8b9",
+  "agent": "75410e73319c72cd3e991a501c5455eb78f38375"
+}

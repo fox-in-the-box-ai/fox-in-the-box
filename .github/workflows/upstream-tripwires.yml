@@ -1,0 +1,241 @@
+# .github/workflows/upstream-tripwires.yml
+#
+# Consolidated upstream-monitoring tripwires (v0.6.0 — issue #206).
+#
+# Originally specced as 10 separate workflows (#207 thru #216). Consolidated
+# into one file because they share scaffolding: daily cron, GitHub API
+# calls against the two upstream repos, dedupe-by-title issue creation.
+# Splitting would multiply maintenance with no benefit.
+#
+# Each tripwire is its own job. All jobs are independent; one failing does
+# not skip the others. A job's "fire" condition opens (or reuses) one issue
+# with a stable title; subsequent fires bump the existing issue rather than
+# stack. Issue closes happen by human inspection after the upstream condition
+# clears.
+#
+# Tripwires implemented:
+#   #207  upstream_commit_digest   — daily commits + keyword/file flagging
+#   #208  license_watch            — LICENSE drift on either upstream
+#   #209  branch_creation_watch    — new upstream branch matches rewrite-regex
+#   #210  nousresearch_ui_watch    — webui/frontend/static dir appears in agent
+#   #211  maintainer_absence       — nesquena silent for 5+ days
+#   #212  cve_feed                 — new GHSA on either upstream
+#   #213  stage_batch_gap          — stage-NNN release stamp gap >48h
+#   #214  e2e_pair_test            — verified-shipped (see comment in job)
+#   #215  patch_rebase_clock       — oldest overlay patch refresh-age
+#   #216  open_issue_age           — oldest upstream open issue >90d
+#
+# See docs/architecture/upstream-overlay.md §Operational → "Tripwires" for
+# the resolution playbook for each label.
+
+name: Upstream Tripwires
+
+on:
+  schedule:
+    # 06:00 UTC daily — 43 min after upstream-watch.yml (05:17 UTC) so
+    # they don't race on the GitHub API rate limit.
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+    inputs:
+      only:
+        description: 'Run only this tripwire (e.g. "license_watch"); empty = all'
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+  issues: write
+
+env:
+  WEBUI_REPO: nesquena/hermes-webui
+  AGENT_REPO: NousResearch/hermes-agent
+  WEBUI_BRANCH: master
+  AGENT_BRANCH: main
+  # Shared label all tripwire-opened issues carry; lets you filter the
+  # backlog at a glance with `gh issue list --label tripwire-fire`.
+  TRIPWIRE_LABEL: tripwire-fire
+
+jobs:
+
+  # ── #207 — Daily upstream-commit digest ─────────────────────────────────
+  # Highlights commits matching keyword regex AND commits touching the
+  # "always-conflict" file set. If both upstreams have zero commits in the
+  # last 24h, no-op. Issue carries `tripwire/digest` for filtering.
+  upstream_commit_digest:
+    if: github.event.inputs.only == '' || github.event.inputs.only == 'upstream_commit_digest'
+    name: "#207 daily commit digest"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash .github/scripts/tripwire-commit-digest.sh
+
+  # ── #208 — License watch ────────────────────────────────────────────────
+  # SHA of LICENSE on each upstream is compared to the SHA stored in
+  # .github/state/upstream-licenses.json. Fires on drift. Resolve by
+  # running the workflow's "update baseline" step manually after the human
+  # review of the new license.
+  license_watch:
+    if: github.event.inputs.only == '' || github.event.inputs.only == 'license_watch'
+    name: "#208 license watch"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash .github/scripts/tripwire-license-watch.sh
+
+  # ── #209 — Branch-creation watch ────────────────────────────────────────
+  # `git ls-remote --heads` against each upstream, filter on regex matching
+  # rewrite/major-version signals. Fires once per matching branch (dedupe
+  # by branch name in issue title).
+  branch_creation_watch:
+    if: github.event.inputs.only == '' || github.event.inputs.only == 'branch_creation_watch'
+    name: "#209 branch creation watch"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash .github/scripts/tripwire-branch-watch.sh
+
+  # ── #210 — NousResearch official-UI watch ───────────────────────────────
+  # Critical pivot signal — if Nous ships their own UI, Fox should
+  # re-evaluate its dependency on nesquena/hermes-webui.
+  nousresearch_ui_watch:
+    if: github.event.inputs.only == '' || github.event.inputs.only == 'nousresearch_ui_watch'
+    name: "#210 NousResearch UI watch"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash .github/scripts/tripwire-nous-ui-watch.sh
+
+  # ── #211 — Maintainer absence canary (nesquena) ────────────────────────
+  # Baseline at v0.6.0: 0 gaps of 5+ silent days in 48 days. Fires if
+  # nesquena has zero commits to upstream/master for 5 consecutive days.
+  # Debounce note: during 5-week migrations (rare), suppress manually by
+  # closing the issue.
+  maintainer_absence:
+    if: github.event.inputs.only == '' || github.event.inputs.only == 'maintainer_absence'
+    name: "#211 maintainer absence"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash .github/scripts/tripwire-maintainer-absence.sh
+
+  # ── #212 — CVE feed (GHSA polling) ─────────────────────────────────────
+  # Polls /repos/{owner}/{repo}/security-advisories for both upstreams.
+  # Any new advisory opens an issue with severity in title.
+  cve_feed:
+    if: github.event.inputs.only == '' || github.event.inputs.only == 'cve_feed'
+    name: "#212 CVE feed"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash .github/scripts/tripwire-cve-feed.sh
+
+  # ── #213 — Stage-batch monitoring ──────────────────────────────────────
+  # nesquena's release cadence stamps commits like
+  # "Stamp CHANGELOG for v0.51.84 (Release BH / stage-377)". If the gap
+  # between the most recent such stamp and now exceeds 48h while there
+  # is unreleased commit activity, the release pipeline likely broke —
+  # early signal of maintainer outage.
+  stage_batch_gap:
+    if: github.event.inputs.only == '' || github.event.inputs.only == 'stage_batch_gap'
+    name: "#213 stage-batch gap"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash .github/scripts/tripwire-stage-batch-gap.sh
+
+  # ── #214 — E2E pair test ────────────────────────────────────────────────
+  # ALREADY SHIPPED. build-container.yml builds the assembled container
+  # (webui pin + agent pin + overlay) and runs the smoke jobs against it —
+  # that IS the pair test. This job exists only to surface the assertion
+  # in the daily report so the tripwire stays accounted for.
+  e2e_pair_test:
+    if: github.event.inputs.only == '' || github.event.inputs.only == 'e2e_pair_test'
+    name: "#214 e2e pair test (verify build-container.yml)"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash .github/scripts/tripwire-e2e-pair-verify.sh
+
+  # ── #215 — Patch-series rebase clock ───────────────────────────────────
+  # v0 impl: opens issue if the oldest patch file under
+  # packages/fox-overlay/patches/{webui,agent}/*.patch is older than
+  # the threshold (THRESHOLD_DAYS in script). Original spec wanted a
+  # rolling-average of "time-to-rebase per upstream pull" — that needs
+  # historical telemetry we don't have, so v0 ships the freshness clock.
+  patch_rebase_clock:
+    if: github.event.inputs.only == '' || github.event.inputs.only == 'patch_rebase_clock'
+    name: "#215 patch rebase clock"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # need full history to compute file age
+      - env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash .github/scripts/tripwire-rebase-clock.sh
+
+  # ── #216 — Open-issue-age sentry ───────────────────────────────────────
+  # Tracks the oldest open issue on each upstream. Fires when oldest > 90d
+  # AND upstream is < 12mo old (so old-issue accretion doesn't mask the
+  # baseline neglect signal once the project ages naturally).
+  open_issue_age:
+    if: github.event.inputs.only == '' || github.event.inputs.only == 'open_issue_age'
+    name: "#216 open issue age sentry"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash .github/scripts/tripwire-issue-age.sh
+
+  # ── Tripwire-job failure handler ────────────────────────────────────────
+  # If any tripwire job itself fails (network blip, API rate limit, script
+  # bug), open one combined issue rather than ten — surfacing infra failure
+  # separately from upstream-condition fires.
+  workflow_self_health:
+    name: "self-health (open issue on tripwire-job failure)"
+    needs:
+      - upstream_commit_digest
+      - license_watch
+      - branch_creation_watch
+      - nousresearch_ui_watch
+      - maintainer_absence
+      - cve_feed
+      - stage_batch_gap
+      - e2e_pair_test
+      - patch_rebase_clock
+      - open_issue_age
+    if: always() && contains(needs.*.result, 'failure')
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          title="[tripwire-self-health] one or more upstream-tripwire jobs failed in run ${{ github.run_id }}"
+          existing=$(gh issue list --repo "${{ github.repository }}" \
+                       --label tripwire-self-health --state open \
+                       --search "in:title \"tripwire-self-health\"" \
+                       --json number -q '.[0].number' 2>/dev/null || echo "")
+          body="Tripwire job(s) failed (not a real upstream condition — workflow itself broke). See ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }} for the failing job. Common causes: GitHub API rate limit, network blip, upstream URL change, script regression. Resolve by fixing the script or transient retry; close this issue when next run is green."
+          if [ -n "$existing" ]; then
+              gh issue comment "$existing" --body "Re-fired on run ${{ github.run_id }}. $body"
+          else
+              gh issue create --title "$title" --body "$body" \
+                --label tripwire-self-health --label P2
+          fi
