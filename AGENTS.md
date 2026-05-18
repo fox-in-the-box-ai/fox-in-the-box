@@ -26,8 +26,8 @@ The Supervisor will amend the commit message and push.
 ```
 fox-in-the-box/             ← monorepo root
 ├── forks/
-│   ├── hermes-agent/       ← git submodule (fox-in-the-box-ai/hermes-agent)
-│   └── hermes-webui/       ← git submodule (fox-in-the-box-ai/hermes-webui)
+│   ├── hermes-agent/       ← git submodule (NousResearch/hermes-agent, pinned via packages/fox-overlay/versions.toml)
+│   └── hermes-webui/       ← git submodule (nesquena/hermes-webui, pinned via packages/fox-overlay/versions.toml)
 ├── packages/
 │   ├── integration/        ← Dockerfile, supervisord, entrypoint, default-configs
 │   ├── electron/           ← Electron desktop app
