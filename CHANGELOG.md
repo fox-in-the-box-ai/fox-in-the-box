@@ -7,6 +7,36 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.6.1] - 2026-05-18
+
+A universal retry surface for streaming errors. Closes the two v0.7.x carry-overs from the v0.6.0 migration in one shot, using a simpler approach than the original feature-specific implementations.
+
+### Added
+
+- **"Something went wrong, please try again" panel** with a Retry button that re-sends your last message. Appears at the bottom of the chat whenever the server emits a streaming error — auth mismatch, out of credits, rate-limited, mid-stream interruption, no-response, anything except a user-initiated cancellation. Retry wipes the partial assistant response, restores your prompt, and re-sends.
+
+### Fixed
+
+- **#254 — Mid-stream break detection.** Previously: v0.6.0 dropped Fox's old "Stream interrupted" label + partial-text-preservation behavior because upstream refactored the streaming/self-heal flow. Now: every error class — including mid-stream breaks — surfaces the same Retry panel, replacing both the lost behavior and upstream's wordy default error message.
+- **#255 — Silent auto-failover on auth/quota errors.** Previously: when an OpenRouter key was rejected or credits ran out, v0.6.0 surfaced upstream's apperror with no auto-switch. Now: same Retry panel; the user clicks Retry once they've fixed the key in Settings → Providers (or already has fallback configured). Manual provider switch via Settings → Providers continues to work.
+
+### Behind the scenes
+
+- The fix is a single ~190-line static JS file (`packages/fox-overlay/webui_static/stream-error-retry.js`) injected via `HERMES_WEBUI_EXTENSION_DIR` + ~30 lines of CSS. No Python patches, no monkey-patches — it subscribes to upstream's stable `apperror` SSE event as a downstream consumer. Because it doesn't modify upstream source, it survives any future refactor of upstream's error-handling flow as long as the `apperror` event name + payload shape stay stable.
+
+### Verified
+
+Manual smoke against `:latest` candidate post-merge:
+- Force `auth_mismatch`: set OpenRouter key to garbage in Settings → Providers → send message → upstream's inline error suppressed, Fox panel appears, Retry restores the prompt
+- Force `interrupted`: kill the agent mid-stream via `docker exec ... pkill -KILL ...` → panel appears, partial assistant tokens wiped, Retry works
+- Cancel button (`type: cancelled`): panel does NOT appear — user-initiated, no retry surface needed
+
+### What's next
+
+v0.6.x stabilization tail-end. Then Playwright E2E infrastructure (Phase 0 of a phased rollout the architects scoped today — see the upcoming Playwright epic).
+
+---
+
 ## [0.6.0] - 2026-05-18
 
 Upstream-separation migration. The `forks/hermes-webui` and `forks/hermes-agent` submodules now point at the virgin upstream repositories (`nesquena/hermes-webui` v0.51.84 and `NousResearch/hermes-agent` v2026.5.16). All Fox-specific behavior moved into the new `packages/fox-overlay/` package — applied at Docker build time as patch series + file-removals + a sibling Python package + pip-installed monkey-patches. Net: Fox can absorb upstream weekly instead of carrying 1,500+ commits of drift.
