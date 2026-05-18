@@ -33,12 +33,21 @@ tripwire_fire() {
         return 0
     fi
 
-    # Build --label args from comma-separated list.
+    # Build --label args from comma-separated list. Idempotently create
+    # any missing labels first; `gh issue create --label X` errors out if
+    # X doesn't exist in the repo, and we don't want to pre-seed labels
+    # by hand or in a separate workflow step. `gh label create --force`
+    # is the idempotent variant: creates if missing, updates if present.
     local label_args=()
     IFS=',' read -ra parts <<<"$labels"
     for l in "${parts[@]}"; do
         l="$(echo "$l" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
         [ -z "$l" ] && continue
+        # Best-effort: don't fail the tripwire if label creation hits a
+        # permissions issue (the issue creation will surface the error).
+        gh label create "$l" --repo "$REPO" --force \
+            --color "$(tripwire_label_color "$l")" \
+            --description "auto-created by upstream-tripwires.yml" >/dev/null 2>&1 || true
         label_args+=("--label" "$l")
     done
 
@@ -46,6 +55,22 @@ tripwire_fire() {
         --title "$title" \
         --body "$(printf '%s\n\n_Fired by upstream-tripwires.yml run %s_' "$body" "$RUN_URL")" \
         "${label_args[@]}"
+}
+
+# Stable colour per label family so the issue list reads at a glance.
+tripwire_label_color() {
+    case "$1" in
+        tripwire-fire)         echo "d73a4a" ;;  # red
+        tripwire-self-health)  echo "fbca04" ;;  # yellow
+        tripwire/cve|security) echo "b60205" ;;  # dark red
+        tripwire/license)      echo "5319e7" ;;  # purple
+        tripwire/branch|tripwire/nous-ui) echo "d93f0b" ;;  # orange
+        tripwire/*)            echo "1d76db" ;;  # blue (generic tripwire scope)
+        P0)                    echo "b60205" ;;
+        P1)                    echo "d93f0b" ;;
+        P2)                    echo "fbca04" ;;
+        *)                     echo "cccccc" ;;
+    esac
 }
 
 # Read JSON state file (one shared file per category), defaulting to "{}"
