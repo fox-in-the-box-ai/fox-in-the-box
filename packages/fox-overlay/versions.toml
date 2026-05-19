@@ -10,13 +10,19 @@
 # for shell-friendly grepping.
 
 [upstream]
-hermes_webui_tag = "v0.51.84"
+hermes_webui_tag = "v0.51.92"
 hermes_webui_url = "https://github.com/nesquena/hermes-webui"
 hermes_agent_tag = "v2026.5.16"
 hermes_agent_url = "https://github.com/NousResearch/hermes-agent"
 
 [meta]
-pinned_at = "2026-05-17"
-pinned_in_pr = "fox-in-the-box-ai/fox-in-the-box#237"  # Phase 8 ATOMIC
-phase = "Phase 8"
-notes = "First overlay-based pin. Webui patch series + agent bootstrap shim verified clean against this pair."
+pinned_at = "2026-05-19"
+pinned_in_pr = "fox-in-the-box-ai/fox-in-the-box#276"  # v0.6.3 — first auto-watch-driven bump
+phase = "v0.6.3"
+notes = "First upstream bump driven by upstream-watch.yml auto-issue (#275). Webui v0.51.84 → v0.51.92 (8 patch versions); agent unchanged. check-overlay-basis.sh confirmed clean against the new pair before merge."
+
+[history]
+prior_pins = [
+  # newest first
+  "webui=v0.51.84, agent=v2026.5.16 — Phase 8 ATOMIC #237 (2026-05-17)",
+]

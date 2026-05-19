@@ -7,6 +7,31 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.6.3] - 2026-05-19
+
+**First upstream bump driven by the auto-watch loop.** Fox now ships upstream `nesquena/hermes-webui` **v0.51.92** (was v0.51.84 — 8 patch versions of upstream improvements). The agent stays pinned at v2026.5.16. End-to-end proof that the v0.6.0 overlay architecture pays off: zero anchor refresh required, zero Fox code touched, ~5 minutes from auto-issue to merged PR.
+
+### Upstream changes you may notice
+
+- **Grok OAuth** is now a supported provider in the catalog
+- **Auto-compression handoff** is surfaced more clearly in long conversations
+- **Workspace file icons** in the file tree are visually aligned
+- **Anonymous custom endpoints** stay in the model picker even when `/v1/models` probe fails (handy for OpenAI-compatible setups behind auth)
+- Security-tightened: archive extraction is now scoped per-session attachment dir
+- Plus assorted smaller fixes across `~108 files` upstream (full upstream changelog: see [v0.51.85 ... v0.51.92 on nesquena/hermes-webui](https://github.com/nesquena/hermes-webui/compare/v0.51.84...v0.51.92))
+
+### Behind the scenes
+
+- **`upstream-watch.yml` workflow bug fixed (#273 / #274).** The nightly watcher had a `set -e` + `[ ] && echo` gotcha that killed it whenever exactly one of the two upstreams drifted. Result: both 2026-05-18 + 19 nightly runs failed silently (only the generic self-health issue fired). Fix: replaced the short-circuit pattern with explicit `if/then` blocks. Surfaced because nesquena/hermes-webui shipped v0.51.92 yesterday but agent stayed pinned — asymmetric drift triggered the bug. First real-world signal-from-the-watcher: issue [#275](https://github.com/fox-in-the-box-ai/fox-in-the-box/issues/275).
+- **`packages/fox-overlay/versions.toml`** gains a `[history]` block tracking prior pins for future debugging.
+- `check-overlay-basis.sh` verified clean against v0.51.92 in both the auto-watch run AND the pre-build CI gate on this PR.
+
+### What's next
+
+v0.6.x stabilization continues; Playwright Phase 0 (#264) when you're ready. Upstream-watch is now self-healing for future asymmetric drift.
+
+---
+
 ## [0.6.2] - 2026-05-19
 
 Three small stabilization fixes surfaced during real-world smoke of v0.6.1. No new features; v0.6.x stays on track.
