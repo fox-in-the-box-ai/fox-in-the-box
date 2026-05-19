@@ -84,17 +84,29 @@
     return null;
   }
 
-  // Pop the trailing apperror assistant message + the prior user message
-  // from S.messages, then re-render. Wipes partial assistant text + lets
-  // send() re-push the user message cleanly without duplicating it.
+  // Pop the trailing apperror assistant message from S.messages and
+  // re-render. Called from onAppError immediately on fire so the Fox
+  // panel is the sole error UI (was deferred to Retry-click in v0.6.1;
+  // gap surfaced during smoke and tracked as FITB #267).
+  function wipeUpstreamErrorMessage() {
+    try {
+      if (!window.S || !Array.isArray(window.S.messages)) return;
+      var last = window.S.messages[window.S.messages.length - 1];
+      if (last && last.role === 'assistant') {
+        window.S.messages.pop();
+        if (typeof window.renderMessages === 'function') {
+          window.renderMessages({ preserveScroll: true });
+        }
+      }
+    } catch (_) {}
+  }
+
+  // Pop the trailing user message so send() can re-push it cleanly
+  // (without duplicating). The trailing assistant was already popped
+  // by wipeUpstreamErrorMessage() at apperror time.
   function rewindForRetry() {
     try {
       if (!window.S || !Array.isArray(window.S.messages)) return;
-      // The apperror handler in messages.js just pushed the error
-      // assistant message; pop it.
-      var last = window.S.messages[window.S.messages.length - 1];
-      if (last && last.role === 'assistant') window.S.messages.pop();
-      // Now pop the prior user message so send() can re-push it.
       var prev = window.S.messages[window.S.messages.length - 1];
       if (prev && prev.role === 'user') window.S.messages.pop();
       if (typeof window.renderMessages === 'function') {
@@ -143,7 +155,11 @@
   }
 
   // Handler attached to every EventSource. Defers via setTimeout(0) so
-  // upstream's own handler runs first and completes its DOM mutations.
+  // upstream's own handler runs first and completes its DOM mutations
+  // (push assistant message + renderMessages). We then immediately wipe
+  // that upstream message so the Fox panel is the sole error UI for
+  // eligible error classes — fixes FITB #267 (v0.6.1 left the upstream
+  // message visible until Retry-click, which was a UX gap).
   function onAppError(e) {
     setTimeout(function () {
       var d = null;
@@ -153,6 +169,7 @@
         // Cancelled / anything else we deliberately ignore.
         return;
       }
+      wipeUpstreamErrorMessage();
       renderRetryPanel();
     }, 0);
   }

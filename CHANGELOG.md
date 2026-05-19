@@ -7,6 +7,26 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.6.2] - 2026-05-19
+
+Three small stabilization fixes surfaced during real-world smoke of v0.6.1. No new features; v0.6.x stays on track.
+
+### Fixed
+
+- **Mac launcher no longer stays open after the browser launches (#271).** Before: on a successful Mac launch, the browser would open and Fox worked, but the launcher window stayed visible stuck on "Step 5/6 — Wait for services." Race in `monitorContainerSetupLogs`: an in-flight `container.logs()` Docker API call could resolve AFTER `stopLogMonitor()` had been called, then call `showProgress(...)` which sees `_progressWin === null` (because `closeProgress()` already destroyed the window) and creates a fresh launcher window with the stale step-5 text. Fix: a `stopped` re-check after the async logs() returns, before any `showProgress` call.
+- **Stream-error retry panel hides upstream's inline error immediately (#267).** Before: in v0.6.1, when an `apperror` event fired, the Fox "Something went wrong, please try again" panel appeared but upstream's `**Provider mismatch:** …` markdown ALSO stayed visible in the transcript above the panel until the user clicked Retry. After: the panel is now the sole error UI from the moment the error fires — upstream's inline message is wiped immediately on `apperror`, not deferred to the Retry click.
+
+### Behind the scenes
+
+- **Retired the `webui_patches/providers.py` overlay (#269 / #163).** The Fox overlay was substituting upstream's `set_provider_key` to add a `supervisorctl restart hermes-gateway` after every API-key change. Verified on a fresh v0.6.1 container that upstream's `_reload_runtime_env_preserving_config_authority()` at `gateway/run.py:15103` already picks up rotated keys per-turn without any gateway restart — the overlay was dead code AND actively worse (the supervisor restart disrupted in-flight SSE streams that upstream deliberately preserved). Removing the overlay simplifies the patch surface and aligns Fox with upstream's documented behavior. No user-visible change; the WebUI's Settings → Providers flow continues to work identically.
+- **New jest regression tests** for the launcher race fix — `tests/electron/docker-manager.test.js` now covers the "stop() called during in-flight logs()" race + a no-op-when-callback-missing path.
+
+### What's next
+
+v0.6.x stabilization continues. Playwright Phase 0 (#264) is the next bigger workstream — replaces the manual smoke checklist for Sections A-C once landed.
+
+---
+
 ## [0.6.1] - 2026-05-18
 
 A universal retry surface for streaming errors. Closes the two v0.7.x carry-overs from the v0.6.0 migration in one shot, using a simpler approach than the original feature-specific implementations.
