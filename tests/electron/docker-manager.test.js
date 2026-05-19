@@ -245,3 +245,56 @@ test('extractSetupStatusFromLogs handles branch fallback message', () => {
   expect(parsed.currentApp).toBe('hermes-webui');
   expect(parsed.status).toBe('hermes-webui tag not found, using default branch…');
 });
+
+// ── Regression: monitorContainerSetupLogs race fix (FITB #271) ───────────────
+
+test('monitorContainerSetupLogs does not call showProgress after stop() (race fix #271)', async () => {
+  // Sim: container.logs() is async + slow. The poll() invokes it, then
+  // while awaiting we call stop(). When logs() returns, the poll must NOT
+  // call showProgress — otherwise a fresh launcher window would be created
+  // after closeProgress() destroyed the old one (the bug from FITB #271).
+  const { monitorContainerSetupLogs } = require('../../packages/electron/src/docker-manager');
+
+  // First setup-batch worth of lines → status "Installing hermes-agent dependencies…"
+  const batch = `
+2026-05-03 15:12:16.621 | [entrypoint] Cloning hermes-agent @ v0.1.0 ...
+2026-05-03 15:13:20.189 | Updating files:  50% (1355/2709)
+2026-05-03 15:13:20.237 | [entrypoint] Installing hermes-agent ...
+`;
+
+  // Build a controllable `container.logs()` whose resolution we gate.
+  let resolveLogs;
+  const logsPromise = new Promise((res) => { resolveLogs = res; });
+  const fakeContainer = {
+    logs: jest.fn(() => logsPromise),
+  };
+  mockDockerInstance.listContainers.mockResolvedValue([
+    { Id: 'sha1', Names: ['/fox-in-the-box'] },
+  ]);
+  mockDockerInstance.getContainer.mockReturnValue(fakeContainer);
+
+  const showProgress = jest.fn();
+  const stop = monitorContainerSetupLogs(showProgress, { pollIntervalMs: 5_000, tailLines: 100 });
+
+  // Yield a microtask so poll() can reach the `await container.logs(...)` line.
+  await new Promise((r) => setImmediate(r));
+  expect(fakeContainer.logs).toHaveBeenCalled();
+
+  // The bug condition: stop the monitor BEFORE the in-flight logs() resolves.
+  stop();
+
+  // Now resolve the slow logs() call with a payload that WOULD have produced
+  // a new status (and thus a showProgress call) if the race guard weren't there.
+  resolveLogs({ toString: () => batch });
+  await new Promise((r) => setImmediate(r));
+  await new Promise((r) => setImmediate(r));
+
+  expect(showProgress).not.toHaveBeenCalled();
+});
+
+test('monitorContainerSetupLogs returns a no-op when showProgress is missing', () => {
+  const { monitorContainerSetupLogs } = require('../../packages/electron/src/docker-manager');
+  const stop = monitorContainerSetupLogs(null);
+  expect(typeof stop).toBe('function');
+  expect(() => stop()).not.toThrow();
+});

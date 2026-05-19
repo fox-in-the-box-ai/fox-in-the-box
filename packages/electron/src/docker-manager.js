@@ -493,6 +493,11 @@ function monitorContainerSetupLogs(showProgress, {
 
       const parsed = extractSetupStatusFromLogs(raw.toString('utf8'), state);
       state.currentApp = parsed.currentApp;
+      // Race guard: container.logs() above is async and can return AFTER
+      // stopLogMonitor() was called. Without this re-check, a late
+      // showProgress() call after closeProgress() would create a fresh
+      // launcher window stuck on step 5 (FITB #271).
+      if (stopped) return;
       if (parsed.status && parsed.status !== state.lastStatus) {
         state.lastStatus = parsed.status;
         showProgress(parsed.status);
