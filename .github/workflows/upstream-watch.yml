@@ -141,8 +141,18 @@ jobs:
               echo "[upstream-watch] both pins match latest; nothing to do"
           else
               echo "no_drift=no" >> "$GITHUB_OUTPUT"
-              [ "$webui_drift" = "yes" ] && echo "[upstream-watch] webui drift: $pinned_webui → $latest_webui"
-              [ "$agent_drift" = "yes" ] && echo "[upstream-watch] agent drift: $pinned_agent → $latest_agent"
+              # Use `if/then` rather than `[ ] && echo` — `set -e` treats a
+              # false `[ ]` test (exit 1) as fatal even when the short-circuit
+              # was the intended behavior. The old pattern killed the
+              # workflow before it could run check-overlay-basis on a one-
+              # sided drift (FITB observed 2026-05-18 + 19 when webui drifted
+              # to v0.51.92 but agent stayed pinned — see #273).
+              if [ "$webui_drift" = "yes" ]; then
+                  echo "[upstream-watch] webui drift: $pinned_webui → $latest_webui"
+              fi
+              if [ "$agent_drift" = "yes" ]; then
+                  echo "[upstream-watch] agent drift: $pinned_agent → $latest_agent"
+              fi
           fi
 
       - name: Check overlay basis against latest tags
