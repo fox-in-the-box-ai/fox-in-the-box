@@ -7,6 +7,24 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.7.1] - 2026-05-20
+
+Two quick polish fixes from yesterday's grooming pass.
+
+### Fixed
+
+- **Recovery banner background is now opaque (#147 part 1).** The "Your remote provider looks reachable again. Switch off local fallback to use it?" banner had a translucent teal background that bled chat / Settings content from underneath, making both the banner text and the page hard to read. Switched to a solid dark surface (matching the failover-modal palette) with a teal accent border. Banner is now legible against any content. Part 2 (hide banner when navigating away from Chat) deferred to a follow-up; this v0.7.1 ships the cosmetic-only fix to clear the readability blocker.
+
+### Behind the scenes
+
+- **`build-container.yml`'s Option B `:stable` auto-bump step now logs the actual resulting `:stable` digest** instead of the input digest. Cosmetic fix; the prior log line said `✅ :stable now points at $DIGEST` but `$DIGEST` was the pre-re-tag `:latest` digest — `docker buildx imagetools create` generates a NEW manifest-list digest on each invocation, so the value `:stable` actually points at differs. Re-read the digest after the operation so future Option B runs are accurately debuggable.
+
+### Versioning
+
+Per the v0.7.x cadence policy committed today: this is patch v0.7.1, not a minor bump. v0.7.x continues until the current backlog clears (~37 open issues at v0.7.0 ship).
+
+---
+
 ## [0.7.0] - 2026-05-20
 
 **Versioning policy shift.** Fox's version number now reflects **Fox-code changes only**. Upstream `nesquena/hermes-webui` ships several patch versions per day; treating each as a full Fox release was inflating version numbers, churning signed binaries, and burning ~25 min of CI per push for no Fox-side change to report.

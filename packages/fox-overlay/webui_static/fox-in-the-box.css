@@ -832,15 +832,18 @@ pre[class*=language-] {
   transform: translateX(-50%);
   z-index: 9997;
   margin-top: 10px;
-  background: rgba(45, 212, 191, 0.12);
-  border: 1px solid rgba(45, 212, 191, 0.4);
+  /* Opaque dark surface (matches .fitb-fb-modal) + teal accent border so the
+   * banner doesn't bleed content from underneath (FITB #147). */
+  background: var(--bg-secondary, #1f2024);
+  color: var(--text-primary, #f0f0f2);
+  border: 1px solid #2dd4bf;
   border-radius: 8px;
   padding: 10px 14px;
   display: flex;
   gap: 14px;
   align-items: center;
   font-size: 13px;
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
   max-width: 90vw;
 }
 

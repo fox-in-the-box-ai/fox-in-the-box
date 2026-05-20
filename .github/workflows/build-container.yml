@@ -250,13 +250,13 @@ jobs:
           # entirely from downloaded per-arch digests, so `git` is unusable).
           MSG="${HEAD_COMMIT_MESSAGE%%$'\n'*}"
           if [[ "$MSG" =~ ^bump\(upstream\): ]]; then
-              DIGEST="${{ steps.merge.outputs.digest }}"
+              INPUT_DIGEST="${{ steps.merge.outputs.digest }}"
               echo "Commit subject matches Option B upstream-bump convention:"
               echo "  $MSG"
-              echo "Bumping :stable to $DIGEST"
+              echo "Bumping :stable from the :latest manifest list ($INPUT_DIGEST)"
               docker buildx imagetools create \
                 -t "${IMAGE}:stable" \
-                "${IMAGE}@${DIGEST}"
+                "${IMAGE}@${INPUT_DIGEST}"
               # Verify both arches survived the re-tag (defensive — FITB#82).
               docker buildx imagetools inspect "${IMAGE}:stable" \
                 --format '{{range .Manifest.Manifests}}{{.Platform.OS}}/{{.Platform.Architecture}}{{"\n"}}{{end}}' \
@@ -264,7 +264,14 @@ jobs:
               docker buildx imagetools inspect "${IMAGE}:stable" \
                 --format '{{range .Manifest.Manifests}}{{.Platform.OS}}/{{.Platform.Architecture}}{{"\n"}}{{end}}' \
                 | grep -qx 'linux/arm64'
-              echo "✅ :stable now points at $DIGEST (both arches confirmed)"
+              # imagetools create rebuilds the manifest list and assigns it a
+              # NEW index digest (the contents are bit-identical but the
+              # operation creates a new manifest blob). Re-read so the log
+              # shows the actual digest :stable points at after the operation,
+              # not the input digest (FITB v0.7.1 cosmetic fix).
+              STABLE_DIGEST=$(docker buildx imagetools inspect "${IMAGE}:stable" \
+                --format '{{json .Manifest}}' | jq -r '.digest')
+              echo "✅ :stable now points at $STABLE_DIGEST (both arches confirmed; input was $INPUT_DIGEST)"
           else
               echo "Skipping :stable auto-bump — commit subject is not a 'bump(upstream):' prefix:"
               echo "  $MSG"
