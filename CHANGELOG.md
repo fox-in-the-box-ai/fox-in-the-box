@@ -7,6 +7,47 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.7.0] - 2026-05-20
+
+**Versioning policy shift.** Fox's version number now reflects **Fox-code changes only**. Upstream `nesquena/hermes-webui` ships several patch versions per day; treating each as a full Fox release was inflating version numbers, churning signed binaries, and burning ~25 min of CI per push for no Fox-side change to report.
+
+From v0.7.0 forward: **upstream-pin advances ship as container-only updates** — the `:stable` Docker tag advances; existing DMG/exe installations pick up the new container automatically on next Electron launch (Electron pulls `:stable` at startup); no DMG re-download required. Fox version bumps happen only when Fox code changes (overlay code, Electron, packaging, smoke fixes, etc.).
+
+### How it works
+
+A commit-message convention. The merge step in `build-container.yml` now auto-bumps `:stable` if-and-only-if the merged commit subject starts with `bump(upstream):`. This is the marker reserved for pure upstream-pin advances. Fox-code commits never use this prefix, so the original FITB#122 protection (`:stable` doesn't follow main on Fox-code commits) is preserved.
+
+### Practical effect
+
+| Change type | What happens | What gets bumped |
+|---|---|---|
+| Fox-code release (overlay change, bug fix, feature) | Tag `vX.Y.Z` → `release.yml` → DMG + exe + container + GitHub Release | `VERSION`, `package.json`, CHANGELOG, `:stable`, `:vX.Y.Z` |
+| Upstream-only bump (just submodule + `versions.toml`) | Merge PR with `bump(upstream): …` subject → `build-container.yml` auto-bumps `:stable` | `:stable` only (no version bump, no DMG/exe, no GitHub Release) |
+
+### What you'll notice
+
+- **DMG / exe downloads bump less often.** Probably 1-2× per month instead of multiple times per week.
+- **Container `:stable` continues to advance.** Often daily during active upstream cadence. Existing installs get the latest on Electron relaunch.
+- **GitHub Releases** are now reserved for things you actually want to read about. Upstream-pin advances don't create a release; they accumulate (and can be summarized in the next Fox-code release's notes).
+- **No user action required for the policy change** — auto-pickup happens via the existing Electron startup flow.
+
+See [`docs/architecture/upstream-overlay.md`](docs/architecture/upstream-overlay.md) → "Versioning policy (Option B)" + "Bumping the upstream pin" for the full operational guide.
+
+### Behind the scenes
+
+- `build-container.yml` merge job gets the new conditional `:stable` auto-bump step (~15 lines, gated on commit-subject prefix).
+- `docs/architecture/upstream-overlay.md` Operational section rewritten to cover the policy + the bump-PR conventions.
+- `CLAUDE.md` Branching & Release Flow section updated with the `bump(upstream):` convention.
+- No code in Fox-overlay or Electron changed.
+
+### What's next
+
+Future improvements (deferred):
+- Auto-bump workflow that opens the `bump(upstream): …` PR automatically when an `upstream-update-available` issue is labeled. Today it's still manual: read the auto-issue from `upstream-watch.yml`, run the few commands it lists, open a PR with the right subject. ~5 minutes.
+- Date-stamped container tags (e.g. `:container-20260520-abc1234`) for forensic traceability between `:stable` advances.
+
+---
+
 ## [0.6.4] - 2026-05-20
 
 Tight stabilization fix for a user-flow gap discovered during v0.6.3 manual smoke. **Closes #281.**
