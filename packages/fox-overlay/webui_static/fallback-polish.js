@@ -372,6 +372,44 @@
 
   let _bannerNode = null;
   let _recoveryPollTimer = null;
+  let _tabVisibilityTimer = null;
+
+  // The recovery banner is contextually relevant only when the user is on the
+  // Chat panel — it's a chat-flow nudge ("your remote provider's back, switch
+  // off local fallback?"). On other panels (Settings, Workspaces, Insights, …)
+  // it blocks page headings + isn't actionable. Hide it on non-Chat panels;
+  // re-show when the user returns to Chat (FITB #147 part 2).
+  //
+  // Upstream's panel router writes the active panel name to `window._currentPanel`
+  // (see forks/hermes-webui/static/panels.js — values: 'chat' | 'tasks' |
+  // 'skills' | 'memory' | 'workspaces' | 'profiles' | 'todos' | 'insights' |
+  // 'logs' | 'settings'). We poll it on a slow tick (500ms) while the banner
+  // exists; the visible toggle is just an inline display style on the banner
+  // node, so the DOM tree + event handlers are preserved across hide/show.
+  function _isChatPanelActive() {
+    const p = (typeof window._currentPanel === 'string' && window._currentPanel) || 'chat';
+    return p === 'chat';
+  }
+
+  function startTabVisibilityWatch() {
+    if (_tabVisibilityTimer) return;
+    const tick = () => {
+      if (!_bannerNode) {
+        _tabVisibilityTimer = null;
+        return;
+      }
+      _bannerNode.style.display = _isChatPanelActive() ? '' : 'none';
+      _tabVisibilityTimer = setTimeout(tick, 500);
+    };
+    tick();
+  }
+
+  function stopTabVisibilityWatch() {
+    if (_tabVisibilityTimer) {
+      clearTimeout(_tabVisibilityTimer);
+      _tabVisibilityTimer = null;
+    }
+  }
 
   function buildBanner() {
     const wrap = document.createElement('div');
@@ -392,12 +430,14 @@
     if (_bannerNode) return;
     _bannerNode = buildBanner();
     document.body.appendChild(_bannerNode);
+    startTabVisibilityWatch();
 
     const dismiss = _bannerNode.querySelector('#fitbFbBannerDismiss');
     const switchBtn = _bannerNode.querySelector('#fitbFbBannerSwitch');
 
     dismiss.addEventListener('click', () => {
       sessionStorage.setItem(BANNER_DISMISSED, '1');
+      stopTabVisibilityWatch();
       closeNode(_bannerNode);
       _bannerNode = null;
     });
@@ -411,6 +451,7 @@
         return;
       }
       sessionStorage.setItem(BANNER_DISMISSED, '1');
+      stopTabVisibilityWatch();
       closeNode(_bannerNode);
       _bannerNode = null;
       stopRecoveryPolling();
