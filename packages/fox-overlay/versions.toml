@@ -10,19 +10,20 @@
 # for shell-friendly grepping.
 
 [upstream]
-hermes_webui_tag = "v0.51.92"
+hermes_webui_tag = "v0.51.95"
 hermes_webui_url = "https://github.com/nesquena/hermes-webui"
 hermes_agent_tag = "v2026.5.16"
 hermes_agent_url = "https://github.com/NousResearch/hermes-agent"
 
 [meta]
-pinned_at = "2026-05-19"
-pinned_in_pr = "fox-in-the-box-ai/fox-in-the-box#276"  # v0.6.3 — first auto-watch-driven bump
-phase = "v0.6.3"
-notes = "First upstream bump driven by upstream-watch.yml auto-issue (#275). Webui v0.51.84 → v0.51.92 (8 patch versions); agent unchanged. check-overlay-basis.sh confirmed clean against the new pair before merge."
+pinned_at = "2026-05-20"
+pinned_in_pr = "fox-in-the-box-ai/fox-in-the-box#277"  # first Option B upstream-only bump (no Fox version change)
+phase = "container-only-bump"
+notes = "First exercise of the v0.7.0 Option B versioning policy. No Fox code change; no VERSION bump; no DMG/exe rebuild. Webui v0.51.92 → v0.51.95 driven by upstream-watch.yml auto-issue (#277). check-overlay-basis.sh confirmed clean against the new pair. Container :stable auto-advances via build-container.yml merge step when this PR's squash commit (subject prefix bump(upstream):) lands on main."
 
 [history]
 prior_pins = [
   # newest first
+  "webui=v0.51.92, agent=v2026.5.16 — v0.6.3 #276 (2026-05-19)",
   "webui=v0.51.84, agent=v2026.5.16 — Phase 8 ATOMIC #237 (2026-05-17)",
 ]
