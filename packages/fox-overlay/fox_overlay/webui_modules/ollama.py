@@ -439,6 +439,7 @@ def use_model(model_name: str) -> dict[str, Any]:
         _get_config_path,
         _save_yaml_config_file,
         get_config,
+        invalidate_models_cache,
         reload_config,
     )
 
@@ -464,17 +465,25 @@ def use_model(model_name: str) -> dict[str, Any]:
     try:
         _save_yaml_config_file(_get_config_path(), cfg)
         reload_config()
+        # reload_config() only deletes the on-disk models cache; the
+        # picker reads from an in-memory cache that survives until the
+        # next call to invalidate_models_cache(). Without this call, the
+        # newly-activated Ollama model doesn't appear in the chat model
+        # picker until a full page reload (FITB #281).
+        invalidate_models_cache()
     except Exception as exc:
         logger.exception("Failed to switch active model to local Ollama: %s", exc)
         return {"ok": False, "error": f"Failed to update config: {exc}"}
 
-    # Best-effort gateway hot-reload (mirrors providers.py:_reload_provider_runtime
-    # added in v0.2.0 PR #61). Safe no-op outside FITB.
-    try:
-        from api.providers import _reload_provider_runtime
-        _reload_provider_runtime()
-    except Exception:
-        pass
+    # Note: prior versions tried to call _reload_provider_runtime() here
+    # via `from api.providers import _reload_provider_runtime`, but that
+    # import has never resolved — _reload_provider_runtime was only ever
+    # injected into set_provider_key's scope via extra_globals (it was
+    # never a module-level name in api.providers). The accompanying
+    # overlay was retired in v0.6.2 (FITB #269) once we verified upstream's
+    # _reload_runtime_env_preserving_config_authority handles env-key
+    # rotation per-turn without a supervisor restart. Removing the dead
+    # try/except block here; nothing was happening at runtime.
 
     return {
         "ok": True,
