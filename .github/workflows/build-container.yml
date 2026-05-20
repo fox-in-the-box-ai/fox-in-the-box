@@ -236,9 +236,19 @@ jobs:
       # bump(upstream): commit by hand.
       - name: Auto-bump :stable on upstream-only commits (Option B)
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          # github.event.head_commit.message is multi-line (subject + body);
+          # piped through env var (rather than direct ${{ }} interpolation
+          # into the bash script) for safe quoting. Read via shell parameter
+          # expansion to isolate the subject line — that's where the Option B
+          # marker lives.
+          HEAD_COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
         run: |
           set -euo pipefail
-          MSG=$(git log -1 --pretty=%s)
+          # Subject = first line of the commit message. Avoids needing a
+          # `git log` call (the merge job has no actions/checkout — it works
+          # entirely from downloaded per-arch digests, so `git` is unusable).
+          MSG="${HEAD_COMMIT_MESSAGE%%$'\n'*}"
           if [[ "$MSG" =~ ^bump\(upstream\): ]]; then
               DIGEST="${{ steps.merge.outputs.digest }}"
               echo "Commit subject matches Option B upstream-bump convention:"
