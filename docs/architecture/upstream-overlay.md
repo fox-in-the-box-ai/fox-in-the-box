@@ -138,6 +138,28 @@ substituting in-place. Avoids anchor fragility entirely.
 
 ## Operational
 
+### Versioning policy (Option B, since v0.7.0)
+
+Fox's version number reflects **Fox-code changes only**. Upstream-pin
+advances (submodule pointer + `versions.toml` updates with no Fox-code
+diff) **do not bump VERSION/package.json and do not rebuild DMG/exe**.
+Instead, they ship as **container-only updates**: the `:stable` Docker
+tag advances to the new build; existing DMG/exe installations pick up
+the new container on their next launch (Electron pulls `:stable` at
+startup); no re-download required by users.
+
+Why: nesquena/hermes-webui ships several patch versions per day. Treating
+each as a full Fox release would inflate version numbers, churn signed
+binaries, and waste ~25 min of CI per release with no Fox-side change to
+report. Treating upstream as a base image (the way alpine bumps don't
+bump app versions) is the natural fit.
+
+How: a commit-message convention. The merge step in
+`build-container.yml` auto-bumps `:stable` if-and-only-if the merged
+commit subject starts with `bump(upstream):`. Fox-code commits never use
+this prefix, so the original FITB#122 protection (`:stable` doesn't
+follow main on Fox-code commits) is preserved.
+
 ### Bumping the upstream pin
 
 1. Open the auto-issue from `upstream-watch.yml` (or run it manually).
@@ -146,12 +168,42 @@ substituting in-place. Avoids anchor fragility entirely.
      pointers to the new tags.
    - Updates `packages/fox-overlay/versions.toml` with the new tags +
      `pinned_at` date + the bump PR's number.
+   - **Title + squash-merge commit subject MUST start with
+     `bump(upstream):`** — this is the Option B marker that authorizes the
+     `:stable` auto-bump. Example: `bump(upstream): webui v0.51.92 →
+     v0.51.95 (closes #277)`.
+   - **Does NOT change** `VERSION` or `packages/electron/package.json`
+     version.
+   - **Does NOT add** a CHANGELOG `## [X.Y.Z]` entry. (Optional: add a
+     line under an existing `### Container-only updates` section that
+     accumulates between Fox releases.)
 3. CI runs `check-overlay-basis.sh` as a pre-build gate.
-4. Container build + smoke as usual.
+4. On merge to `main`: container builds + smokes as usual, then the
+   merge step's "Auto-bump :stable on upstream-only commits" step
+   detects the `bump(upstream):` prefix and tags `:stable` to the new
+   manifest-list digest.
+5. No GitHub Release is created. No DMG/exe rebuild. Users pick up the
+   new container on their next Electron launch.
 
 If `check-overlay-basis.sh` reported drift, an open issue (label
 `upstream-drift`) lists the failing anchor(s) — refresh in a preceding
-PR, then bump.
+Fox-code PR (which DOES bump VERSION + DMG/exe), then do the
+`bump(upstream):` PR.
+
+### When to do a real Fox release instead
+
+- Fox-overlay code change (Python, JS, CSS, patches)
+- Electron code change (any file under `packages/electron/`)
+- Packaging / signing / install-script change
+- Documentation that ships with the binary (CLAUDE.md, etc.)
+- Stabilization fix that resolves a user-reported bug
+
+In those cases: bump `VERSION` + `packages/electron/package.json`, add
+a CHANGELOG `## [X.Y.Z]` entry, merge, then tag `vX.Y.Z` and push the
+tag. `release.yml` fires, builds container + DMG + exe, publishes a
+GitHub Release, and moves `:stable` to the released digest. Just like
+before Option B — the difference is that pure upstream-pin advances
+no longer follow this path.
 
 ### Tripwires (upstream-dependency monitoring)
 

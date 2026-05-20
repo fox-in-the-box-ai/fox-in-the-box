@@ -213,14 +213,56 @@ jobs:
           fi
           echo "✅ Both linux/amd64 and linux/arm64 confirmed in manifest list"
 
-      # NOTE: :stable is intentionally NOT re-tagged here. It used to be
-      # auto-bumped from :latest on every push to main, which meant any
-      # post-release commit (including docs-only PRs) shipped a build to
-      # all DMG users via :stable without a release tag — surfaced by
-      # FITB#122 where :stable diverged from :v0.5.0 within hours of the
-      # release. :stable is now bumped exclusively by release.yml's
-      # imagetools step (pinned to the wait-for-container index digest)
-      # so it tracks released versions only. Do NOT restore this step.
+      # ── Option B (v0.7.0+): auto-bump :stable on upstream-only commits ─────
+      #
+      # Background: previously, :stable was bumped on every push to main, which
+      # shipped post-release commits (docs-only PRs, partial Fox features) to
+      # all DMG users without an explicit release tag — surfaced by FITB#122
+      # where :stable diverged from :v0.5.0 within hours of release. The
+      # original guard removed all auto-bump-on-main behavior, deferring :stable
+      # entirely to release.yml's tag-driven path.
+      #
+      # Option B (introduced v0.7.0): the Fox version (VERSION + DMG + exe)
+      # tracks Fox-code changes only. Upstream-pin advances ship as container-
+      # only updates without forcing a DMG re-download. To preserve FITB#122's
+      # protection while enabling Option B, this step ONLY auto-bumps :stable
+      # when the merged commit's subject is prefixed with `bump(upstream):` —
+      # a convention reserved for upstream-pin advance commits. Fox-code
+      # commits never use this prefix, so they fall back to release.yml's
+      # tag-driven :stable path exactly as before.
+      #
+      # See docs/architecture/upstream-overlay.md → "Versioning policy
+      # (Option B)" for the operational story + how to create a valid
+      # bump(upstream): commit by hand.
+      - name: Auto-bump :stable on upstream-only commits (Option B)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          set -euo pipefail
+          MSG=$(git log -1 --pretty=%s)
+          if [[ "$MSG" =~ ^bump\(upstream\): ]]; then
+              DIGEST="${{ steps.merge.outputs.digest }}"
+              echo "Commit subject matches Option B upstream-bump convention:"
+              echo "  $MSG"
+              echo "Bumping :stable to $DIGEST"
+              docker buildx imagetools create \
+                -t "${IMAGE}:stable" \
+                "${IMAGE}@${DIGEST}"
+              # Verify both arches survived the re-tag (defensive — FITB#82).
+              docker buildx imagetools inspect "${IMAGE}:stable" \
+                --format '{{range .Manifest.Manifests}}{{.Platform.OS}}/{{.Platform.Architecture}}{{"\n"}}{{end}}' \
+                | grep -qx 'linux/amd64'
+              docker buildx imagetools inspect "${IMAGE}:stable" \
+                --format '{{range .Manifest.Manifests}}{{.Platform.OS}}/{{.Platform.Architecture}}{{"\n"}}{{end}}' \
+                | grep -qx 'linux/arm64'
+              echo "✅ :stable now points at $DIGEST (both arches confirmed)"
+          else
+              echo "Skipping :stable auto-bump — commit subject is not a 'bump(upstream):' prefix:"
+              echo "  $MSG"
+              echo "(This is the FITB#122 protection: only Option B upstream-only commits move :stable on main pushes; Fox-code releases move :stable via release.yml on tag push.)"
+          fi
+      # Do NOT add an unconditional :stable re-tag here. The conditional above
+      # is the entire Option B contract; making it unconditional would re-open
+      # FITB#122's bug.
 
   # ── Pull the published manifest by INDEX digest on each platform's
   # native runner and run the smoke test. This proves the digest pin
