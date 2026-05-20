@@ -7,6 +7,24 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.6.4] - 2026-05-20
+
+Tight stabilization fix for a user-flow gap discovered during v0.6.3 manual smoke. **Closes #281.**
+
+### Fixed
+
+- **Chat model picker now refreshes immediately after activating a new Ollama model (#281).** Before: pull an Ollama model in Settings → Local Ollama → click "Use" → return to chat → the new model wasn't visible in the picker until a full page reload. After: the picker reflects the new model on next open (no reload required). Root cause: `ollama.py`'s `use_model()` was only calling upstream's `reload_config()` (which clears the on-disk models cache) but not `invalidate_models_cache()` (which flushes the in-memory cache the picker actually reads from). Upstream's own convention — see the comment at `api/providers.py:2049-2051` — is to call `invalidate_models_cache()` directly when config changes affect models. The fix wires `ollama.py` into that same convention.
+
+### Behind the scenes
+
+- Removed a dead `from api.providers import _reload_provider_runtime` import inside `use_model()` that has always failed silently (the function was only ever injected into `set_provider_key`'s scope via `extra_globals`, never a module-level name). The matching overlay was retired in v0.6.2 (#269); the misleading try/except block in `ollama.py` is now also gone.
+
+### What's next
+
+After this, the versioning policy shifts to **Option B**: container `:stable` auto-advances when upstream pulls land clean; FITB version (and DMG/exe rebuilds) only bump when Fox-side code changes. Ships as v0.7.0 with the policy as the headline. See [`docs/architecture/upstream-overlay.md`](docs/architecture/upstream-overlay.md) once the policy ships.
+
+---
+
 ## [0.6.3] - 2026-05-19
 
 **First upstream bump driven by the auto-watch loop.** Fox now ships upstream `nesquena/hermes-webui` **v0.51.92** (was v0.51.84 — 8 patch versions of upstream improvements). The agent stays pinned at v2026.5.16. End-to-end proof that the v0.6.0 overlay architecture pays off: zero anchor refresh required, zero Fox code touched, ~5 minutes from auto-issue to merged PR.
