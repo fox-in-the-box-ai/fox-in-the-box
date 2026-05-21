@@ -7,6 +7,26 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.7.2] - 2026-05-20
+
+Two safe quick-wins continuing the v0.7.x stabilization train.
+
+### Fixed
+
+- **Recovery banner now hides when you navigate away from Chat (#147 part 2).** The "Your remote provider looks reachable again. Switch off local fallback?" banner was relevant only on the Chat panel but stayed visible across Settings, Workspaces, Insights, and every other tab — blocking page headings + adding noise. Now: visibility tracks the active panel; banner shows on Chat, hides everywhere else, restores when you return. State is preserved (no re-fetch); just a display toggle. Closes #147 (part 1 shipped in v0.7.1 with the opaque-background fix).
+- **Windows app icon now embedded in the installed `FoxInTheBox.exe` (#287, reported by bsdigital).** Before: the inner Windows executable shipped with the default Electron icon, while the NSIS installer + uninstaller had the correct Fox icon (so users saw Fox during install but a generic Electron icon afterward). Root cause: our `signAndEditExecutable: false` electron-builder setting (added for Azure Trusted Signing compatibility) disabled BOTH signing AND rcedit's icon embedding. Fix: dedicated `afterPack` hook (`packages/electron/build/afterPack.js`) that runs rcedit only — runs BEFORE NSIS packing, so the signed installer wraps the iconned exe.
+
+### Behind the scenes
+
+- New devDep `rcedit@^4.0.1` in `packages/electron` for the afterPack hook
+- Mac path is unaffected (the afterPack hook gates on `electronPlatformName === 'win32'`; `icon.icns` continues to be embedded by electron-builder for darwin builds independently)
+
+### Versioning
+
+Patch v0.7.2 per the v0.7.x cadence policy. Continuing the stabilization train; no minor bump until backlog clears.
+
+---
+
 ## [0.7.1] - 2026-05-20
 
 Two quick polish fixes from yesterday's grooming pass.

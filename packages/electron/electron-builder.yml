@@ -15,6 +15,14 @@ files:
 
 icon: assets/icon.png
 
+# Run our own rcedit step in afterPack to embed the icon into the inner
+# Windows .exe. We can't rely on electron-builder's built-in rcedit
+# because `signAndEditExecutable: false` (set on `win:` below for Azure
+# Trusted Signing compatibility) disables BOTH signing AND editing.
+# The afterPack hook checks platform — Mac path is unaffected. See
+# build/afterPack.js for the full rationale + FITB #287.
+afterPack: ./build/afterPack.js
+
 win:
   icon: assets/icon.ico
   publisherName: Vulpy, Inc.
