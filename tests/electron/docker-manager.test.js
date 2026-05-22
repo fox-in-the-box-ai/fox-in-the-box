@@ -40,6 +40,16 @@ beforeEach(() => {
   };
   mockDockerInstance.listContainers.mockResolvedValue([]);
   Dockerode.mockImplementation(() => mockDockerInstance);
+  // Default child_process.exec mock: fail immediately (ENOENT). Tests that
+  // care about the docker-info probe override this via mockExecSuccess /
+  // mockExecFailure. Without a default, jest.fn() callback never fires →
+  // promisify(exec) hangs forever → tests timeout (caught by Windows CI
+  // where process.platform === 'win32' triggers the probe code path).
+  exec.mockImplementation((_cmd, _opts, cb) => {
+    const e = new Error('default mock: docker CLI not available');
+    e.code = 'ENOENT';
+    cb(e);
+  });
   docker.init();
 });
 
