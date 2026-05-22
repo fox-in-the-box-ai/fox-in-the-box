@@ -54,6 +54,26 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Verify submodule state
+        run: |
+          set -euo pipefail
+          # Ensure submodules are in sync — fixes race conditions on CI runners
+          # with cached state. Runs git submodule sync (update .git/config from
+          # .gitmodules) then update to pinned commits.
+          git submodule sync --recursive
+          git submodule update --init --recursive --depth=1
+          # Quick sanity: both required submodules must exist and have a HEAD.
+          for dir in forks/hermes-webui forks/hermes-agent; do
+            if [ ! -d "$dir/.git" ]; then
+              echo "::error::Submodule $dir not properly initialized"
+              exit 1
+            fi
+            if ! (cd "$dir" && git rev-parse HEAD >/dev/null 2>&1); then
+              echo "::error::Submodule $dir has no valid HEAD"
+              exit 1
+            fi
+          done
+
       # Phase 8 follow-up #246: fail fast if any overlay artefact is stale
       # against the current submodule pin. Catches upstream rename/delete
       # of .fox-removals entries + anchor drift in the webui/agent patch
