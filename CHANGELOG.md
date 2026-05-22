@@ -7,6 +7,32 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.7.6] - 2026-05-22
+
+Silent failover, back. The other half of the local-AI story — automatic swap to the local llama-server when a remote provider has a transient failure — works again, closing the last open symptom of #303.
+
+### Fixed
+
+- **Silent failover on transient remote errors (#303 symptom 3 — closes #303 fully).** When a remote provider returns a failover-eligible error (rate-limit / 429 / 5xx / no response) and the local llama-server is ready, Fox now swaps to local + emits a `provider_switched` event. The user sees their original message still in the transcript with a "Switched to local model. Re-send your message to retry." note, and their next send hits local — no manual provider switch needed. Was lost in the v0.6.0 ATOMIC refactor (#241) when upstream rewrote the error-handling architecture; rebuilt on the new architecture with two new substitutions in `fox_overlay/webui_patches/streaming.py` — one for the success path (provider returned error response), one for the exception path (agent's `run_conversation()` raised). The first time Fox has used `substitute_function` for more than one substitution against `_run_agent_streaming` since the original v0.5.2 engine.
+
+### Heads-up
+
+- **Auth errors are still handled by upstream's `_attempt_credential_self_heal`** (not by Fox's failover). That's deliberate — Fox would otherwise double-retry. The `should_failover` filter explicitly excludes `auth_mismatch`.
+- **Quota errors are NOT failed over.** Retrying on local doesn't fix a billing-side problem — the user has to address their account. Fox surfaces the original quota error in that case.
+- **No auto-retry of the message.** Failover emits the switch event and stops the current stream cleanly. The user re-sends with one tap; their next message hits local. Auto-retry was the v0.5.2 behavior but adds real complexity (rebuilding the agent + replaying context against a different model's context window) for marginal UX gain over a single tap.
+
+### Behind the scenes
+
+- The failover splice spends a real engineering decision: `substitute_function` (in-function textual insertion) was the right tool, not the wrap-and-splice pattern from v0.7.4. `_run_agent_streaming` is a stream-emitting function with no return value to mutate — wrapping would have been the wrong shape. Two anchors, two splice points, each verified unique in upstream v0.51.107 before commit.
+- Anchor self-checks fail loudly thanks to v0.7.5's fail-loud bootstrap — if a future upstream refactor breaks either anchor, container boot aborts at CI time and we know immediately.
+
+### What's next
+
+- **v0.7.7:** docs at parity with shipped reality (#310) and Playwright Phase 0 (#264) — replacing the manual smoke checklist as the release gate.
+- **v0.7.8:** Playwright Phase 1 (#265, ~12 specs), bootstrap log surfaced to docker logs (#302), one-click diagnostic report button (#293), release-channels split (#306).
+
+---
+
 ## [0.7.5] - 2026-05-22
 
 Cleanup and guardrails — the kind of release nobody asks for but everybody benefits from. Eight audit items from a five-perspective code review, bundled into one focused PR. No new features; quieter failures, cleaner offline behavior, fewer ways to ship broken code.
