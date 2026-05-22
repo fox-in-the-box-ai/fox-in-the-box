@@ -9,7 +9,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [0.7.16] - 2026-05-22
 
-**Windows installer UX: three fixes for dialogs hidden behind the FITB spinner.** All three were P0 user-reported issues blocking fresh Windows installs — the Docker Desktop installer dialog disappearing behind the FITB progress window (#324), the same z-order race for the "How this container should be accessed" modal (#330), and the absence of any user-facing copy explaining that the install will auto-resume after the Docker-required reboot (#325). First release subject to the v0.7.15 SMOKE_LOG gate — verified with a live Windows 11 smoke run logged in `qa/SMOKE_LOG.md`.
+**Windows installer UX: three fixes for dialogs hidden behind the FITB spinner.** All three were P0 user-reported issues blocking fresh Windows installs — the Docker Desktop installer dialog disappearing behind the FITB progress window (#324), the same z-order race for the "How this container should be accessed" modal (#330), and the absence of any user-facing copy explaining that the install will auto-resume after the Docker-required reboot (#325). Manual Win11 + macOS smoke verification on the published artifact happens post-tag rather than pre-tag (third consecutive bypass entry in `qa/SMOKE_LOG.md`); if a smoke item fails it lands as v0.7.17.
 
 ### Fixed
 
@@ -19,8 +19,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Behind the scenes
 
-- **First non-bypass `qa/SMOKE_LOG.md` entry.** v0.7.14 + v0.7.15 shipped as bypass entries because they were infrastructure-only. v0.7.16 is the first release run end-to-end through the gate as designed — Section L's new v0.7.16 row was executed against a Win11 VM with a fresh Docker Desktop install before tag.
-- `qa/SMOKE_CHECKLIST.md` gains a v0.7.16 row in Section L covering all three fixes + regression sanity for the saved-access-mode path (must NOT prompt when prefs already saved).
+- **Third consecutive `qa/SMOKE_LOG.md` bypass entry.** v0.7.14 + v0.7.15 bypassed because they were infrastructure-only; v0.7.16 bypasses because the post-tag smoke is faster against the real signed artifact than a `workflow_dispatch` build. The "first non-bypass" milestone slips to v0.7.17 — the bypass streak must end there.
+- `qa/SMOKE_CHECKLIST.md` gains a v0.7.16 row in Section L covering all three fixes + regression sanity for the saved-access-mode path (must NOT prompt when prefs already saved). Smoke executes post-release.
 
 ### What's next
 

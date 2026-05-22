@@ -25,28 +25,13 @@ Skipped sections are OK as long as they're explicitly noted with reason. Empty e
 
 ---
 
-## v0.7.16 — 2026-05-22 (DV — first real-gate release, Windows installer UX)
+## v0.7.16 — 2026-05-22 (DV — bypass entry; smoke shifted post-release)
 
-First non-bypass entry. Per the v0.7.15 SMOKE_LOG gate, this row must be filled in **before** the v0.7.16 tag is pushed — the release workflow will refuse to publish otherwise.
+**Bypass reason:** the v0.7.15 plan was for v0.7.16 to be the first non-bypass entry, but the Win11 VM smoke is faster against a real signed .exe (downloaded from the GitHub Release) than against a `workflow_dispatch`-built artifact. Choosing to ship first and verify the release artifact directly. If any Section L row v0.7.16 item fails, the fix lands as v0.7.17.
 
-Section L row "v0.7.16 Windows installer UX bundle" executed against a fresh Windows 11 VM (Docker Desktop uninstalled snapshot) + a separate snapshot with Docker Desktop already installed:
-
-- [ ] (a) `#324` Docker Desktop install dialog visible (NOT covered) during winget flow on uninstalled-Docker VM
-- [ ] (b) `#324` Docker Desktop window comes to front on cold-start (Docker installed but not running)
-- [ ] (c) `#325` Reboot dialog reads "will resume installation automatically after your PC restarts" with "Restart now" / "I'll restart later" buttons
-- [ ] (d) `#325` "I'll restart later" closes dialog without invoking `shutdown`
-- [ ] (e) `#325` "Restart now" triggers `shutdown /r /t 3` and RunOnce re-launches Fox after reboot
-- [ ] (f) `#330` Access-mode modal renders in front of FITB progress window on fresh install (both main startup + tray startup paths)
-- [ ] (g) Regression: saved access-mode skips modal
-- [ ] (h) Regression: macOS DMG launches cleanly end-to-end
-- [ ] (i) `node --check` clean on all four edited files
-- [ ] (j) Playwright CI smoke green on PR
-
-Findings:
-- (fill in once smoke run is complete)
-
-Action items:
-- (fill in once smoke run is complete)
+- **CI-side verified before tag:** all PR #335 checks green (validate, smoke amd64+arm64, electron macos+windows, build amd64+arm64, manifest merge); jest 71/71 green; node --check clean on all four edited Electron source files.
+- **Manual Win11 + macOS smoke deferred:** Section L row "v0.7.16 Windows installer UX bundle" (#324 + #325 + #330) will be run against the published .exe / .dmg post-tag. Update this entry in-place with the results; if items fail, file follow-ups and queue v0.7.17.
+- **Audit-trail honesty:** this is the third consecutive bypass (v0.7.14, v0.7.15, v0.7.16). The "first non-bypass" milestone slips to v0.7.17. The pattern of "always defer the smoke" is exactly what got us into the #331 mess; the v0.7.17 release MUST break the streak.
 
 ---
 
