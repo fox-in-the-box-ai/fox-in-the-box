@@ -61,17 +61,17 @@ jobs:
           # with cached state. Runs git submodule sync (update .git/config from
           # .gitmodules) then update to pinned commits.
           git submodule sync --recursive
-          git submodule update --init --recursive --depth=1
-          # Quick sanity: both required submodules must exist and have a HEAD.
+          git submodule update --init --recursive
+          # Hard-reset submodules to their pinned HEAD — runners can reuse
+          # workspaces from prior runs where Docker build patches were applied,
+          # causing git apply --check to fail on already-applied hunks.
           for dir in forks/hermes-webui forks/hermes-agent; do
             if [ ! -e "$dir/.git" ]; then
               echo "::error::Submodule $dir not properly initialized"
               exit 1
             fi
-            if ! (cd "$dir" && git rev-parse HEAD >/dev/null 2>&1); then
-              echo "::error::Submodule $dir has no valid HEAD"
-              exit 1
-            fi
+            git -C "$dir" reset --hard HEAD
+            git -C "$dir" clean -fd
           done
 
       # Phase 8 follow-up #246: fail fast if any overlay artefact is stale
@@ -80,7 +80,10 @@ jobs:
       # series BEFORE the Docker build wastes ~3 minutes per arch only to
       # die at git apply --check inside the container.
       - name: Overlay basis sanity check
-        run: ./packages/fox-overlay/scripts/check-overlay-basis.sh
+        run: |
+          set -euo pipefail
+          ./packages/fox-overlay/scripts/check-overlay-basis.sh
+          echo "Exit code: $?"
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
