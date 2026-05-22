@@ -7,6 +7,28 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.7.14] - 2026-05-22
+
+**Process meta-fixes from the v0.7.13 retrospective.** Three convergent recommendations from the 6-perspective retro that caught #331: (1) catch anchor drift locally instead of waiting 3+ minutes for CI Docker build; (2) atomic patch generation that prevents the "uncommitted fork state leaks into the diff" failure mode (commit e9bd4cd); (3) written audit trail forcing actual smoke-checklist execution before a tag publishes. No user-visible change — pure infrastructure.
+
+### Added
+
+- **`make validate-overlay` + `.github/workflows/validate-overlay.yml`** — three-check overlay gate that runs in <30s on every PR touching `packages/fox-overlay/**` or `forks/**`. Same gate runs locally via the Makefile target. The three checks (per #328): (a) submodule cleanliness — `forks/hermes-{agent,webui}` must be at the pinned commit with no uncommitted changes (catches the commit-e9bd4cd class of failure); (b) `check-overlay-basis.sh` — patch series + `.fox-removals` apply cleanly; (c) bootstrap import smoke — `webui_patches.apply_all()` runs against actual submodule sources, surfacing anchor + signature drift in `webui_patches/{config,streaming}.py` that today only fires at container runtime.
+- **`make regen-patch FORK=… PATCH=…`** — atomic patch regeneration per #328's solution sketch. Force-resets the fork to its pinned commit, applies all earlier series patches, hands off to a shell for the developer to make edits, then exports the diff and force-resets the fork. Eliminates the entire "uncommitted fork state contaminates the diff" category.
+- **`qa/SMOKE_LOG.md`** — written audit trail for which release was actually smoke-tested by a human. Pre-v0.7.14, the only evidence anyone ran SMOKE_CHECKLIST.md was its "Currently testing: vX.Y.Z" header — which sat at v0.7.6 for 6 releases, exactly because nobody was updating it. Forward: every release must have a matching `## vX.Y.Z` entry here; empty entries are OK if the maintainer explicitly notes the bypass reason. v0.7.15+ will wire `release.yml` to refuse publish without a matching entry (5-line bash grep).
+
+### Behind the scenes — #328 closes
+
+The patch-fragility-caught-only-in-CI class of bug closes here. Anchor drift now surfaces at 3 layers: local `make validate-overlay`, the new PR-time `validate-overlay.yml` (<30s), and the existing `check-overlay-basis.sh` in `build-container.yml` (~3 min, kept as belt-and-suspenders). The cost-of-iteration drops from "3 minutes per failed CI cycle" to "<2 seconds per failed local run."
+
+### What's next
+
+- **v0.7.15:** flip Playwright smoke to a required CI check (was deferred to "Phase 1" indefinitely; the indefinite deferral is exactly what bit us in #331). Add the v0.7.13-deferred `wizard-renders.spec.ts` redirect-fires assertion (chicken-and-egg unblocked now that `:stable` will be v0.7.13). Plus `SMOKE_LOG.md` gate enforcement.
+- **v0.7.16:** Windows installer UX bundle (#324 + #325 + #330).
+- **v0.7.17:** Minimum brand alignment for installer (#323 scoped down).
+
+---
+
 ## [0.7.13] - 2026-05-22
 
 **Onboarding restored — P0 fix.** New-install users get the Fox wizard at `/setup` again instead of dropping straight into a half-styled chat shell. The redirect middleware that v0.5.x had inline at `server.py` was missing from the v0.6.0/v0.7.0 overlay migration — `should_redirect_to_setup` and `redirect_to_setup` were moved into the overlay package but the patch to re-wire them into upstream's `server.py:do_GET`/`_handle_write` was never written. Every fresh install since v0.7.0 has shipped without onboarding.
