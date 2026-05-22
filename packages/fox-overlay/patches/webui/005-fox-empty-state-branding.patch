@@ -1,0 +1,13 @@
+--- a/static/index.html	2026-05-22 13:42:28.771502573 +0000
++++ b/static/index.html	2026-05-22 13:42:28.775744452 +0000
+@@ -386,8 +386,8 @@
+           <circle cx="32" cy="10" r="4" fill="#F5C542"/>
+           <circle cx="32" cy="10" r="2" fill="#FFF8E1" opacity="0.7"/>
+         </svg></div>
+-        <h2 data-i18n="empty_title">What can I help with?</h2>
+-        <p data-i18n="empty_subtitle">Ask anything, run commands, explore files, or manage your scheduled tasks.</p>
++        <h2 data-i18n="empty_title">Most powerful, least hassle.</h2>
++        <p data-i18n="empty_subtitle">Privacy first. Self-hosted. Focused.</p>
+         <div class="suggestion-grid">
+           <button class="suggestion" data-msg="What files are in this workspace?"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg> <span data-i18n="suggest_files">What files are in this workspace?</span></button>
+           <button class="suggestion" data-msg="What's on my schedule today?"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="12" y2="16"/></svg> <span data-i18n="suggest_schedule">What's on my schedule today?</span></button>

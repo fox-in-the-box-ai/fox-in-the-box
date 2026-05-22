@@ -1044,3 +1044,18 @@ pre[class*=language-] {
   align-items: center;
 }
 
+
+/* ── Fox avatar in message role header ────────────────────────────── */
+.role-icon-avatar.fox-avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid var(--accent-bg-strong);
+  flex-shrink: 0;
+}
+
+/* Ensure avatar aligns with role text baseline */
+.msg-role.assistant {
+  align-items: center;
+}

@@ -10,3 +10,6 @@
 
 001-server-py-bootstrap.patch
 002-routes-py-dispatch-hook.patch
+003-fox-bot-name-override.patch
+004-fox-avatar-override.patch
+005-fox-empty-state-branding.patch

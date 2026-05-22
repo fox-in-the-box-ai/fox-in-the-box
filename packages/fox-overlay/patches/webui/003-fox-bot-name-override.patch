@@ -1,0 +1,11 @@
+--- a/static/boot.js	2026-05-22 13:42:13.510696399 +0000
++++ b/static/boot.js	2026-05-22 13:42:13.512574505 +0000
+@@ -1420,7 +1420,7 @@
+     window._sidebarDensity=(s.sidebar_density==='detailed'?'detailed':'compact');
+     window._busyInputMode=(s.busy_input_mode||'queue');
+     window._sessionEndlessScrollEnabled=!!s.session_endless_scroll;
+-    window._botName=s.bot_name||'Hermes';
++    window._botName=s.bot_name||'Fox';
+     if(s.default_model) window._defaultModel=s.default_model;
+     window._sessionJumpButtonsEnabled=!!s.session_jump_buttons;
+     // Reconcile appearance: prefer localStorage (what the user last saw) over

@@ -1,0 +1,11 @@
+--- a/static/ui.js	2026-05-22 13:42:19.583468879 +0000
++++ b/static/ui.js	2026-05-22 13:42:22.616487530 +0000
+@@ -4851,7 +4851,7 @@
+ function _assistantRoleHtml(tsTitle='', tpsText=''){
+   const _bn=assistantDisplayName();
+   const tps=(isTpsDisplayEnabled()&&tpsText)?`<span class="msg-tps-inline" title="Tokens per second">${esc(tpsText)}</span>`:'';
+-  return `<div class="msg-role assistant" ${tsTitle?`title="${esc(tsTitle)}"`:''}><div class="role-icon assistant">${esc(_bn.charAt(0).toUpperCase())}</div><span style="font-size:12px">${esc(_bn)}</span>${tps}</div>`;
++  return `<div class="msg-role assistant" ${tsTitle?`title="${esc(tsTitle)}"`:''}><img src="/fox_avatar.jpg" class="role-icon-avatar fox-avatar" alt="Fox" /><span style="font-size:12px">${esc(_bn)}</span>${tps}</div>`;
+ }
+ function _setAssistantTurnTps(turn, tpsText=''){
+   if(!turn) return;
