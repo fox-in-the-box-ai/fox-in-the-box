@@ -98,6 +98,11 @@ async function runStartup({
   closeProgress,
   openOnboarding,
   onDaemonNotReady,
+  // v0.7.16 #330: callback that returns the BrowserWindow native dialogs
+  // should parent to (typically the FITB progress window). Without a
+  // parent, `dialog.showMessageBox` on Windows can render behind any
+  // alwaysOnTop window we already opened.
+  getDialogParent = () => null,
   platform = process.platform,
 }) {
   const sessionId = crypto.randomUUID();
@@ -179,7 +184,7 @@ async function runStartup({
   await runPhase(sessionId, 'container_ready', async () => {
     containerProgress('Preparing Fox in the box container…');
     if (typeof docker.ensureDockerAccessModeChosen === 'function') {
-      await docker.ensureDockerAccessModeChosen();
+      await docker.ensureDockerAccessModeChosen({ parent: getDialogParent() });
     }
     const result = await docker.ensureContainerRunning();
     if (!result || !result.reason) return;

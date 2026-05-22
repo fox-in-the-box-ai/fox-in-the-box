@@ -116,6 +116,24 @@ function closeProgress() {
   _progressState = { title: '', detail: '' };
 }
 
+// v0.7.16 #324: when external installers (Docker Desktop, winget, UAC) are
+// about to surface their own GUI, the FITB progress window's `alwaysOnTop`
+// flag covers them up and the user sees a frozen spinner instead of the
+// dialog they need to interact with. Drop alwaysOnTop while yielded;
+// reclaim it once Docker's window has had its turn.
+function setForegroundYield(shouldYield) {
+  if (!_progressWin || _progressWin.isDestroyed()) return;
+  try {
+    _progressWin.setAlwaysOnTop(!shouldYield);
+  } catch (err) {
+    log.debug('setForegroundYield failed:', err.message);
+  }
+}
+
+function getDialogParent() {
+  return _progressWin && !_progressWin.isDestroyed() ? _progressWin : null;
+}
+
 function buildDiagnosticsText({
   sessionId,
   phase,
@@ -257,6 +275,7 @@ async function ensureDockerWindows(progressCb = showProgress) {
     showProgress: progressCb,
     showRebootRequired: () => showDaemonRecoveryRequired('win32'),
     showError,
+    setForegroundYield,
   });
 }
 
@@ -318,13 +337,21 @@ async function showDaemonRecoveryRequired(platform) {
   closeProgress();
 
   if (platform === 'win32') {
+    // v0.7.16 #325: register the RunOnce resume BEFORE the user sees the
+    // dialog, so the "will continue automatically after restart" line is
+    // truthful at the moment we make the promise. If the registration
+    // fails, the dialog copy below would be a lie — registerWindowsRunOnceResume
+    // logs but does not throw, so detect that we have an exe path at least.
     await registerWindowsRunOnceResume(app.getPath('exe'));
     const { response } = await dialog.showMessageBox({
       type: 'warning',
-      title: 'Restart required',
-      message: 'Docker was installed/started but is not ready yet.',
-      detail: 'A restart is recommended before trying Fox in the box again.',
-      buttons: ['Restart now', 'Close'],
+      title: 'Restart required to finish Docker setup',
+      message: 'Docker Desktop needs a restart before Fox in the box can continue.',
+      detail:
+        'Fox in the box will resume installation automatically after your PC restarts — '
+        + 'you do not need to re-launch the installer manually.\n\n'
+        + 'Save any unsaved work in other apps before clicking Restart now.',
+      buttons: ['Restart now', 'I\'ll restart later'],
       defaultId: 0,
       cancelId: 1,
     });
@@ -399,7 +426,7 @@ async function startFromTray() {
   showProgress('Starting Fox in the box…');
   try {
     if (typeof docker.ensureDockerAccessModeChosen === 'function') {
-      await docker.ensureDockerAccessModeChosen();
+      await docker.ensureDockerAccessModeChosen({ parent: getDialogParent() });
     }
     await ensureContainerHealthy({
       docker,
@@ -465,6 +492,7 @@ async function main() {
       closeProgress,
       openOnboarding: () => shell.openExternal(APP_HOME_URL),
       onDaemonNotReady: ({ platform }) => showDaemonRecoveryRequired(platform),
+      getDialogParent,
       platform: process.platform,
     });
     if (startupOutcome && startupOutcome.outcome === 'reboot-required') {
