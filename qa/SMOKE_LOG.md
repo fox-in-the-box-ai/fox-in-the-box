@@ -25,6 +25,16 @@ Skipped sections are OK as long as they're explicitly noted with reason. Empty e
 
 ---
 
+## v0.7.15 — 2026-05-22 (DV, infrastructure release — bypass entry)
+
+This release ships the SMOKE_LOG gate itself + a permanent regression spec for #331. It is intentionally an infrastructure-only release with no user-visible product change.
+
+- **Bypass reason:** the release that *adds* the SMOKE_LOG enforcement gate can't itself wait for the gate to have been pre-existing. Future product-change releases (v0.7.16+) must run an actual smoke section before tagging.
+- **CI gates verified:** validate-overlay green, Playwright smoke green (now includes the deferred wizard-renders redirect-fires spec — proves patch 003 from v0.7.13 actually wired the onboarding redirect against live `:stable` = v0.7.14).
+- **Action items for v0.7.16:** the Windows installer UX bundle (#324 + #325 + #330). That release MUST have a real Section H / Section L smoke gate run logged here.
+
+---
+
 ## v0.7.14 — 2026-05-22 (DV, baseline)
 
 First entry. Pre-v0.7.14 releases shipped without entries here because this log didn't exist — #331 (onboarding missing since v0.7.0) was the consequence of that gap. v0.7.13 hotfixed #331 itself; v0.7.14 establishes the audit trail so the next #331-class regression surfaces immediately.

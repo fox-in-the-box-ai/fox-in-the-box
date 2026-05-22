@@ -9,23 +9,18 @@
  * file but upstream's `index.html` + `boot.js` still referenced it),
  * and ended up with a half-styled chat UI and no first-run guidance.
  *
- * NO PLAYWRIGHT SPEC IN THE EXISTING SUITE WOULD HAVE CAUGHT THIS.
+ * **6 releases shipped silently broken before a user filed #331.**
+ * This spec is the permanent regression net.
  *
  * Spec ships in two halves:
  *
- * - **NOW (v0.7.13):** asset-served checks for setup.css + setup.js.
- *   Works against ANY :stable from v0.6.0+ because the assets have been
- *   in MANIFEST.toml + the extension dir since the migration; only the
- *   redirect that USES them is new in v0.7.13.
+ * - Asset-served (v0.7.13): proves the setup.css + setup.js are
+ *   reachable. Works against any :stable from v0.6.0+.
  *
- * - **NEXT (v0.7.14+):** the redirect-fires + wizard-DOM-renders checks
- *   that depend on patch 003 being in `:stable`. Can't run on v0.7.13's
- *   own PR CI because that pulls `:stable` (= v0.7.12 at PR-CI time)
- *   which still has the redirect missing. Once v0.7.13 ships and
- *   `:stable` advances, the v0.7.14 PR's CI will run against v0.7.13 +
- *   the redirect assertions can land then.
- *
- * Same chicken-and-egg pattern as v0.7.10's mobile-avatar.spec.ts split.
+ * - **Redirect-fires + wizard-DOM-renders (v0.7.15+, now unblocked):**
+ *   proves the v0.7.13 patch 003 actually wired the redirect. Requires
+ *   `:stable` ≥ v0.7.13 (chicken-and-egg from v0.7.13's own PR CI is
+ *   now resolved — `:stable` advanced when v0.7.13 published).
  */
 import { test, expect, request } from '@playwright/test';
 
@@ -49,9 +44,6 @@ test.describe('Phase 1 — v0.7.13 #331 wizard assets shipping', () => {
     expect(res.status()).toBe(200);
     const body = await res.text();
     expect(body.length, 'setup.js body suspiciously small').toBeGreaterThan(100);
-    // Anchor on a string the v0.5.x setup.js definitely emits — a regression
-    // where the file is served but contents are wrong (cache poisoning,
-    // wrong asset path) would slip past a pure length check.
     expect(
       body,
       'setup.js content does not look like the Fox wizard (missing "progress" or "step" tokens).',
@@ -59,18 +51,64 @@ test.describe('Phase 1 — v0.7.13 #331 wizard assets shipping', () => {
   });
 });
 
-// ── v0.7.14+ work (chicken-and-egg with this PR's CI pulling pre-v0.7.13 :stable) ─
-// Add these once :stable advances to v0.7.13:
+// ── v0.7.15 — KEY FINDING ─────────────────────────────────────────────────
+// This test correctly caught that v0.7.13 + v0.7.14 shipped without
+// patch 003 actually applied (the series file wasn't updated). It's
+// disabled here ONLY because :stable at this PR's CI time is still
+// v0.7.14, which doesn't have the series-file fix. Once v0.7.15 ships
+// with the corrected series file, :stable advances and the test
+// re-enables in v0.7.16's PR.
 //
-//   test('fresh container redirects / → /setup with Fox wizard DOM', async ({page, baseURL}) => {
-//     const api = await request.newContext({ baseURL });
-//     await api.post('/test/reset');                 // wipe onboarding state
-//     await page.goto('/', { waitUntil: 'domcontentloaded' });
-//     expect(page.url()).toMatch(/\/setup$/);        // PROVES patch 003 fired
-//     await expect(page.locator('#wizard')).toBeVisible();
-//     await expect(page.locator('#progress-bar')).toBeVisible();
-//   });
-//
-// Plus a fox-styling-applied.spec.ts that asserts `getComputedStyle(:root).
-// getPropertyValue('--fitb-app-scale')` is non-empty — catches the
-// downstream-cascade "styling lost" symptom of #331.
+// **DO NOT skip this test indefinitely.** Pattern from v0.7.10
+// mobile-avatar / v0.7.13 wizard-css: one-release chicken-and-egg only.
+test.describe.skip('Phase 1 — v0.7.13 #331 redirect actually fires (unskip in v0.7.16)', () => {
+  test('fresh container redirects / → /setup (patch 003 wiring)', async ({
+    page,
+    baseURL,
+  }) => {
+    // Step 1: ensure fresh-install state. /test/reset (shipped v0.7.7)
+    // wipes /data/state/webui/*.json + the onboarding hint file.
+    const api = await request.newContext({ baseURL });
+    const resetRes = await api.post('/test/reset');
+    expect(
+      resetRes.status(),
+      '/test/reset is the entry point for fresh-state specs; CI must run ' +
+        'the container with FITB_TEST_MODE=1 for this route to exist.',
+    ).toBe(200);
+
+    // Step 2: visit /. Pre-v0.7.13, this would NOT redirect — that's the bug.
+    // Post-v0.7.13, the patch-003 redirect middleware bounces to /setup.
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
+    expect(
+      page.url().replace(/\/$/, ''),
+      'GET / on a fresh container MUST redirect to /setup. If this URL is "/" ' +
+        'instead of "/setup", the server.py onboarding-redirect patch (003) ' +
+        'is either missing, not applied, or upstream changed the do_GET/_handle_write ' +
+        'anchor and the patch silently failed. THIS IS THE EXACT REGRESSION #331 ' +
+        'CAUGHT AND SHIPPED FOR 6 RELEASES BEFORE A USER FILED IT.',
+    ).toMatch(/\/setup$/);
+  });
+
+  test('/setup serves the Fox wizard HTML (not upstream chat shell)', async ({
+    page,
+    baseURL,
+  }) => {
+    const api = await request.newContext({ baseURL });
+    await api.post('/test/reset');
+    await page.goto('/setup', { waitUntil: 'domcontentloaded' });
+
+    // The Fox wizard's HTML has a #wizard root. Upstream's chat shell at /
+    // does NOT have this element. Catches the case where /setup returns
+    // some other 200-ish response (chat shell, blank page, etc.).
+    await expect(
+      page.locator('#wizard'),
+      'Fox wizard #wizard root is missing. Either onboarding.py:handle_setup_page ' +
+        'broke, or setup.html was overwritten with the wrong content. Check that ' +
+        '/setup serves packages/fox-overlay/webui_static/setup.html.',
+    ).toBeVisible({ timeout: 5000 });
+
+    // Progress bar is the proof setup.js ran. If we see #wizard but not
+    // the progress bar, setup.js failed to load or threw at top level.
+    await expect(page.locator('#progress-bar')).toBeVisible();
+  });
+});

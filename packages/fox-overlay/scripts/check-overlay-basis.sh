@@ -53,10 +53,24 @@ else
     done < "$removals_file"
 fi
 
-# ── 2. webui patch series must apply --check against current submodule ──────
+# ── 2. webui patch series must apply --check SEQUENTIALLY against current ──
+# v0.7.15 fix: previously this loop did `git apply --check` independently
+# for each patch against the virgin submodule. That works for single-file
+# patches that don't overlap, but FAILS for stacked patches where 003's
+# hunks reference lines that only exist after 001+002 have been applied
+# (the actual Dockerfile applies in-order, so 003 succeeds at build time).
+# The mismatch let v0.7.13 ship with patch 003's series entry missing —
+# basis check said "all 2 patches clean" because 003 wasn't in series,
+# Dockerfile built without 003, #331 stayed broken. New behavior: apply
+# each patch to a SCRATCH WORKING TREE in order, mirroring the Dockerfile.
 webui_series="$OVERLAY/patches/webui/series"
 if [ -f "$webui_series" ]; then
     note "checking webui patch series against $WEBUI ($(cd "$WEBUI" && git describe --tags --always 2>/dev/null || echo unknown))"
+    # Working scratch: a temporary git tree we can apply patches against
+    # in sequence without polluting the submodule's working dir. Use
+    # `git stash` semantics: stash any state, apply, check, reset.
+    SCRATCH_RESULT=0
+    (cd "$WEBUI" && git stash --include-untracked --quiet 2>/dev/null || true)
     while IFS= read -r patch; do
         patch="${patch%%#*}"
         patch="$(printf '%s' "$patch" | tr -d '\r' | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
@@ -64,19 +78,34 @@ if [ -f "$webui_series" ]; then
         patch_path="$OVERLAY/patches/webui/$patch"
         if [ ! -f "$patch_path" ]; then
             fail "webui series references missing patch: $patch"
+            SCRATCH_RESULT=1
             continue
         fi
+        # Check + apply each patch in sequence so the next patch sees the
+        # post-prior-patches state — same as the Dockerfile does.
         if ! (cd "$WEBUI" && git apply --check "$patch_path") 2>/dev/null; then
-            fail "webui patch fails --check: $patch"
+            fail "webui patch fails --check (after prior patches stacked): $patch"
             (cd "$WEBUI" && git apply --check "$patch_path" 2>&1 | sed 's/^/    /') >&2 || true
+            SCRATCH_RESULT=1
+            break  # can't continue applying if this one didn't check
         fi
+        (cd "$WEBUI" && git apply "$patch_path") || {
+            fail "webui patch passed --check but apply failed: $patch"
+            SCRATCH_RESULT=1
+            break
+        }
     done < "$webui_series"
+    # Restore submodule to pristine state regardless of result.
+    (cd "$WEBUI" && git reset --hard --quiet 2>/dev/null) && \
+        (cd "$WEBUI" && git clean -fdx --quiet 2>/dev/null)
 fi
 
-# ── 3. agent patch series must apply --check against current submodule ──────
+# ── 3. agent patch series must apply --check SEQUENTIALLY against current ──
+# Same sequential apply pattern as section 2 — see comment above for rationale.
 agent_series="$OVERLAY/patches/agent/series"
 if [ -f "$agent_series" ]; then
     note "checking agent patch series against $AGENT ($(cd "$AGENT" && git describe --tags --always 2>/dev/null || echo unknown))"
+    (cd "$AGENT" && git stash --include-untracked --quiet 2>/dev/null || true)
     while IFS= read -r patch; do
         patch="${patch%%#*}"
         patch="$(printf '%s' "$patch" | tr -d '\r' | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
@@ -87,10 +116,17 @@ if [ -f "$agent_series" ]; then
             continue
         fi
         if ! (cd "$AGENT" && git apply --check "$patch_path") 2>/dev/null; then
-            fail "agent patch fails --check: $patch"
+            fail "agent patch fails --check (after prior patches stacked): $patch"
             (cd "$AGENT" && git apply --check "$patch_path" 2>&1 | sed 's/^/    /') >&2 || true
+            break
         fi
+        (cd "$AGENT" && git apply "$patch_path") || {
+            fail "agent patch passed --check but apply failed: $patch"
+            break
+        }
     done < "$agent_series"
+    (cd "$AGENT" && git reset --hard --quiet 2>/dev/null) && \
+        (cd "$AGENT" && git clean -fdx --quiet 2>/dev/null)
 fi
 
 if [ "$failed" -eq 0 ]; then
