@@ -1,11 +1,14 @@
+diff --git a/static/boot.js b/static/boot.js
+index 24fd34be..b98c0297 100644
 --- a/static/boot.js
 +++ b/static/boot.js
-@@ -1420,7 +1420,7 @@
-     window._sidebarDensity=(s.sidebar_density==='detailed'?'detailed':'compact');
+@@ -1421,6 +1421,9 @@ function applyBotName(){
      window._busyInputMode=(s.busy_input_mode||'queue');
      window._sessionEndlessScrollEnabled=!!s.session_endless_scroll;
--    window._botName=s.bot_name||'Hermes';
-+    window._botName=s.bot_name||'Fox';
+     window._botName=s.bot_name||'Hermes';
++    if(typeof document!=='undefined'&&document.documentElement&&document.documentElement.classList.contains('fox-in-the-box')){
++      window._botName='Fox in the box';
++    }
      if(s.default_model) window._defaultModel=s.default_model;
      window._sessionJumpButtonsEnabled=!!s.session_jump_buttons;
      // Reconcile appearance: prefer localStorage (what the user last saw) over
