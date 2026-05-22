@@ -40,8 +40,9 @@ jobs:
           node-version: '20'
 
       - uses: pnpm/action-setup@v4
-        with:
-          version: 9
+        # pnpm version comes from root package.json's "packageManager" field
+        # (pnpm@9.0.0). action-setup@v4 rejects having both `version:` here
+        # AND `packageManager:` in package.json, so we omit `version:` here.
 
       - name: Install Playwright workspace deps
         working-directory: qa/playwright
@@ -133,8 +134,9 @@ jobs:
           node-version: '20'
 
       - uses: pnpm/action-setup@v4
-        with:
-          version: 9
+        # pnpm version comes from root package.json's "packageManager" field
+        # (pnpm@9.0.0). action-setup@v4 rejects having both `version:` here
+        # AND `packageManager:` in package.json, so we omit `version:` here.
 
       - name: Install Playwright workspace deps
         working-directory: qa/playwright
@@ -210,8 +212,9 @@ jobs:
           node-version: '20'
 
       - uses: pnpm/action-setup@v4
-        with:
-          version: 9
+        # pnpm version comes from root package.json's "packageManager" field
+        # (pnpm@9.0.0). action-setup@v4 rejects having both `version:` here
+        # AND `packageManager:` in package.json, so we omit `version:` here.
 
       - name: Install Playwright workspace deps
         working-directory: qa/playwright
