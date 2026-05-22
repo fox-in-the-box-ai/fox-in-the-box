@@ -64,7 +64,7 @@ jobs:
           git submodule update --init --recursive --depth=1
           # Quick sanity: both required submodules must exist and have a HEAD.
           for dir in forks/hermes-webui forks/hermes-agent; do
-            if [ ! -d "$dir/.git" ]; then
+            if [ ! -e "$dir/.git" ]; then
               echo "::error::Submodule $dir not properly initialized"
               exit 1
             fi
