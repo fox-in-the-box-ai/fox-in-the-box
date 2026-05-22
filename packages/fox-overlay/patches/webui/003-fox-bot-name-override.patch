@@ -1,5 +1,5 @@
---- a/static/boot.js	2026-05-22 13:42:13.510696399 +0000
-+++ b/static/boot.js	2026-05-22 13:42:13.512574505 +0000
+--- a/static/boot.js
++++ b/static/boot.js
 @@ -1420,7 +1420,7 @@
      window._sidebarDensity=(s.sidebar_density==='detailed'?'detailed':'compact');
      window._busyInputMode=(s.busy_input_mode||'queue');
