@@ -7,6 +7,31 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.7.7] - 2026-05-22
+
+Docs at parity with shipped reality + the verification rebuild starts. Two big-effort PRs without a single user-visible code change to the running app — the kind of release that pays back over the entire v0.7.x stabilization cycle.
+
+### Changed
+
+- **Documentation audit (#310 — closes).** Six rewritten docs, 20 archived, two deletions, no code change. The high-leverage rewrites: `CLAUDE.md` "Current State" now reflects v0.7.6 (was stuck at v0.5.3 across the v0.6.x and v0.7.x cycle); `docs/RELEASE_WORKFLOW.md` now documents both Flow A (Fox-code release with the v0.7.5 PR-A + PR-B split) and Flow B (Option B upstream-only bump with the v0.7.5 diff guard); `docs/architecture/upstream-overlay.md` got a "Testing" pointer + the v0.7.4 wrap-and-splice / v0.7.5 fail-loud-bootstrap / v0.7.6 multi-substitution patterns documented; `packages/fox-overlay/README.md` went from 14-line placeholder to a real inventory; the top-level `README.md` roadmap section caught up to current reality. Twenty files moved to `docs/archive/` (15 task docs from pre-v0.5, 4 v0.6.0 planning/research docs, 1 v0.4.7 verification doc). Two strategy docs deleted as byte-identical to their existing archived copies. Acceptance test: `git grep` for v0.5/v0.6 mentions in non-archive markdown now returns only intentional historical context (per-version smoke rows, the "post-v0.6.0" architecture title, historical narrative).
+
+### Added
+
+- **Playwright Phase 0 infrastructure (#264 — closes).** New `qa/playwright/` workspace + 3-job CI workflow (`smoke` on PR, `full` nightly across 3 browsers × 4 shards, `electron-parity` weekly on macOS + Windows) + ONE trivial `/health` spec proving the rails work end-to-end against the released `:stable` container. New `fox_overlay/webui_modules/test_hooks.py` exposes `POST /test/reset` (nukes `/data/state/webui/*.json` + session dirs + the onboarding hint) and a `POST /test/tailscale/set-state` stub for Phase 1 — **only registered when `FITB_TEST_MODE=1`**, production builds see zero new attack surface, verified by three dedicated tests. Smoke job is non-required for Phase 0 by design (lets us iterate the infrastructure); becomes required in Phase 1.
+
+### Behind the scenes
+
+- The Playwright smoke job actually runs against the released `:stable` container — not a local build. The /health spec also asserts that a Fox-added `/api/ollama/status` route is registered, which catches "dispatcher didn't initialize" regressions.
+- First CI run of the new `playwright.yml` workflow caught one issue (pnpm/action-setup@v4 rejects having both `version:` in the workflow AND `packageManager:` in package.json) and resolved on the second run. Pattern for future workflow additions: don't pin pnpm version in two places.
+- Six tests added to `packages/fox-overlay/tests/` verify the `FITB_TEST_MODE=1` gate works in both directions — production safety isn't a "we believed it" claim, it's a unit test.
+
+### What's next
+
+- **v0.7.8: Playwright Phase 1 (#265).** ~12 specs replacing the manual smoke checklist as the release gate. Wizard + endpoints + overlay bootstrap + v0.6.1 retry. Becomes a required CI check once landed.
+- v0.7.8 will likely bundle: bootstrap log surfaced to docker logs (#302), one-click diagnostic report button (#293), release-channels split (#306), Windows automated-testing strategy doc (#290).
+
+---
+
 ## [0.7.6] - 2026-05-22
 
 Silent failover, back. The other half of the local-AI story — automatic swap to the local llama-server when a remote provider has a transient failure — works again, closing the last open symptom of #303.
