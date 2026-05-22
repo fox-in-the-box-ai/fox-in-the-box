@@ -361,6 +361,7 @@ $DOCKER_CMD run -d \
   --add-host=host.docker.internal:host-gateway \
   $TAILSCALE_FLAGS \
   -v "$DATA_DIR":/data \
+  -v "$DATA_DIR/workspace":/app/workspace \
   $PORT_BIND \
   "$IMAGE" \
   || die "Failed to start container."

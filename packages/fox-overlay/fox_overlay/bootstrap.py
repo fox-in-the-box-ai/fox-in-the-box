@@ -73,15 +73,34 @@ def install() -> None:
 
         from fox_overlay import dispatch
         dispatch.freeze()
-        # WARNING level so the line surfaces in webui's default logging
-        # config — INFO is filtered by the stdlib default (WARNING) and
-        # hermes-webui doesn't call basicConfig. This line is the "did
-        # Fox load?" signal for ops smoke checks.
-        _log.warning(
+        # The "did Fox load?" signal for ops smoke checks. Goes to two
+        # destinations:
+        #
+        # 1. Python's logging at WARNING — lands in /data/logs/hermes-webui.err
+        #    via supervisord's capture (or wherever webui's logging config
+        #    routes WARNING). Filterable, structured, persisted across
+        #    rotation.
+        #
+        # 2. Direct write to PID 1's stdout — lands in `docker logs`.
+        #    v0.7.9 #302 fix: pre-v0.7.9 only (1) happened, and supervisord
+        #    captures program output to files, not container stdout. Ops
+        #    running `docker logs` would never see the bootstrap signature.
+        #    Writing to /proc/1/fd/1 directly bypasses Python's logging
+        #    config and supervisord's per-program capture entirely.
+        #    Best-effort: silently no-op if /proc isn't writable (non-Linux
+        #    container, restricted namespace).
+        _msg = (
             "[fox-overlay] bootstrap installed: dispatcher frozen, "
-            "%d GET + %d POST handlers registered",
-            len(dispatch.GET_TABLE), len(dispatch.POST_TABLE),
+            "%d GET + %d POST handlers registered"
+            % (len(dispatch.GET_TABLE), len(dispatch.POST_TABLE))
         )
+        _log.warning(_msg)
+        try:
+            with open("/proc/1/fd/1", "w") as _stdout:
+                _stdout.write(_msg + "\n")
+        except Exception:
+            pass
+
         _INSTALLED = True
 
 

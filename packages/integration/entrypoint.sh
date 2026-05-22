@@ -147,6 +147,16 @@ chown -R foxinthebox:foxinthebox \
 # /data/data/tailscale is kept root-owned so tailscaled can write state.
 chown root:root /data/run /data/data/tailscale
 
+# v0.7.9 #145: /app/workspace is bind-mounted from the host (see
+# packages/electron/src/docker-manager.js + packages/scripts/install.sh).
+# Pre-fix, this path lived on the container's writable layer and was wiped
+# on every container recreate — silent data loss for users whose chats
+# asked the agent to write files. mkdir is no-op if the host mount already
+# has files; chown ensures the foxinthebox user (which the agent runs as)
+# can write here.
+mkdir -p /app/workspace
+chown -R foxinthebox:foxinthebox /app/workspace
+
 # ── 5. Load environment ────────────────────────────────────────────────────────
 HERMES_ENV="/data/config/hermes.env"
 if [ -f "$HERMES_ENV" ]; then
