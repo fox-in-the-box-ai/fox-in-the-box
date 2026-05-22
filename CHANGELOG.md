@@ -7,6 +7,33 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.7.5] - 2026-05-22
+
+Cleanup and guardrails — the kind of release nobody asks for but everybody benefits from. Eight audit items from a five-perspective code review, bundled into one focused PR. No new features; quieter failures, cleaner offline behavior, fewer ways to ship broken code.
+
+### Fixed
+
+- **Anchor drift no longer ships silently.** Pre-v0.7.5, an upstream refactor that broke a Fox patch's textual anchor was demoted to a WARNING — Fox would boot in a quietly-broken state and ship that to users. Now: `AssertionError` from `bootstrap.apply_all()` aborts container boot, so CI catches it and broken Fox never reaches a release tag.
+- **Offline launches no longer fail because of a force re-pull.** The Electron app and `install.sh` used to `docker rmi` the `:stable` image before every pull, discarding the offline fallback. Removed. `docker pull` already checks the manifest for tagged refs and pulls a new digest when `:stable` is re-tagged. Side effect: corporate networks that throttle `ghcr.io` no longer eat a 15-minute stall on every restart.
+- **Per-service container logs are bounded.** Added `stdout_logfile_maxbytes=10MB stdout_logfile_backups=3` to all six supervisord program blocks. Was effectively unbounded (per-program defaults are 50MB × 10); a chatty Qdrant or hermes-webui could fill the user's `/data` volume over time.
+
+### Added
+
+- **`FITB_IMAGE` rollback escape hatch.** Users stranded by a bad release can now roll back without waiting for a hotfix: `FITB_IMAGE=ghcr.io/fox-in-the-box-ai/cloud:v0.7.3 ./install.sh` from the terminal, or set the same env var before launching the desktop app. Default container reference unchanged.
+- **CI gate: Option B diff guard.** New `.github/workflows/option-b-diff-guard.yml` fails any PR titled `bump(upstream): …` whose diff touches anything outside the upstream-pin allow-list (submodule pointers + `versions.toml`). Closes the last hole in the auto-bump trust model — a typo'd Fox-code PR can no longer silently ship arbitrary code to `:stable`.
+
+### Behind the scenes
+
+- **Removed 459 lines of legacy.** Extracted the duplicated `_helpers.py` (webui + agent sides had already drifted once — webui added `substitute_method`, agent didn't) to a single `fox_overlay/_substitute.py`; both `_helpers.py` files are now 3-line re-export shims. Deleted `tests/test_providers_patch.py` (201 lines, imported a module retired in v0.6.2). Trimmed 60-line "Phase 8 refresh history" docstrings to focused single-purpose ones.
+- Test suite: 125/125 passing post-cleanup, basis check clean against current pin (webui v0.51.107).
+
+### What's next
+
+- **v0.7.6: silent failover rebuild.** The other half of the local-AI story — the silent-failover engine that swaps to local on `auth_mismatch` / `quota_exhausted` — is still missing (dropped in the v0.6.0 ATOMIC refactor). Rebuilding it on upstream's new `_classify_provider_error()` + `_attempt_credential_self_heal()` architecture is the v0.7.6 theme.
+- v0.7.7: docs at parity with shipped reality (#310) + Playwright Phase 0 (#264).
+
+---
+
 ## [0.7.4] - 2026-05-22
 
 Local Ollama, finally working in the picker. Models you pulled via Settings now show up in the chat model dropdown — the missing half of the local-AI happy path (#303).
