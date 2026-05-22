@@ -6,7 +6,12 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
-const IMAGE  = 'ghcr.io/fox-in-the-box-ai/cloud:stable';
+// Rollback escape hatch (v0.7.5): respect FITB_IMAGE if set in the app's
+// environment, so users stranded by a bad release can launch with:
+//   FITB_IMAGE=ghcr.io/fox-in-the-box-ai/cloud:v0.7.3 /Applications/Fox\ in\ the\ Box.app/...
+// on macOS, or set a User env var on Windows, to roll back without waiting
+// for a hotfix.
+const IMAGE  = process.env.FITB_IMAGE || 'ghcr.io/fox-in-the-box-ai/cloud:stable';
 const CNAME  = 'fox-in-the-box';
 const PORT   = '8787/tcp';
 const ACCESS_MODE_FILE = 'docker-access-mode.json';
@@ -149,25 +154,22 @@ async function isImagePresent() {
 
 /**
  * Pull the image with a progress callback.
- * First removes any existing local image to bypass Docker's client-side cache,
- * ensuring updates to :stable tag are picked up immediately.
  * @param {(pct: number) => void} onProgress  0–100
  */
 async function pullImage(onProgress) {
-  // Remove cached image first to force fresh pull. Dockerode.pull() doesn't support
-  // --pull=always flag, so we delete and re-pull instead.
-  try {
-    const images = await docker.listImages({ filters: { reference: [IMAGE] } });
-    for (const img of images) {
-      const image = docker.getImage(img.Id);
-      await image.remove({ force: true });
-      log.info(`Removed stale image: ${IMAGE}`);
-    }
-  } catch (err) {
-    log.warn('Failed to remove old image before pull (may not exist):', err.message);
-    // Continue anyway; the pull will proceed
-  }
-
+  // v0.7.5: removed the pre-pull `docker rmi` step that used to live here.
+  // The old "Dockerode.pull() doesn't support --pull=always" rationale was
+  // wrong — `docker pull` for a tagged ref already checks the registry
+  // manifest and pulls a new digest if :stable has been re-tagged. The rmi
+  // step was throwing away the offline fallback for no benefit: every
+  // launch became dependent on GHCR uptime, and corporate networks that
+  // throttle ghcr.io got a 15-min stall on every restart.
+  //
+  // If the pull fails now AND no local image exists, the caller (startup
+  // orchestrator) surfaces CONTAINER_CREATE_FAILED with a clear hint. If
+  // the pull fails BUT a local image exists, the subsequent `docker run`
+  // succeeds against the cached image — degraded (no updates this launch)
+  // but functional.
   return new Promise((resolve, reject) => {
     docker.pull(IMAGE, (err, stream) => {
       if (err) return reject(err);

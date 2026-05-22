@@ -20,7 +20,11 @@ success() { echo -e "${GREEN}[fox]${NC} $*"; }
 warn()    { echo -e "${YELLOW}[fox]${NC} $*"; }
 die()     { echo -e "${RED}[fox] ERROR:${NC} $*" >&2; exit 1; }
 
-IMAGE="ghcr.io/fox-in-the-box-ai/cloud:stable"
+# Rollback escape hatch (v0.7.5): respect FITB_IMAGE if set, so users
+# stranded by a bad release can run:
+#   FITB_IMAGE=ghcr.io/fox-in-the-box-ai/cloud:v0.7.3 ./install.sh
+# to roll back without waiting for a hotfix.
+IMAGE="${FITB_IMAGE:-ghcr.io/fox-in-the-box-ai/cloud:stable}"
 CONTAINER="fox-in-the-box"
 
 ##############################################################################
@@ -170,12 +174,15 @@ DOCKER_CMD="${DOCKER_CMD:-docker}"
 success "Docker is ready."
 
 ##############################################################################
-# 3. Pull image (always fetch latest, don't use stale local cache)
+# 3. Pull image
 ##############################################################################
 info "Pulling image: $IMAGE"
-# Remove any existing cached image to force a fresh pull from registry.
-# This ensures hotfixes and updates to :stable tag are picked up immediately.
-$DOCKER_CMD rmi "$IMAGE" 2>/dev/null || true
+# v0.7.5 audit (#310 prep): the pre-pull `docker rmi` was misguided. `docker
+# pull` for a tagged ref ALREADY checks the registry manifest and pulls a new
+# digest if :stable has been re-tagged — the rmi just discarded our offline
+# fallback. If the registry is unreachable now (corporate proxy, GHCR outage,
+# offline launch), the previous working image stays intact and the next
+# `docker run` succeeds.
 $DOCKER_CMD pull "$IMAGE" \
   || die "Failed to pull $IMAGE. Check your network connection or GHCR credentials."
 success "Image pulled."

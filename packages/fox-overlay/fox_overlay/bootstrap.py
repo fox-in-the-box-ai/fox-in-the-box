@@ -43,17 +43,33 @@ def install() -> None:
 
         # Phase 6: apply monkey-patches to upstream mid-file edits.
         # Each patch is idempotent (sentinel attribute guard inside
-        # substitute_function). Wrap in Exception so a single patch
-        # failure (e.g. anchor drift) degrades that one patch but
-        # doesn't kill webui boot — the AssertionError detail still
-        # lands in webui stderr for ops to find.
+        # substitute_function). Distinguish two failure modes:
+        #
+        # - ImportError → the patches submodule itself didn't load
+        #   (deployment problem, not Fox-code problem). Degrade with a
+        #   warning so webui still boots with whatever modules did load.
+        # - AssertionError → an anchor or signature self-check failed,
+        #   meaning upstream drifted under us. This is the entire reason
+        #   _helpers.substitute_function raises loudly; swallowing it
+        #   here would ship silently-broken Fox behavior (bug v0.7.5
+        #   audit caught: pre-v0.7.5, anchor drift logged WARNING and
+        #   the user got a quietly-degraded app). Re-raise to abort boot
+        #   so CI / smoke / users see the failure.
+        # - Anything else → log full traceback (not just `e`) and degrade
+        #   the affected patch; webui core is upstream so it survives.
         try:
             from fox_overlay import webui_patches
             webui_patches.apply_all()
         except ImportError as e:
             _log.warning("[fox-overlay] webui_patches import failed (%s); Fox mid-file edits degraded", e)
-        except Exception as e:  # AssertionError on anchor drift, etc.
-            _log.warning("[fox-overlay] webui_patches.apply_all() failed (%s); some Fox mid-file edits degraded", e)
+        except AssertionError:
+            _log.exception(
+                "[fox-overlay] webui_patches.apply_all() ABORTED — anchor/signature drift "
+                "detected, refusing to boot with silently-broken Fox patches"
+            )
+            raise
+        except Exception:
+            _log.exception("[fox-overlay] webui_patches.apply_all() failed; Fox mid-file edits degraded")
 
         from fox_overlay import dispatch
         dispatch.freeze()

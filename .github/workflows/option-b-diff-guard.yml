@@ -1,0 +1,62 @@
+name: Option B diff guard
+
+# Enforces the Option B contract documented in CLAUDE.md + docs/architecture/
+# upstream-overlay.md: a PR whose title (or, after squash-merge, whose commit
+# subject) starts with `bump(upstream):` may ONLY touch the upstream submodule
+# pointers and the versions.toml that pins them. Any other file change in a
+# bump(upstream) PR would silently ship arbitrary Fox code to :stable via the
+# auto-bump in build-container.yml — which is what FITB#122 forbade and the
+# v0.7.5 audit (per the engineering plan) flagged as the only remaining hole
+# in the auto-bump trust model.
+#
+# Failure mode this closes: a Fox-code PR is squash-merged with a typo'd or
+# copy-pasted "bump(upstream): …" subject line. build-container.yml's merge
+# job sees the subject match its `^bump\(upstream\):` regex, retags :stable
+# to the new digest, and every DMG/exe user's next launch pulls the unintended
+# Fox-code change as a "stable" upgrade.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    if: startsWith(github.event.pull_request.title, 'bump(upstream):')
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Assert diff touches only upstream-pin files
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          # Allowed paths for an Option B PR. Any change outside this list is
+          # a violation. Notes:
+          # - The two submodule pointers (gitlink entries) live at top level
+          #   under `forks/`. Their content changes are gitlink-only — the
+          #   submodule SHA in the parent tree changes; the file MODE is
+          #   160000 (submodule), not a regular file edit.
+          # - `packages/fox-overlay/versions.toml` is the human-readable
+          #   record of which upstream tags are pinned; bumped alongside.
+          ALLOWED_RE='^(forks/hermes-(agent|webui)|packages/fox-overlay/versions\.toml)$'
+
+          changed=$(git diff --name-only "$BASE_SHA".."$HEAD_SHA")
+          echo "----- Changed files in this Option B PR -----"
+          echo "$changed"
+          echo "---------------------------------------------"
+
+          violations=$(echo "$changed" | grep -Ev "$ALLOWED_RE" || true)
+          if [ -n "$violations" ]; then
+            echo "::error::Option B violation. A PR titled 'bump(upstream): …' must touch ONLY the upstream submodule pointers and packages/fox-overlay/versions.toml. The following files are out-of-bounds for an Option B PR:"
+            echo "$violations" | sed 's/^/::error::  - /'
+            echo "::error::If this PR is supposed to include Fox-code changes, rename it to drop the 'bump(upstream):' prefix. If the auto-bump should apply but you also need a code change, split into two PRs."
+            exit 1
+          fi
+
+          echo "✅ Option B contract satisfied — diff is upstream-pin-only."

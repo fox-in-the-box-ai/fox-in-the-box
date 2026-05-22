@@ -1,65 +1,21 @@
-"""Fox webui patch: streaming.py — FITB#9 local-fallback plumbing only.
+"""Fox webui patch: streaming.py — FITB#9 local-fallback plumbing.
 
-## Phase 8 refresh history (#241)
+Adds the Fox local-fallback plumbing inside ``_run_agent_streaming``:
+if Settings → Providers "Local fallback" is ON AND the bundled
+llama-server is healthy, plumb it through as ``_fallback_resolved``
+(preempts any config-driven fallback).
 
-Original Fox streaming patch (Phase 6 module 4/5, PR #231) contained
-6 substitutions in ``_run_agent_streaming``:
+Self-checks: ``inspect.signature`` on ``_run_agent_streaming`` (catches
+drift outside the anchor; v0.51.84 added ``goal_related=False``); anchor
+exactly-once via ``substitute_function``; per-patch sentinel +
+apply-level idempotency guard.
 
-1. FITB#9 local-fallback plumbing (preempt config-driven fallback)
-2. FITB#89 token_sent gate change (mid-stream breaks fire apperror)
-3. FITB#89 mid-stream-break ``elif _token_sent`` branch
-4. FITB#129b silent failover before apperror (success path)
-5. FITB#89+129b persistence wrap + partial-text preservation
-6. FITB#129b exception-path apperror gating
-
-Phase 8 ATOMIC re-pointed webui at v0.51.84. Upstream's error/self-heal
-flow was extensively refactored in the v0.5x line:
-
-* `_classify_provider_error()` — dispatcher replaces Fox's if/elif chain
-* `_attempt_credential_self_heal()` — automatic 401 retry (Fox didn't have)
-* `_materialize_pending_user_turn_before_error()` — Fox didn't have
-* `_provider_error_payload()` — dedicated payload builder
-* `_self_healed` state tracking
-
-Hunks 2-6 of Fox's original patch CAN'T be expressed as substitutions
-against this new flow — the surrounding context (err_label cascade
-+ apperror emission + persistence) is structurally different.
-
-**Phase 8 follow-up #241 decision (per Dennis 2026-05-17 "we do not
-care if the product itself is broken at this stage"):** keep ONLY
-hunk 1 (FITB#9 local-fallback plumbing — applies cleanly). Hunks 2-6
-(FITB#89 mid-stream-break label + #129b silent failover) are
-DROPPED. Those features ARE LOST in v0.6.0 — they can be
-re-implemented later against upstream's new flow if Fox needs them
-back (likely as a different design, since upstream's credential
-self-heal already covers part of the #89 use case).
-
-## What this patch still does
-
-* Add FITB local-fallback plumbing inside ``_run_agent_streaming``
-  so that if the user has the Settings → Providers "Local fallback"
-  toggle ON AND the bundled llama-server is healthy, plumb it
-  through as ``_fallback_resolved`` (preempts any config-driven
-  fallback).
-
-## What it NO LONGER does (regressions in v0.6.0 vs v0.5.x)
-
-* FITB#89 mid-stream break detection — provider drops connection
-  mid-stream → Fox previously emitted ``Stream interrupted`` label
-  with partial-text preservation. Now: upstream's classification
-  applies (no special label).
-* FITB#129b silent failover to local on auth/quota errors — Fox
-  previously swapped the gateway's active model to local when
-  errors hit AND local was ready. Now: upstream's apperror surfaces
-  to the user; user must manually switch in Settings.
-
-## Self-checks
-
-* ``inspect.signature`` self-check on ``_run_agent_streaming``
-  (catches drift outside anchor; v0.51.84 adds ``goal_related=False``)
-* Anchor self-check via ``substitute_function`` (each anchor MUST
-  appear exactly once)
-* Per-patch sentinel + apply-level idempotency guard
+**Missing in this patch (intentional, dropped in Phase 8 #241):**
+FITB#89 mid-stream-break label and #129b silent auto-failover. They
+were 5 of the original 6 hunks and became structurally unmappable when
+upstream refactored to ``_classify_provider_error()`` +
+``_attempt_credential_self_heal()`` in v0.51.84. Tracked for v0.7.5+
+rebuild (see #303 symptom 3). See git history for the original hunks.
 """
 import inspect
 import logging
