@@ -5,3 +5,4 @@ packages:
   # safer for future contributors who may add a package.json under a Python
   # package directory.
   - "packages/electron"
+  - "qa/playwright"
