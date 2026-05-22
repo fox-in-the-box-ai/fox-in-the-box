@@ -25,6 +25,31 @@ Skipped sections are OK as long as they're explicitly noted with reason. Empty e
 
 ---
 
+## v0.7.16 — 2026-05-22 (DV — first real-gate release, Windows installer UX)
+
+First non-bypass entry. Per the v0.7.15 SMOKE_LOG gate, this row must be filled in **before** the v0.7.16 tag is pushed — the release workflow will refuse to publish otherwise.
+
+Section L row "v0.7.16 Windows installer UX bundle" executed against a fresh Windows 11 VM (Docker Desktop uninstalled snapshot) + a separate snapshot with Docker Desktop already installed:
+
+- [ ] (a) `#324` Docker Desktop install dialog visible (NOT covered) during winget flow on uninstalled-Docker VM
+- [ ] (b) `#324` Docker Desktop window comes to front on cold-start (Docker installed but not running)
+- [ ] (c) `#325` Reboot dialog reads "will resume installation automatically after your PC restarts" with "Restart now" / "I'll restart later" buttons
+- [ ] (d) `#325` "I'll restart later" closes dialog without invoking `shutdown`
+- [ ] (e) `#325` "Restart now" triggers `shutdown /r /t 3` and RunOnce re-launches Fox after reboot
+- [ ] (f) `#330` Access-mode modal renders in front of FITB progress window on fresh install (both main startup + tray startup paths)
+- [ ] (g) Regression: saved access-mode skips modal
+- [ ] (h) Regression: macOS DMG launches cleanly end-to-end
+- [ ] (i) `node --check` clean on all four edited files
+- [ ] (j) Playwright CI smoke green on PR
+
+Findings:
+- (fill in once smoke run is complete)
+
+Action items:
+- (fill in once smoke run is complete)
+
+---
+
 ## v0.7.15 — 2026-05-22 (DV, infrastructure release — bypass entry)
 
 This release ships the SMOKE_LOG gate itself + a permanent regression spec for #331. It is intentionally an infrastructure-only release with no user-visible product change.

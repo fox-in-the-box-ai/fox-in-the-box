@@ -356,12 +356,19 @@ function getEffectiveAccessMode() {
  * DMG users can opt into Tailscale before container creation. No-op on
  * Linux (host-script users go through install.sh's chooser) and when
  * prefs already exist.
+ *
+ * @param {{ parent?: import('electron').BrowserWindow }} [opts]
+ *   `parent` is the window the modal should attach to; without it on
+ *   Windows the message box races other foreground claimants (e.g. the
+ *   FITB progress window with `alwaysOnTop: true`) and ends up rendered
+ *   behind them — #330. main.js / startup-orchestrator pass the active
+ *   progress window through so the dialog is a proper modal child.
  */
-async function ensureDockerAccessModeChosen() {
+async function ensureDockerAccessModeChosen(opts = {}) {
   if (process.platform !== 'win32' && process.platform !== 'darwin') return;
   if (getSavedAccessMode() !== null) return;
   const { dialog } = require('electron');
-  const { response } = await dialog.showMessageBox({
+  const boxOpts = {
     type: 'question',
     title: 'Fox in the box — Network access',
     message: 'How should this PC reach the container?',
@@ -373,7 +380,10 @@ async function ensureDockerAccessModeChosen() {
     buttons: ['Port only', 'Tailscale only', 'Both', 'Cancel'],
     defaultId: 1,
     cancelId: 3,
-  });
+  };
+  const { response } = opts.parent
+    ? await dialog.showMessageBox(opts.parent, boxOpts)
+    : await dialog.showMessageBox(boxOpts);
   if (response === 3) {
     const err = new Error('Setup cancelled at network access step.');
     err.code = 'ACCESS_MODE_CANCELLED';

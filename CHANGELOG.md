@@ -7,6 +7,28 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.7.16] - 2026-05-22
+
+**Windows installer UX: three fixes for dialogs hidden behind the FITB spinner.** All three were P0 user-reported issues blocking fresh Windows installs — the Docker Desktop installer dialog disappearing behind the FITB progress window (#324), the same z-order race for the "How this container should be accessed" modal (#330), and the absence of any user-facing copy explaining that the install will auto-resume after the Docker-required reboot (#325). First release subject to the v0.7.15 SMOKE_LOG gate — verified with a live Windows 11 smoke run logged in `qa/SMOKE_LOG.md`.
+
+### Fixed
+
+- **#324 — Docker Desktop install dialog appears behind the FITB installer.** The FITB progress window opens with `alwaysOnTop: true` so the user can see startup status. When the same flow then launches Docker Desktop (via `winget install` for fresh installs or by spawning `Docker Desktop.exe` for existing installs), Docker's GUI dialogs were competing with that always-on-top claim and losing. Fix: the progress window now drops `alwaysOnTop` for the duration of any external Docker-Desktop launch (`startup.js` calls a new `setForegroundYield()` dep wired from `main.js`), then reclaims it once Docker's window has come up. Bracketed at the `state.action === 'start'` spawn paths and the `action === 'install'` winget flow. (`packages/electron/src/{startup,main}.js`)
+- **#330 — "How this container should be accessed" modal appears behind the install window.** `ensureDockerAccessModeChosen` was calling `dialog.showMessageBox(opts)` without a parent BrowserWindow — Electron's API supports both signatures but parent-less message boxes on Windows can render behind any pre-existing always-on-top window. Fix: the function now accepts `{ parent }` and passes it as the first arg when present; `startup-orchestrator` + `startFromTray` thread the active progress window through. (`packages/electron/src/{docker-manager,startup-orchestrator,main}.js`)
+- **#325 — User isn't told installation will auto-resume after the post-Docker-install reboot.** The reboot prompt copy read only "A restart is recommended before trying Fox in the box again," leaving users uncertain whether they had to re-run the installer themselves. RunOnce was already being registered (no behavior change), but the dialog never told the user. Fix: dialog now reads "Fox in the box will resume installation automatically after your PC restarts — you do not need to re-launch the installer manually," with buttons "Restart now" / "I'll restart later" instead of "Restart now" / "Close." (`packages/electron/src/main.js` — `showDaemonRecoveryRequired`)
+
+### Behind the scenes
+
+- **First non-bypass `qa/SMOKE_LOG.md` entry.** v0.7.14 + v0.7.15 shipped as bypass entries because they were infrastructure-only. v0.7.16 is the first release run end-to-end through the gate as designed — Section L's new v0.7.16 row was executed against a Win11 VM with a fresh Docker Desktop install before tag.
+- `qa/SMOKE_CHECKLIST.md` gains a v0.7.16 row in Section L covering all three fixes + regression sanity for the saved-access-mode path (must NOT prompt when prefs already saved).
+
+### What's next
+
+- **v0.7.17:** the meta-gaps surfaced by the v0.7.15 audit — orphan-patch detection in `check-overlay-basis.sh`, a working `regen-patch.sh` (the v0.7.14 ship was broken-on-arrival), and unskipping the `wizard-renders` redirect-fires Playwright assertions (chicken-and-egg now resolved by v0.7.15 having shipped).
+- v0.7.x continues until "ship-to-a-stranger" quality holds.
+
+---
+
 ## [0.7.15] - 2026-05-22
 
 **Permanent regression net for #331 + SMOKE_LOG enforcement gate.** The infrastructure half of the v0.7.13 retrospective's findings — Playwright spec that would have caught #331 had it existed, plus a release-time gate that refuses to publish a tag without a written audit-trail entry in `qa/SMOKE_LOG.md`. The deferral pattern that let #331 ship for 6 releases is closed at the bone.

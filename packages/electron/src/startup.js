@@ -416,6 +416,13 @@ async function ensureDockerWindows(deps) {
       waitForDesktopProcessStart(isRunning, timeoutMs, intervalMs, _sleep, progress),
     diagnoseDocker = () => diagnoseWindowsDocker(_run),
     attemptRecover = (sp) => attemptRecoverWindowsDocker(_run, sp),
+    // v0.7.16 #324: invoked as setForegroundYield(true) before any external
+    // Docker-Desktop UI is summoned (winget install, spawnDetached, fallback
+    // `start ""`), and setForegroundYield(false) once Docker's own window has
+    // had a chance to claim foreground. main.js drops the progress window's
+    // `alwaysOnTop` flag while yielded so Docker's GUI installer isn't
+    // covered by the FITB spinner. No-op when omitted (tests).
+    setForegroundYield = () => {},
   } = deps;
 
   const state = await detectWindowsDockerState(isDaemonRunning, _findExe);
@@ -424,6 +431,7 @@ async function ensureDockerWindows(deps) {
 
   if (state.action === 'start' || state.action === 'start-service') {
     showProgress('Starting Docker Desktop… this can take up to 3 minutes on first launch.');
+    setForegroundYield(true);
     if (state.action === 'start-service') {
       try {
         await _run('net start com.docker.service', { shell: true });
@@ -458,6 +466,7 @@ async function ensureDockerWindows(deps) {
       }
       desktopRunning = await waitForDesktopStart(isDesktopProcessRunning, 15_000, 1_000, undefined, showProgress);
       if (!desktopRunning) {
+        setForegroundYield(false);
         const launchErr = new Error(
           'Docker Desktop did not start. Please open Docker Desktop manually, wait until it is running, then retry.'
         );
@@ -465,6 +474,10 @@ async function ensureDockerWindows(deps) {
         throw launchErr;
       }
     }
+    // Docker Desktop process is up; its setup dialog (if any) has had its
+    // shot at the foreground. Reclaim alwaysOnTop on the FITB spinner so
+    // the user can see daemon-ready progress.
+    setForegroundYield(false);
 
     let remainingMs = 180_000;
     let diagnostics = null;
@@ -522,24 +535,32 @@ async function ensureDockerWindows(deps) {
 
   // action === 'install'
   showProgress('Docker not found — installing Docker Desktop…');
-  await _run(
-    'winget install --id Docker.DockerDesktop --silent --accept-source-agreements --accept-package-agreements',
-    { shell: true, timeout: 300_000 },
-  ).catch((err) => {
-    // winget exits non-zero when already installed — not an error
-    if (err.message && (
-      err.message.includes('already installed') ||
-      err.message.includes('No applicable upgrade') ||
-      err.message.includes('0x8A150101')
-    )) return;
-    const msg =
-      'Could not install Docker Desktop automatically.\n\n' +
-      'Please install it manually from https://docker.com/products/docker-desktop,\n' +
-      'then reopen Fox in the box.';
-    const installErr = new Error(msg);
-    installErr.code = 'DOCKER_INSTALL_FAILED';
-    throw installErr;
-  });
+  // Yield foreground around winget: Docker's installer may surface a GUI
+  // dialog (UAC, EULA, post-install panel) that must not be covered by
+  // the always-on-top FITB spinner. #324.
+  setForegroundYield(true);
+  try {
+    await _run(
+      'winget install --id Docker.DockerDesktop --silent --accept-source-agreements --accept-package-agreements',
+      { shell: true, timeout: 300_000 },
+    ).catch((err) => {
+      // winget exits non-zero when already installed — not an error
+      if (err.message && (
+        err.message.includes('already installed') ||
+        err.message.includes('No applicable upgrade') ||
+        err.message.includes('0x8A150101')
+      )) return;
+      const msg =
+        'Could not install Docker Desktop automatically.\n\n' +
+        'Please install it manually from https://docker.com/products/docker-desktop,\n' +
+        'then reopen Fox in the box.';
+      const installErr = new Error(msg);
+      installErr.code = 'DOCKER_INSTALL_FAILED';
+      throw installErr;
+    });
+  } finally {
+    setForegroundYield(false);
+  }
 
   // Docker Desktop always requires a reboot after fresh install on Windows.
   // No point polling — show the reboot screen immediately.
