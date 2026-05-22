@@ -7,6 +7,34 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.7.3] - 2026-05-22
+
+Fox gets its own voice. New users meet **Fox in the Box** the agent — laid-back, opinionated, brief by default, no corporate filler.
+
+### Added
+
+- **Fox-specific persona via `SOUL.md` overlay (#297 by @bsgdigital).** New installs now ship with Fox's own persona file: anthropomorphic fox AI assistant, business-first systems thinker, "no bullshit / no sycophancy / 3-line max unless you say deep dive." Replaces upstream Hermes's generic persona. Implemented as an agent-side overlay (`packages/fox-overlay/agent_overlay/SOUL.md`) that the Dockerfile copies over `/app/hermes-agent/docker/SOUL.md` at build time; upstream's entrypoint then seeds it into `$HERMES_HOME/SOUL.md` on first run — the same mechanism upstream uses for its default persona.
+
+### Heads-up for existing installs
+
+The new persona ships in the container but only seeds into your home directory on **first run** (it doesn't overwrite an existing `SOUL.md`). If you've been running Fox already, your `$HERMES_HOME/SOUL.md` is the older / customized version — to pick up the new Fox persona, either:
+- Delete `$HERMES_HOME/SOUL.md` (or `/data/SOUL.md` inside the container) and restart, OR
+- Edit your existing `SOUL.md` manually with the new content (see the source at `packages/fox-overlay/agent_overlay/SOUL.md`)
+
+A future release may add a migration that surfaces this choice in the UI.
+
+### Behind the scenes
+
+- New **agent-side content-overlay pattern** for Fox-only content files (vs. patches or runtime monkey-patches): place file under `packages/fox-overlay/agent_overlay/`, add a Dockerfile `RUN cp` block at build time. Use this for any future Fox-only content file that needs to overwrite an upstream content file. Mirrors the existing `agent_memory_plugins/` install pattern.
+- `FITB_DISABLE_AGENT_OVERLAY=1` build arg short-circuits the SOUL.md copy too, consistent with the other agent-side overlay paths.
+- Test suite covering artifact + Dockerfile wiring + manifest classification (`tests/integration/test_fox_soul_overlay.py`). Tests currently run via local `pytest`; CI wiring deferred to a follow-up issue.
+
+### What's next
+
+#303 — Local Ollama integration end-to-end fix is the highest-priority remaining v0.7.x item. v0.7.4 candidate.
+
+---
+
 ## [0.7.2] - 2026-05-20
 
 Two safe quick-wins continuing the v0.7.x stabilization train.
