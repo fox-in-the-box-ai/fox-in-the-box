@@ -384,6 +384,11 @@ function getRemediationForCode(code, platform) {
     if (platform === 'win32') return 'Start Docker Desktop manually, wait until it reports running, then relaunch Fox in the box.';
     return 'Open Docker Desktop and wait for daemon readiness, then relaunch Fox in the box.';
   }
+  if (code === 'DOCKER_WINDOWS_CONTAINERS_MODE') {
+    // v0.7.11 #291: Docker IS running but in the wrong mode. There's no
+    // recovery to attempt — the user has to flip the switch themselves.
+    return 'Docker Desktop is in Windows-containers mode. Fox needs Linux containers. Right-click the Docker Desktop tray icon → "Switch to Linux containers..." → wait for it to finish, then relaunch Fox in the box.';
+  }
   if (code === 'IMAGE_PULL_TIMEOUT') return 'Check network connectivity and retry. Corporate proxies/firewalls can block container pulls.';
   if (code === 'HEALTH_TIMEOUT') return 'Container started but app is not healthy yet. Wait a bit longer or restart Docker and try again.';
   if (code === 'ACCESS_MODE_CANCELLED') return 'Relaunch Fox in the box and pick a network option, or set FOX_ACCESS_MODE=1|2|3 before starting.';

@@ -7,6 +7,32 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.7.11] - 2026-05-22
+
+Windows users no longer cycle through a 4-minute WSL repair + reboot loop when Docker Desktop is in Windows-containers mode. Fox now detects the mismatch in ~10 seconds and shows the exact tray-menu steps to switch modes.
+
+### Fixed
+
+- **Windows-containers-mode detection + actionable error (#291 — closes; also resolves #286 follow-up).** When Docker Desktop is running but set to Windows-containers mode, both Linux engine pipes return ENOENT. Pre-v0.7.11, Fox couldn't tell the difference between "Docker not installed" and "Docker installed but wrong mode," so it ran the WSL-repair flow — a ~4-minute UAC dance that ends in a reboot prompt. The user reboots, comes back, and hits the same failure because the mode persists across reboots. Real user impact, reported live during the v0.7.10 release window. Now: after both Linux pipes return ENOENT, Fox runs `docker info --format "{{.OSType}}"` (3s timeout). If `OSType` ends with `windows`, sets a new error code `DOCKER_WINDOWS_CONTAINERS_MODE`; the startup orchestrator short-circuits the recovery flow and surfaces a non-recoverable error dialog with the exact tray-menu steps: *"Right-click the Docker Desktop tray icon → 'Switch to Linux containers...' → wait for it to finish, then relaunch Fox in the box."* No more reboot loop.
+
+### Heads-up
+
+- **If you're stuck in the reboot loop right now on v0.7.10 or earlier:** the manual workaround is exactly what v0.7.11's error message says — right-click Docker Desktop tray → "Switch to Linux containers..." → wait ~30s → relaunch Fox. v0.7.11 just automates surfacing the message instead of cycling through WSL repair first.
+- **Non-Docker-Desktop Windows installs** (Docker CE on Windows Server, Mirantis, Rancher Desktop) would also report `OSType=windows` legitimately. The error message specifically names Docker Desktop's tray menu — if you're using a different runtime and hit this, the underlying detection still saved you 4 minutes of recovery, just the suggested remediation will be off. File an issue if it surfaces.
+
+### Behind the scenes
+
+- Added `getLastDaemonErrorCode()` to docker-manager.js exports — a non-breaking pattern that lets the orchestrator distinguish "daemon not running" from richer failure causes without changing the `isDaemonRunning() → bool` contract that ~5 callers depend on.
+- **6 new Jest tests** in `tests/electron/docker-manager.test.js` covering: Windows-containers detection, Linux-mode does NOT set code, CLI-unavailable graceful fallthrough, non-Windows platforms skip the probe entirely (saves wall time on macOS/Linux), banner-prefixed CLI output tolerated (some Docker Desktop 4.x builds prepend "Using context..."), stale code reset between calls. Total Electron test suite: **71 specs, all green**.
+- Per the 4-architect scoping pass: realistic estimate was 4-6h; actual was ~2h once the existing `getRemediationForCode` table at `main.js:358-391` made the UI wiring trivial.
+
+### What's next
+
+- **v0.7.12: Tailscale Safari auth-link rebuild (#146).** Largest remaining bug — scoping revealed it's a rebuild-from-scratch (the v0.7.0 migration dropped the client tile) plus a server-side data race. ~8-12h with real Safari verification + test-hook expansion.
+- **Also pending: #324** (Windows installer: Docker Desktop dialog appears behind installer window) — filed today, likely small NSIS z-order fix.
+
+---
+
 ## [0.7.10] - 2026-05-22
 
 Mobile gets the Fox. The titlebar on phones now shows the Fox avatar photo instead of the upstream Hermes caduceus logomark — small change, but it's the difference between "generic app" and "my assistant" on a 375px viewport.

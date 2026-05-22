@@ -2,11 +2,27 @@
 
 jest.mock('dockerode');
 jest.mock('electron-log', () => ({ info: jest.fn(), warn: jest.fn(), debug: jest.fn(), error: jest.fn() }));
+// v0.7.11 #291: mock child_process so the new Windows-containers probe
+// (`docker info --format '{{.OSType}}'`) is controllable from tests.
+jest.mock('child_process', () => ({ exec: jest.fn() }));
 
 const Dockerode = require('dockerode');
+const { exec } = require('child_process');
 const docker    = require('../../packages/electron/src/docker-manager');
 const { extractSetupStatusFromLogs } = require('../../packages/electron/src/docker-manager');
 const fs = require('fs');
+
+// Helper: configure the child_process.exec mock to behave like a successful
+// callback-style invocation. `promisify(exec)` translates this into a
+// resolved promise with `{ stdout, stderr }`.
+function mockExecSuccess(stdout) {
+  exec.mockImplementation((_cmd, _opts, cb) => {
+    cb(null, { stdout, stderr: '' });
+  });
+}
+function mockExecFailure(err) {
+  exec.mockImplementation((_cmd, _opts, cb) => { cb(err); });
+}
 
 let mockDockerInstance;
 
@@ -297,4 +313,116 @@ test('monitorContainerSetupLogs returns a no-op when showProgress is missing', (
   const stop = monitorContainerSetupLogs(null);
   expect(typeof stop).toBe('function');
   expect(() => stop()).not.toThrow();
+});
+
+// ── v0.7.11 #291: Windows-containers-mode detection ─────────────────────────
+
+test('isDaemonRunning sets DOCKER_WINDOWS_CONTAINERS_MODE when docker info reports OSType=windows', async () => {
+  // Both Windows pipes fail (Windows-containers mode hides the Linux engine).
+  const failingClient = {
+    ping: jest.fn().mockRejectedValue(new Error('connect ENOENT')),
+  };
+  Dockerode.mockImplementation(() => failingClient);
+  Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+  docker.init({ platform: 'win32' });
+
+  // docker info CLI returns the Docker mode.
+  mockExecSuccess('windows\n');
+
+  await expect(docker.isDaemonRunning()).resolves.toBe(false);
+  expect(docker.getLastDaemonErrorCode()).toBe('DOCKER_WINDOWS_CONTAINERS_MODE');
+  expect(exec).toHaveBeenCalledWith(
+    expect.stringContaining('docker info'),
+    expect.objectContaining({ timeout: 3000 }),
+    expect.any(Function),
+  );
+});
+
+test('isDaemonRunning does NOT set the code when docker info reports OSType=linux', async () => {
+  // Linux-containers Docker Desktop with a transiently-unreachable pipe.
+  const failingClient = {
+    ping: jest.fn().mockRejectedValue(new Error('connect ENOENT')),
+  };
+  Dockerode.mockImplementation(() => failingClient);
+  Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+  docker.init({ platform: 'win32' });
+
+  mockExecSuccess('linux\n');
+
+  await expect(docker.isDaemonRunning()).resolves.toBe(false);
+  // Linux means the regular "daemon not reachable" recovery is correct.
+  expect(docker.getLastDaemonErrorCode()).toBeNull();
+});
+
+test('isDaemonRunning falls through gracefully when docker CLI is unavailable', async () => {
+  // ENOENT on the docker CLI (Docker Desktop GUI-only install, or PATH not set).
+  const failingClient = {
+    ping: jest.fn().mockRejectedValue(new Error('connect ENOENT')),
+  };
+  Dockerode.mockImplementation(() => failingClient);
+  Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+  docker.init({ platform: 'win32' });
+
+  const enoent = new Error('docker: command not found');
+  enoent.code = 'ENOENT';
+  mockExecFailure(enoent);
+
+  await expect(docker.isDaemonRunning()).resolves.toBe(false);
+  // No code → orchestrator runs the existing recovery path (correct fallback).
+  expect(docker.getLastDaemonErrorCode()).toBeNull();
+});
+
+test('isDaemonRunning does not probe docker CLI on non-Windows platforms', async () => {
+  const failingClient = {
+    ping: jest.fn().mockRejectedValue(new Error('connect ECONNREFUSED')),
+  };
+  Dockerode.mockImplementation(() => failingClient);
+  Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true });
+  docker.init({ platform: 'darwin' });
+
+  await expect(docker.isDaemonRunning()).resolves.toBe(false);
+  expect(docker.getLastDaemonErrorCode()).toBeNull();
+  // Critically: the new probe must NOT run on Mac/Linux. macOS Docker Desktop
+  // would also report OSType=linux on `docker info`, but we don't want to
+  // spend the wall time on a fork+exec for every non-Windows daemon check.
+  expect(exec).not.toHaveBeenCalled();
+});
+
+test('isDaemonRunning tolerates Docker Desktop CLI banner before OSType output', async () => {
+  // Some Docker Desktop 4.x builds emit a "context using..." line before the
+  // format output. The osType.trim().toLowerCase().endsWith('windows') parse
+  // should tolerate this.
+  const failingClient = {
+    ping: jest.fn().mockRejectedValue(new Error('connect ENOENT')),
+  };
+  Dockerode.mockImplementation(() => failingClient);
+  Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+  docker.init({ platform: 'win32' });
+
+  mockExecSuccess('Using context "desktop-windows"\nwindows\n');
+
+  await expect(docker.isDaemonRunning()).resolves.toBe(false);
+  expect(docker.getLastDaemonErrorCode()).toBe('DOCKER_WINDOWS_CONTAINERS_MODE');
+});
+
+test('isDaemonRunning resets the error code on each call', async () => {
+  // Call 1: Windows-containers mode detected.
+  const failingClient = {
+    ping: jest.fn().mockRejectedValue(new Error('connect ENOENT')),
+  };
+  Dockerode.mockImplementation(() => failingClient);
+  Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+  docker.init({ platform: 'win32' });
+  mockExecSuccess('windows\n');
+  await docker.isDaemonRunning();
+  expect(docker.getLastDaemonErrorCode()).toBe('DOCKER_WINDOWS_CONTAINERS_MODE');
+
+  // Call 2: ping now succeeds (user switched modes + we re-checked). Stale
+  // error code must NOT persist — orchestrator polls isDaemonRunning multiple
+  // times and would otherwise refuse to recover.
+  const goodClient = { ping: jest.fn().mockResolvedValue({}) };
+  Dockerode.mockImplementation(() => goodClient);
+  docker.init({ platform: 'win32' });
+  await docker.isDaemonRunning();
+  expect(docker.getLastDaemonErrorCode()).toBeNull();
 });

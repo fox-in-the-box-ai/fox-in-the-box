@@ -116,6 +116,22 @@ async function runStartup({
     let dockerRunning = await docker.isDaemonRunning();
     if (dockerRunning) return;
 
+    // v0.7.11 #291: short-circuit when isDaemonRunning detected Docker
+    // Desktop in Windows-containers mode. Running the WSL repair / Docker
+    // install flow is actively harmful here (Docker IS installed and
+    // running — it's just in the wrong mode). Throw a non-recoverable
+    // error so main.js surfaces the actionable hint immediately instead
+    // of cycling through the recovery path.
+    const daemonErrCode = docker.getLastDaemonErrorCode && docker.getLastDaemonErrorCode();
+    if (daemonErrCode === 'DOCKER_WINDOWS_CONTAINERS_MODE') {
+      throw Object.assign(
+        new Error(
+          'Docker Desktop is running in Windows-containers mode. Fox needs Linux containers.',
+        ),
+        { code: 'DOCKER_WINDOWS_CONTAINERS_MODE', nonRecoverable: true },
+      );
+    }
+
     if (platform === 'win32') {
       daemonProgress('Setting up Docker…');
       const winDocker = await ensureDockerWindows(daemonProgress);

@@ -5,6 +5,9 @@ const log = require('electron-log');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { exec } = require('child_process');
+const { promisify } = require('util');
+const execAsync = promisify(exec);
 
 // Rollback escape hatch (v0.7.5): respect FITB_IMAGE if set in the app's
 // environment, so users stranded by a bad release can launch with:
@@ -19,6 +22,13 @@ const ACCESS_MODE_FILE = 'docker-access-mode.json';
 let docker = null;
 let activeSocket = 'default';
 let socketCandidates = [{}];
+
+// Set by isDaemonRunning() when the daemon-not-reachable cause is
+// known beyond "no pipe responded." Cleared at the start of each call.
+// Callers (startup-orchestrator) check this after a false return to decide
+// whether to attempt platform-specific recovery (the existing flow) or
+// short-circuit with a user-actionable error (the v0.7.11 #291 path).
+let _lastDaemonErrorCode = null;
 
 function dockerError(code, message, cause = null) {
   const err = new Error(message);
@@ -122,9 +132,18 @@ function init({ platform = process.platform } = {}) {
 /**
  * Returns true if the Docker daemon is reachable.
  * Throws if Dockerode cannot be initialised.
+ *
+ * On Windows, when both Linux-engine pipes are unreachable, additionally
+ * probes `docker info --format '{{.OSType}}'` to detect the case where
+ * Docker Desktop is running but in **Windows-containers mode** — Fox needs
+ * Linux containers. In that case sets `_lastDaemonErrorCode =
+ * 'DOCKER_WINDOWS_CONTAINERS_MODE'` so the orchestrator can short-circuit
+ * the recovery flow and surface an actionable error instead of running the
+ * unhelpful WSL repair path. See `getLastDaemonErrorCode()` + #291.
  */
 async function isDaemonRunning() {
   if (!docker) throw dockerError('DOCKER_NOT_INITIALIZED', 'Docker manager not initialized');
+  _lastDaemonErrorCode = null;
   const errors = [];
   for (const candidate of socketCandidates) {
     const socketLabel = candidate.socketPath || 'default';
@@ -141,7 +160,48 @@ async function isDaemonRunning() {
     }
   }
   log.warn('Docker daemon not reachable:', errors.join(' | '), `(socket: ${activeSocket})`);
+
+  // v0.7.11 #291: on Windows, distinguish "Docker not running" from "Docker
+  // is running but in Windows-containers mode." The latter needs a totally
+  // different recovery (switch mode via tray menu) than the former (start
+  // Docker Desktop). bsdigital lost ~30 min in #286 → #288 → #291 because
+  // Fox silently took the wrong recovery path.
+  if (process.platform === 'win32') {
+    try {
+      // 3s timeout — `docker info` against a healthy daemon returns in ~50ms;
+      // against a degraded daemon it can hang for tens of seconds. Either
+      // way, 3s is more than enough for the happy path and bounds the bad path.
+      const { stdout } = await execAsync('docker info --format "{{.OSType}}"', {
+        timeout: 3000,
+        windowsHide: true,
+      });
+      // Defensive parse: trim + lowercase + endsWith — accounts for stray
+      // banner lines some Docker Desktop CLI builds emit before the format
+      // output, and for casing variance across 4.x versions.
+      const osType = String(stdout).trim().toLowerCase();
+      if (osType.endsWith('windows')) {
+        _lastDaemonErrorCode = 'DOCKER_WINDOWS_CONTAINERS_MODE';
+        log.warn(
+          'Docker Desktop is in Windows-containers mode (docker info reports OSType=windows). ' +
+          'Fox needs Linux containers — Docker Desktop must be switched to Linux containers ' +
+          'mode from its tray menu, then Fox relaunched.',
+        );
+      }
+    } catch (probeErr) {
+      // CLI not on PATH (some Docker Desktop installs are GUI-only), daemon
+      // hung, exec timeout — any of these mean we can't say the mode is
+      // wrong, so fall through to the existing "daemon not running" path
+      // and let recovery proceed normally.
+      log.debug('Docker mode probe inconclusive:', probeErr.message);
+    }
+  }
+
   return false;
+}
+
+/** Returns the last error code set by isDaemonRunning(), or null. */
+function getLastDaemonErrorCode() {
+  return _lastDaemonErrorCode;
 }
 
 /**
@@ -532,6 +592,7 @@ module.exports = {
   extractSetupStatusFromLogs,
   monitorContainerSetupLogs,
   isDaemonRunning,
+  getLastDaemonErrorCode,
   isImagePresent,
   pullImage,
   getRunningContainer,
