@@ -151,3 +151,124 @@ def test_prefix_does_not_match_adjacent_paths(fresh_dispatch_and_module):
     h = _FakeHandler()
     assert d.handle_get(h, urlparse("/api/tailscalex/status")) is False
     assert d.handle_get(h, urlparse("/api/tailscale-other/status")) is False
+
+
+# ── v0.7.12 #146: sticky auth_url + cleared flag ────────────────────────────
+# The disappearing-link bug is a transient empty-auth_url window during the
+# awaiting-auth state — daemon scrape returning briefly empty, or a stale
+# poll racing a fresh attempt's reset. Server-side sticky `last_auth_url`
+# rides out those gaps so the client always sees a stable URL until the
+# attempt is genuinely terminal.
+
+def test_set_up_state_populates_last_auth_url(fresh_dispatch_and_module):
+    _d, m = fresh_dispatch_and_module
+    # Establish a current attempt.
+    m._up_state["attempt_id"] = 1
+    m._up_state["state"] = "starting"
+    m._up_state["auth_url"] = ""
+    m._up_state["last_auth_url"] = ""
+
+    m._set_up_state(attempt_id=1, state="awaiting-auth", auth_url="https://login.tailscale.com/abc123")
+
+    assert m._up_state["auth_url"] == "https://login.tailscale.com/abc123"
+    assert m._up_state["last_auth_url"] == "https://login.tailscale.com/abc123"
+
+
+def test_set_up_state_does_not_overwrite_last_auth_url_with_empty(fresh_dispatch_and_module):
+    """A stale or transient daemon update that sets auth_url='' must NOT
+    clear the sticky last_auth_url — that's exactly the race we're fixing."""
+    _d, m = fresh_dispatch_and_module
+    m._up_state["attempt_id"] = 1
+    m._up_state["state"] = "awaiting-auth"
+    m._up_state["auth_url"] = "https://login.tailscale.com/abc123"
+    m._up_state["last_auth_url"] = "https://login.tailscale.com/abc123"
+
+    # Simulate the racy update that was clobbering the link in Safari
+    m._set_up_state(attempt_id=1, auth_url="")
+
+    # auth_url got cleared (caller asked), BUT sticky survives.
+    assert m._up_state["auth_url"] == ""
+    assert m._up_state["last_auth_url"] == "https://login.tailscale.com/abc123"
+
+
+def test_get_up_progress_returns_last_auth_url_when_current_is_empty(fresh_dispatch_and_module, monkeypatch):
+    """The whole point: poll responses must keep delivering the URL even
+    when auth_url has been transiently blanked."""
+    _d, m = fresh_dispatch_and_module
+    # Stub get_status so we don't actually call tailscale CLI.
+    monkeypatch.setattr(m, "get_status", lambda: {"backend_state": "NeedsLogin"})
+    m._up_state["state"] = "awaiting-auth"
+    m._up_state["auth_url"] = ""  # transient blank
+    m._up_state["last_auth_url"] = "https://login.tailscale.com/abc123"
+    m._up_state["attempt_id"] = 1
+
+    resp = m.get_up_progress()
+    assert resp["auth_url"] == "https://login.tailscale.com/abc123"
+    assert resp["cleared"] is False  # not terminal, link should be kept rendered
+
+
+def test_get_up_progress_clears_auth_url_on_running_state(fresh_dispatch_and_module, monkeypatch):
+    """Once the attempt succeeds (state=running), the link should disappear
+    from the poll response — its job is over and showing it would confuse."""
+    _d, m = fresh_dispatch_and_module
+    monkeypatch.setattr(m, "get_status", lambda: {"backend_state": "Running"})
+    m._up_state["state"] = "running"
+    m._up_state["auth_url"] = ""
+    m._up_state["last_auth_url"] = "https://login.tailscale.com/abc123"  # leftover from awaiting-auth
+    m._up_state["attempt_id"] = 1
+
+    resp = m.get_up_progress()
+    assert resp["auth_url"] == ""  # terminal state → clear
+    assert resp["cleared"] is True
+
+
+def test_get_up_progress_clears_auth_url_on_failed_state(fresh_dispatch_and_module, monkeypatch):
+    """Same for failed — link is no longer actionable, error is what the user needs."""
+    _d, m = fresh_dispatch_and_module
+    monkeypatch.setattr(m, "get_status", lambda: {"backend_state": "NoState"})
+    m._up_state["state"] = "failed"
+    m._up_state["auth_url"] = ""
+    m._up_state["last_auth_url"] = "https://login.tailscale.com/abc123"
+    m._up_state["error"] = "auth timed out"
+    m._up_state["attempt_id"] = 1
+
+    resp = m.get_up_progress()
+    assert resp["auth_url"] == ""
+    assert resp["cleared"] is True
+    assert resp["error"] == "auth timed out"
+
+
+def test_get_up_progress_preserves_auth_url_through_state_promotion(fresh_dispatch_and_module, monkeypatch):
+    """When get_up_progress promotes awaiting-auth → running mid-poll (via
+    the get_status BackendState check), the auth_url field in the response
+    should clear cleanly. Important because that's the natural success
+    transition — link served, user clicked, daemon became Running."""
+    _d, m = fresh_dispatch_and_module
+    # Daemon is now Running — get_up_progress will promote state.
+    monkeypatch.setattr(m, "get_status", lambda: {"backend_state": "Running"})
+    monkeypatch.setattr(m, "_attempt_configure_serve", lambda _aid: None)
+    m._up_state["state"] = "awaiting-auth"
+    m._up_state["auth_url"] = "https://login.tailscale.com/abc123"
+    m._up_state["last_auth_url"] = "https://login.tailscale.com/abc123"
+    m._up_state["attempt_id"] = 1
+
+    resp = m.get_up_progress()
+    # State got promoted to running, link cleared (job done).
+    assert resp["state"] == "running"
+    assert resp["auth_url"] == ""
+    assert resp["cleared"] is True
+
+
+def test_get_up_progress_includes_cleared_field_for_all_responses(fresh_dispatch_and_module, monkeypatch):
+    """Defensive: every response shape must include the `cleared` field so
+    clients can rely on its presence without conditional checks."""
+    _d, m = fresh_dispatch_and_module
+    monkeypatch.setattr(m, "get_status", lambda: {"backend_state": "NoState"})
+    m._up_state["state"] = "idle"
+    m._up_state["auth_url"] = ""
+    m._up_state["last_auth_url"] = ""
+    m._up_state["attempt_id"] = 0
+
+    resp = m.get_up_progress()
+    assert "cleared" in resp
+    assert resp["cleared"] is True  # idle is terminal-ish
