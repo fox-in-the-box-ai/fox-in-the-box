@@ -1,0 +1,207 @@
+# .github/workflows/windows-real-smoke.yml
+#
+# Nightly + on-demand smoke test of Fox's `:stable` container against a real
+# Docker Desktop on a real Windows machine. First exercise of the
+# self-hosted runner from #292.
+#
+# This is the workflow that catches bsdigital-class bugs (#286 / #288 / #291)
+# BEFORE they reach users — the Windows-containers-mode / WSL2-broken /
+# Docker-Desktop-not-detected error paths that GHA's hosted Linux runners
+# cannot test.
+#
+# Scope of v1 (this iteration):
+#   - Happy path only: Docker Desktop in Linux containers mode, daemon green
+#   - Pull `:stable`, run, hit `/health`, teardown
+#   - Verify the container we built actually starts on a real Windows host
+#
+# Out of scope of v1 (deferred to follow-up iterations as the runner proves stable):
+#   - Matrix over Docker modes (linux / windows / stopped / paused) — see #292
+#   - Electron .exe install + Playwright drive — needs Playwright infra first
+#   - Container teardown forensics on failure (screenshot, log dump)
+#
+# Triggers:
+#   - workflow_dispatch:  manual trigger from the UI (debug / smoke-before-tag)
+#   - schedule:           nightly 04:30 UTC, 13 min after upstream-watch.yml
+#                         (05:17 UTC) but offset so they don't share API quota
+#
+# Notably NOT triggered:
+#   - On push to main:    the runner is a single host; we don't want every
+#                         Fox-code merge contending for it. Tag-push releases
+#                         already smoke via build-container.yml's hosted-Linux
+#                         smoke; this workflow is the platform-coverage
+#                         supplement.
+#   - On PR:              same reason; we don't want to block PRs on a
+#                         single physical machine.
+
+name: Windows real-Docker smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      image:
+        description: "Container image to smoke (default: :stable)"
+        required: false
+        default: "ghcr.io/fox-in-the-box-ai/cloud:stable"
+  schedule:
+    # Nightly 04:30 UTC.
+    - cron: "30 4 * * *"
+
+concurrency:
+  group: windows-real-smoke
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    name: Windows + Docker Desktop smoke
+    runs-on: [self-hosted, fitb-runner-01]
+    timeout-minutes: 15
+
+    env:
+      IMAGE: ${{ github.event.inputs.image || 'ghcr.io/fox-in-the-box-ai/cloud:stable' }}
+      CONTAINER: fitb-runner-smoke
+      HOST_PORT: 8788
+
+    steps:
+      - name: Show environment baseline
+        shell: pwsh
+        run: |
+          Write-Host "Host: $env:COMPUTERNAME"
+          Write-Host "User: $env:USERNAME"
+          Write-Host "Image to smoke: $env:IMAGE"
+          docker version --format '{{.Server.Version}}' | ForEach-Object { Write-Host "Docker Engine: $_" }
+          $ostype = docker info --format '{{.OSType}}'
+          Write-Host "Docker OSType: $ostype"
+          if ($ostype -ne 'linux') {
+              Write-Error "Docker Desktop is in '$ostype'-containers mode. Fox requires 'linux'. Switch via tray + retry."
+              exit 1
+          }
+
+      - name: Tear down any prior smoke container
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          docker rm -f $env:CONTAINER 2>$null
+          docker volume rm "${env:CONTAINER}-data" 2>$null
+          Write-Host "Pre-flight cleanup done."
+
+      - name: Pull image
+        shell: pwsh
+        run: |
+          docker pull $env:IMAGE
+          $digest = docker image inspect $env:IMAGE --format '{{index .RepoDigests 0}}'
+          Write-Host "Pulled: $digest"
+
+      - name: Start container
+        shell: pwsh
+        run: |
+          docker volume create "${env:CONTAINER}-data" | Out-Null
+          docker run -d --name $env:CONTAINER `
+            -p "127.0.0.1:${env:HOST_PORT}:8787" `
+            -v "${env:CONTAINER}-data:/data" `
+            $env:IMAGE
+          Write-Host "Container started; waiting for /health to respond."
+
+      - name: Wait for /health (≤120s)
+        shell: pwsh
+        run: |
+          $deadline = (Get-Date).AddSeconds(120)
+          while ((Get-Date) -lt $deadline) {
+              try {
+                  $r = Invoke-WebRequest -Uri "http://127.0.0.1:${env:HOST_PORT}/health" -UseBasicParsing -TimeoutSec 3
+                  if ($r.StatusCode -eq 200) {
+                      Write-Host "/health responded 200 after $([math]::Round(((Get-Date) - (Get-Date).AddSeconds(-120)).TotalSeconds))s"
+                      Write-Host "Body: $($r.Content)"
+                      exit 0
+                  }
+              } catch {
+                  # connection refused etc. — expected during boot
+              }
+              Start-Sleep -Seconds 2
+          }
+          Write-Error "/health did not respond 200 within 120 seconds"
+          Write-Host "── Container logs (last 100 lines) ──"
+          docker logs --tail 100 $env:CONTAINER
+          exit 1
+
+      - name: Verify Fox-claimed endpoints respond 200
+        shell: pwsh
+        run: |
+          $endpoints = @(
+              '/', '/setup', '/api/profiles', '/api/ollama/status',
+              '/api/tailscale/status', '/api/local-fallback/status',
+              '/api/local-models', '/api/settings/hostname'
+          )
+          $failed = @()
+          foreach ($ep in $endpoints) {
+              try {
+                  $r = Invoke-WebRequest -Uri "http://127.0.0.1:${env:HOST_PORT}${ep}" -UseBasicParsing -TimeoutSec 5
+                  if ($r.StatusCode -eq 200) {
+                      Write-Host "✓ $ep → 200"
+                  } else {
+                      Write-Host "✗ $ep → $($r.StatusCode)"
+                      $failed += $ep
+                  }
+              } catch {
+                  Write-Host "✗ $ep → exception: $($_.Exception.Message)"
+                  $failed += $ep
+              }
+          }
+          if ($failed.Count -gt 0) {
+              Write-Error "$($failed.Count) Fox endpoint(s) failed: $($failed -join ', ')"
+              exit 1
+          }
+          Write-Host "All Fox-claimed endpoints responded 200."
+
+      - name: Verify overlay bootstrap log signature
+        shell: pwsh
+        run: |
+          $log = docker logs $env:CONTAINER 2>&1 | Out-String
+          if ($log -match '\[fox-overlay\] bootstrap installed: dispatcher frozen, \d+ GET \+ \d+ POST handlers registered') {
+              Write-Host "✓ Overlay bootstrap signature present:"
+              $log -split "`n" | Where-Object { $_ -match '\[fox-overlay\]' } | ForEach-Object { Write-Host "  $_" }
+          } else {
+              Write-Error "Overlay bootstrap signature missing from container log"
+              exit 1
+          }
+
+      - name: Teardown
+        if: always()
+        shell: pwsh
+        run: |
+          docker rm -f $env:CONTAINER 2>$null
+          docker volume rm "${env:CONTAINER}-data" 2>$null
+          Write-Host "Teardown complete."
+
+  # If the smoke job fails, open or re-fire an issue so we notice. Idempotent
+  # title — re-fires comment on existing open issue rather than stack new ones.
+  notify-on-failure:
+    name: Notify on failure
+    needs: smoke
+    if: failure() && github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          title="[windows-real-smoke] Nightly Windows smoke FAILED"
+          existing=$(gh issue list --label windows-real-smoke-failure --state open \
+                       --search "in:title \"$title\"" \
+                       --json number -q '.[0].number' 2>/dev/null || echo "")
+          run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          body="Windows real-Docker smoke failed on the self-hosted runner. See run: $run_url
+
+          This is the bsdigital-class bug class (#286 / #288 / #291). Investigate:
+          1. SSH into fitb-runner-01 via Tailscale
+          2. Check Docker Desktop tray status (green/yellow/red)
+          3. \`docker info | Select-String OSType\` should still return 'linux'
+          4. \`docker logs fitb-runner-smoke\` (if container still around) for runtime errors
+          5. Check the workflow log for the failed step
+
+          Re-trigger via workflow_dispatch once root cause is fixed; this issue stays open."
+          if [ -n "$existing" ]; then
+              gh issue comment "$existing" --body "Re-fired on run $run_url"
+          else
+              gh issue create --title "$title" --body "$body" --label windows-real-smoke-failure --label P1
+          fi
