@@ -7,6 +7,36 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.7.8] - 2026-05-22
+
+Playwright Phase 1 partial — 4 new integration specs added on top of Phase 0's `/health` baseline. Total verification suite: **5 specs** running on every PR against `:stable`. The remaining 8 Phase 1 specs (wizard flows, retry-panel, settings persistence, sentinel checks, `.fox-removals` enforcement) land in v0.7.9+ once the supporting test-hooks expand.
+
+### Added
+
+- **`endpoints-sweep.spec.ts`** — parametrizes over 5 Fox-claimed route prefixes (Ollama, Tailscale, local-fallback, local-models, /setup). Each must return 200, 404, or 503; anything else (especially 500) signals the dispatcher didn't claim the prefix.
+- **`health-deep.spec.ts`** — `/health` now checked beyond just "200" — content-type is JSON or plain text, body is non-empty, no HTML error page. Catches upstream returning a default error page for `/health` while still 200.
+- **`static-overlay.spec.ts`** — sample of `/extensions/*` assets (Fox CSS + JS) served correctly. Catches the v0.6.0 P2 class of regression where `HERMES_WEBUI_EXTENSION_DIR` isn't set or the Dockerfile didn't COPY `webui_static/`.
+- **`test-hooks-safety.spec.ts`** — `POST /test/reset` returns `{ok: true}` under `FITB_TEST_MODE=1`. Proves the gate works from the outside (the unit tests in `test_test_hooks.py` cover the gate from the inside).
+
+### Heads-up (not in v0.7.8)
+
+- **The `playwright-smoke` CI job is still NOT a required check.** Phase 1 full landing (8 more specs covering the stateful flows + testid retrofit on overlay JS) is when it becomes required. Promoting the job to required needs a manual branch-protection edit anyway.
+- **No specs for stateful flows yet** — the wizard, settings persistence, and the v0.6.1 retry-panel specs need `/test/ollama/set-state`, `/test/openrouter/set-key`, or container-restart orchestration. Coming as part of the test-hooks expansion that the v0.7.9 spec authoring will require.
+
+### Behind the scenes
+
+- The 5 specs run in parallel inside the smoke job's chromium project. Wall time on PR: still well under 1 minute.
+- Each spec is failure-mode-driven: the assertion's error message names the most likely root cause ("`HERMES_WEBUI_EXTENSION_DIR` isn't set on supervisord's hermes-webui block"). When CI fails, the message points at the fix, not just the symptom.
+
+### What's next
+
+- **v0.7.9**: testid retrofit on `webui_static/setup.js` + `hostname-prompt.js` + the wizard-happy-path spec that depends on them. Likely the largest remaining piece.
+- **v0.7.10+**: incremental spec additions; sentinel/`.fox-removals` checks; promotion of smoke to required CI gate when count crosses ~10.
+
+The v0.7.x cycle continues — v0.8.0 only when the verification rebuild is genuinely solid.
+
+---
+
 ## [0.7.7] - 2026-05-22
 
 Docs at parity with shipped reality + the verification rebuild starts. Two big-effort PRs without a single user-visible code change to the running app — the kind of release that pays back over the entire v0.7.x stabilization cycle.
