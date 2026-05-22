@@ -19,6 +19,22 @@ v0.51.84's upstream changes:
 4. **``_SETTINGS_DEFAULTS`` + ``_SETTINGS_BOOL_KEYS``** — still
    module-scope; dict/set additions still work.
 
+## v0.7.4 addition (#303)
+
+5. **``get_available_models()``** — wrap-and-splice (NOT
+   ``substitute_function``). Local Ollama models pulled via
+   Settings → Local Ollama don't appear in the chat picker because
+   upstream's ``_build_available_models_uncached()`` has no
+   ``elif pid == "ollama"`` branch alongside its ``ollama-cloud``
+   one. Fox already has the daemon detection + installed-models
+   listing via ``fox_overlay.webui_modules.ollama.get_models()``;
+   this wrap splices that data into the picker output as an OLLAMA
+   group. Wrap (vs ``substitute_function``) chosen because the change
+   is post-call mutation of the return value, and the upstream
+   function is ~1200 lines — textual anchors deep inside it would be
+   fragile vs upstream refactors. Wrap-and-splice is invariant to
+   internals as long as the function signature + return-shape hold.
+
 ## Fox edits restored
 
 ### Module-scope additions (direct dict/set mutation)
@@ -54,10 +70,12 @@ _log = logging.getLogger("fox_overlay.webui_patches.config")
 
 _RELOAD_CONFIG_SENTINEL = "_fox_patched_reload_config"
 _SAVE_SETTINGS_SENTINEL = "_fox_patched_save_settings"
+_GET_AVAILABLE_MODELS_SENTINEL = "_fox_patched_get_available_models"
 _MODULE_DEFAULTS_FLAG = "_fox_settings_defaults_applied"
 
 _EXPECTED_RELOAD_CONFIG_SIG = "() -> None"
 _EXPECTED_SAVE_SETTINGS_SIG = "(settings: dict) -> dict"
+_EXPECTED_GET_AVAILABLE_MODELS_SIG = "() -> dict"
 
 _FOX_DEFAULTS = {
     # Local AI fallback (#9). Toggling ON triggers a one-time GGUF
@@ -97,6 +115,84 @@ def _check_signature(callable_obj, expected: str, label: str) -> None:
             "Refresh both the expected signature and the substitution "
             "anchors in fox_overlay/webui_patches/config.py." % (label, expected, actual)
         )
+
+
+def _splice_ollama_group(result: dict) -> None:
+    """Append a local-Ollama group to ``result['groups']`` if the daemon
+    is reachable and has installed models. No-op otherwise.
+
+    Sourced from ``fox_overlay.webui_modules.ollama.get_models()``,
+    which already owns daemon detection, custom-URL handling (#109),
+    and TTL caching. Label formatting matches upstream's existing
+    Ollama Cloud branch (which uses ``_format_ollama_label``).
+    """
+    try:
+        from fox_overlay.webui_modules import ollama as _fox_ollama
+        from api.config import _format_ollama_label
+    except ImportError:
+        return
+
+    status = _fox_ollama.get_models()
+    if not isinstance(status, dict) or not status.get("running"):
+        return
+
+    models = []
+    for entry in status.get("models") or []:
+        if not isinstance(entry, dict):
+            continue
+        name = (entry.get("name") or "").strip()
+        if not name:
+            continue
+        models.append({"id": name, "label": _format_ollama_label(name)})
+
+    if not models:
+        return
+
+    groups = result.setdefault("groups", [])
+    if not isinstance(groups, list):
+        return
+    # Don't double-add if upstream ever lands its own ollama branch.
+    if any(isinstance(g, dict) and g.get("provider_id") == "ollama" for g in groups):
+        return
+
+    groups.append({
+        "provider": "Ollama",
+        "provider_id": "ollama",
+        "models": models,
+    })
+
+
+def _wrap_get_available_models(upstream_module) -> None:
+    """Wrap upstream ``get_available_models()`` to splice in a Fox OLLAMA
+    group post-call. See module docstring §"v0.7.4 addition (#303)" for
+    why wrap-and-splice was chosen over ``substitute_function``.
+
+    Idempotent via the standard per-target sentinel pattern.
+    """
+    upstream_fn = upstream_module.get_available_models
+    if getattr(upstream_fn, _GET_AVAILABLE_MODELS_SENTINEL, False):
+        return
+
+    _check_signature(upstream_fn, _EXPECTED_GET_AVAILABLE_MODELS_SIG, "get_available_models")
+
+    def _fox_get_available_models():
+        result = upstream_fn()
+        try:
+            if isinstance(result, dict):
+                _splice_ollama_group(result)
+        except Exception:
+            _log.exception(
+                "[fox-overlay] _splice_ollama_group failed — picker returned without OLLAMA group"
+            )
+        return result
+
+    setattr(_fox_get_available_models, _GET_AVAILABLE_MODELS_SENTINEL, True)
+    _fox_get_available_models.__name__ = upstream_fn.__name__
+    _fox_get_available_models.__doc__ = upstream_fn.__doc__
+    upstream_module.get_available_models = _fox_get_available_models
+    _log.info(
+        "[fox-overlay] wrapped api.config.get_available_models — local Ollama group injection enabled (#303)"
+    )
 
 
 def apply() -> None:
@@ -239,3 +335,6 @@ def apply() -> None:
         ],
         sentinel=_SAVE_SETTINGS_SENTINEL,
     )
+
+    # ── Wrap get_available_models: splice in local-Ollama group (#303) ──
+    _wrap_get_available_models(_u)

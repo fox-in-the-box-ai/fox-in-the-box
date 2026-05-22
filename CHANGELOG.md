@@ -7,6 +7,31 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.7.4] - 2026-05-22
+
+Local Ollama, finally working in the picker. Models you pulled via Settings now show up in the chat model dropdown — the missing half of the local-AI happy path (#303).
+
+### Fixed
+
+- **Local Ollama models now appear in the chat model picker (#303 symptoms 1+2).** Pulled models in Settings → Local Ollama → Pull are now selectable from the chat dropdown's OLLAMA group. Previously they appeared in the Settings pulled-list but were invisible to the picker, so users had no way to actually send a message to a local model — making the entire local-AI value prop dead even after a successful pull. Fix is an overlay wrap of upstream's `get_available_models()` that splices in a Fox-detected OLLAMA group sourced from `fox_overlay.webui_modules.ollama.get_models()` (which already owns daemon detection, custom-URL handling per #109, and TTL caching).
+
+### Heads-up
+
+- **Symptom 4 (messages queue with no response) is expected to resolve alongside this fix.** It was likely a downstream cascade: if a user clicked "Use" on a pulled model but the picker still showed the old remote model selected, chat-send routed to the wrong target. Verify per the smoke checklist; if it persists, file a separate issue.
+- **Local fallback / silent failover (#303 symptom 3) is still broken** — the v0.5.2 failover engine was dropped in the v0.6.0 ATOMIC refactor (#241), and upstream has since rewritten the error-handling architecture, so rebuilding the engine is non-trivial. Tracked for v0.7.5.
+
+### Behind the scenes
+
+- New patch pattern in `fox_overlay/webui_patches/config.py`: **wrap-and-splice** for post-call mutations, alongside the existing `substitute_function` pattern for in-function modifications. Chosen here because the upstream function is ~1200 lines — anchored textual substitutions deep inside it would be fragile against upstream refactors. The wrap only depends on the function signature + return-shape, both of which have signature self-checks that fail loudly on drift.
+- Upstream bug at `nesquena/hermes-webui` is drafted but not yet filed — the overlay is the short-term fix while the long-term resolution is decided. The wrap-and-splice approach means once upstream lands its own ollama branch we just delete the wrap; the guard against double-adding (the OLLAMA group won't appear twice if upstream returns one) makes the transition seamless.
+- Regression suite for the wrap: 7 new tests in `tests/test_config_patch.py` covering happy path, daemon-down, no-models, double-add guard, malformed entries, and signature-drift detection.
+
+### What's next
+
+- v0.7.5: rebuild the silent-failover engine (#303 symptom 3) onto upstream's new `_classify_provider_error()` + `_attempt_credential_self_heal()` architecture. Then docs audit (#310).
+
+---
+
 ## [0.7.3] - 2026-05-22
 
 Fox gets its own voice. New users meet **Fox in the Box** the agent — laid-back, opinionated, brief by default, no corporate filler.
