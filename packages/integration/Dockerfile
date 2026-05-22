@@ -328,6 +328,34 @@ RUN set -eux; \
 # don't invalidate the (slow) upstream pip install layer cache.
 COPY packages/fox-overlay /app/fox-overlay
 RUN pip install --no-cache-dir -e /app/fox-overlay
+
+# ── Fox SOUL.md override (Phase 8+ — submodule re-pointed at virgin upstream) ──
+# Upstream's docker/SOUL.md is a generic Hermes persona. Fox ships its own
+# (Fox-in-the-Box anthropomorphic assistant identity) by overwriting the
+# upstream SOUL.md inside the image. The upstream entrypoint.sh in
+# /app/hermes-agent/docker/entrypoint.sh seeds $HERMES_HOME/SOUL.md from
+# $INSTALL_DIR/docker/SOUL.md on first run if the user has no SOUL.md yet —
+# so overwriting that source file is sufficient to ship the Fox persona.
+#
+# FITB_DISABLE_AGENT_OVERLAY=1 short-circuits (consistent with the other
+# agent-side overlay steps), leaving upstream's default SOUL.md in place.
+RUN set -eu; \
+    if [ "${FITB_DISABLE_AGENT_OVERLAY}" = "1" ]; then \
+        echo "[fox-soul] FITB_DISABLE_AGENT_OVERLAY=1 — skipping SOUL.md override"; \
+        exit 0; \
+    fi; \
+    if [ ! -f /app/fox-overlay/agent_overlay/SOUL.md ]; then \
+        echo "ERROR: /app/fox-overlay/agent_overlay/SOUL.md missing — fox-overlay COPY broken?" >&2; \
+        exit 1; \
+    fi; \
+    if [ ! -d /app/hermes-agent/docker ]; then \
+        echo "ERROR: /app/hermes-agent/docker missing — upstream layout changed?" >&2; \
+        exit 1; \
+    fi; \
+    cp /app/fox-overlay/agent_overlay/SOUL.md /app/hermes-agent/docker/SOUL.md; \
+    chown foxinthebox:foxinthebox /app/hermes-agent/docker/SOUL.md; \
+    echo "[fox-soul] installed Fox SOUL.md → /app/hermes-agent/docker/SOUL.md"
+
 ENV HERMES_WEBUI_EXTENSION_DIR=/app/fox-overlay/webui_static \
     HERMES_WEBUI_EXTENSION_SCRIPT_URLS=/extensions/onboarding-preview.js,/extensions/fox-overlay.js,/extensions/hostname-prompt.js,/extensions/fallback-polish.js,/extensions/stream-error-retry.js \
     HERMES_WEBUI_EXTENSION_STYLESHEET_URLS=/extensions/fox-in-the-box.css

@@ -24,6 +24,11 @@
 "setup.html" = "fox-only"
 "setup.css" = "fox-only"
 "setup.js" = "fox-only"
+# Post-Phase-8 — Fox SOUL.md override (agent-side, copied into /app/hermes-agent/docker/SOUL.md
+# at Docker build time; upstream entrypoint then seeds it into $HERMES_HOME on first run).
+# Classified under [static] (not [python]) because it is a plain content file copied
+# verbatim, not an importable module. FITB_DISABLE_AGENT_OVERLAY=1 short-circuits the copy.
+"agent_overlay/SOUL.md" = "fox-only"
 
 [python]
 # Phase 3 — agent-side overlay. Three monkey-patch modules applied via
