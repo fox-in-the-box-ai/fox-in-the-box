@@ -7,7 +7,7 @@ Replacing the manual smoke checklist (`qa/SMOKE_CHECKLIST.md`) as the release ga
 | Phase | Scope | Status |
 |---|---|---|
 | 0 | Infra: workflow + workspace + 1 trivial spec | v0.7.7 (shipped) |
-| 1 partial | 4 of ~12 smoke specs (integration-only: endpoints sweep, /health deep, static-overlay assets, test-hooks safety) | v0.7.8 (in flight) |
+| 1 partial | 5 of ~12 smoke specs (4 integration: endpoints sweep, /health deep, static-overlay assets, test-hooks safety + 1 mobile UI: avatar swap #299) | v0.7.8 + v0.7.10 |
 | 1 full | Remaining specs: wizard flows + retry-panel + settings-persist + sentinel checks + .fox-removals — plus testid retrofit + smoke-job-becomes-required (#265) | v0.7.9+ |
 | 2 | ~30 critical-path specs: failover/recovery/Ollama/Tailscale/fallback + Electron parity (#266) | deferred |
 
