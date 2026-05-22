@@ -32,7 +32,12 @@ _SETUP_PREFIXES = (
     "/api/setup/",
     "/api/ollama/",
     "/api/local-fallback/",
-    "/static/setup.",
+    # v0.7.13 #331: setup assets now served at /extensions/ via
+    # HERMES_WEBUI_EXTENSION_DIR (the Dockerfile env wire), not /static/.
+    # The old /static/setup. entry was stale dead code since v0.6.0 P2 —
+    # whitelisted a path that would 404 anyway. Updating to the live path
+    # so the wizard's CSS + JS load cleanly without being bounced.
+    "/extensions/",
     "/health",
     "/static/favicon",
 )

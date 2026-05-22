@@ -7,6 +7,29 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.7.13] - 2026-05-22
+
+**Onboarding restored — P0 fix.** New-install users get the Fox wizard at `/setup` again instead of dropping straight into a half-styled chat shell. The redirect middleware that v0.5.x had inline at `server.py` was missing from the v0.6.0/v0.7.0 overlay migration — `should_redirect_to_setup` and `redirect_to_setup` were moved into the overlay package but the patch to re-wire them into upstream's `server.py:do_GET`/`_handle_write` was never written. Every fresh install since v0.7.0 has shipped without onboarding.
+
+### Fixed
+
+- **Onboarding redirect re-wired (#331 — closes).** New patch `003-server-py-onboarding-redirect.patch` imports Fox's two onboarding helpers (guarded so vanilla webui without `fox_overlay` keeps booting), then inserts `if should_redirect_to_setup(parsed.path) and redirect_to_setup is not None: return redirect_to_setup(self)` at the top of both `do_GET` and `_handle_write` (which is shared by `do_POST` / `do_PATCH` / `do_DELETE` — so the single insertion covers all write methods). Pattern matches the v0.5.4 fork's inline edits at `server.py:147-148, 167-168`. The "custom styling lost" symptom from #331 is a downstream cascade: when boot.js crashes mid-init referencing `loadOnboardingWizard` (gone via `.fox-removals`), the DOM state attributes never get set and Fox CSS selectors don't match. Restoring the redirect prevents un-onboarded users from reaching `/` at all, so `boot.js` never tries to load the missing wizard.
+- **`_SETUP_PREFIXES` whitelist cleanup.** Replaced stale `/static/setup.` (dead code since v0.6.0 P2 — assets moved to `/extensions/`) with `/extensions/`. Wizard CSS/JS/fonts/images load cleanly without being bounced back to `/setup` mid-page-render.
+
+### Behind the scenes
+
+- **A 6-perspective retrospective drove this release.** 3 architects + 3 SWE subagents dug into how a P0 onboarding regression shipped across 12 releases this morning without anyone noticing. The convergent finding: `qa/SMOKE_CHECKLIST.md`'s Section B (wizard renders) explicitly covered the regression case, but the checklist hadn't been re-run between v0.5.x and v0.7.12 — its own "Currently testing: v0.7.6" header is the evidence. 12 releases in one day cannot accommodate a 2-hour manual checklist between each. The Playwright smoke suite that nominally replaces it has zero specs asserting the wizard actually renders.
+- New `qa/playwright/tests/smoke/wizard-renders.spec.ts` ships the asset-served half (works against any `:stable`). The redirect-actually-fires assertion has the same chicken-and-egg as v0.7.10's mobile-avatar spec — it can't run on this PR's CI because `:stable` is still v0.7.12. Lands as a v0.7.14 PR once `:stable` advances. The pattern of split-the-spec-by-shipping-window is now established.
+- The 6-perspective retro also surfaced the **process meta-fixes** that should land as v0.7.14+: make Playwright smoke a required CI check (deferred to "Phase 1" indefinitely; today the indefinite deferral is exactly what bit us); add a `SMOKE_LOG.md` that `release.yml` refuses to publish without a matching entry per tag; delete SUPERSEDED checklist sections eroded by accretion.
+
+### What's next
+
+- **v0.7.14:** anchor-drift caught locally (#328) — `make validate-overlay` + `validate-overlay.yml` PR gate + `regen-patch.sh`. Stops the overlay-patch-fragility class of bug at commit-time, not 3+ minutes into CI.
+- **v0.7.15:** Windows installer UX bundle (#324 + #325 + #330) — z-order fixes for Docker Desktop install dialog + access-mode modal, plus the "installation auto-resumes after reboot" copy.
+- **v0.7.16:** minimum brand alignment for installer (#323 scoped down — Fox avatar + 1 accent color; defer full design-system pass to v0.8/#64).
+
+---
+
 ## [0.7.12] - 2026-05-22
 
 Tailscale auth link, sticky. The `/api/tailscale/up/poll` response now serves a stable auth URL across the entire `awaiting-auth` window even when the daemon thread momentarily returns empty mid-poll — fixes the "link flashes for ~1s and disappears" symptom Safari users hit (#146). Server-side fix in `tailscale.py`; client-side tile rebuild (the bigger architectural piece per the 4-architect scoping) deferred to v0.7.13 if this MVP doesn't fully resolve.
