@@ -234,13 +234,49 @@ body {
   display: none;
 }
 
-/* Mobile: show titlebar for safe-area spacing, but hide inner content and border */
+/* Mobile (v0.7.10 #299): show titlebar with Fox avatar in place of the upstream
+ * Hermes caduceus logomark. The logomark reads "generic app chrome" on small
+ * screens where it competes with the OS chrome and the address bar; the avatar
+ * photo reads "this is *my* assistant." Above-the-fold so loading=lazy is wrong;
+ * decoding=async happens via the browser's background-image pipeline.
+ *
+ * Touch target ≥44px (Apple HIG / Material) while visible diameter is 40px so
+ * the avatar doesn't dominate the bar. Asset is 512x512 source so retina + 2x DPR
+ * stays crisp.
+ *
+ * Wordmark hidden — the avatar carries the brand on its own; "Hermes" text is
+ * stale anyway. Logging it as a follow-up cleanup for upstream-facing copy. */
 @media (max-width: 767px) {
   .app-titlebar {
     display: flex;
     border-bottom: none;
   }
   .app-titlebar-inner {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 8px;
+  }
+  .app-titlebar-title {
+    display: none;
+  }
+  .app-titlebar-icon {
+    width: 40px;
+    height: 40px;
+    min-width: 44px;
+    min-height: 44px;
+    border-radius: 50%;
+    background-image: url('/extensions/images/fox_avatar_cropped.jpg');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    overflow: hidden;
+  }
+  /* Upstream embeds a fixed-size SVG (width="16" height="16" as HTML attrs)
+   * inside .app-titlebar-icon. HTML width/height attrs render regardless of
+   * CSS, so hide the SVG explicitly rather than relying on the background to
+   * cover it. */
+  .app-titlebar-icon > svg {
     display: none;
   }
 }

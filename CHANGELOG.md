@@ -7,6 +7,30 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.7.10] - 2026-05-22
+
+Mobile gets the Fox. The titlebar on phones now shows the Fox avatar photo instead of the upstream Hermes caduceus logomark — small change, but it's the difference between "generic app" and "my assistant" on a 375px viewport.
+
+### Changed
+
+- **Mobile titlebar avatar (#299 — closes).** Below 768px viewport, the titlebar swaps the upstream Hermes caduceus SVG for the Fox avatar photo (`/extensions/images/fox_avatar_cropped.jpg`). 40px circular, 44px touch target (Apple HIG / WCAG 2.5.5). Desktop view unchanged — logomark stays on ≥768px. CSS-only change in `packages/fox-overlay/webui_static/fox-in-the-box.css`; the asset was already in the project (512×512 source, way over the retina threshold).
+
+### Added
+
+- **Playwright spec for the mobile-viewport surface.** `mobile-avatar.spec.ts` runs at iPhone SE dimensions (375×667) and asserts (a) the avatar asset is served from `/extensions/images/`, (b) the titlebar icon's computed `background-image` references the Fox avatar, (c) touch target ≥ 44×44px, (d) the upstream embedded SVG is hidden. Catches three regression classes: CSS load-order, missing asset, upstream selector rename. Total smoke suite: **6 specs** running on every PR.
+
+### Behind the scenes
+
+- The 4-architect scoping pass that preceded this release flagged `fox_avatar_cropped.jpg` dimension verification as a pre-flight check (asset must be ≥88×88 for retina). Verified at 512×512 before implementation. The lightweight scoping pattern worked: an issue that the original report estimated at "30 minutes" was scoped to ~2-3h including verification + a regression-catching spec, which is what shipped.
+- Mobile breakpoint deliberately `max-width: 767px` (not 768px) so the 768px boundary cleanly belongs to desktop. iOS Safari portrait reports `device-width: 375px` on iPhone SE/8 (and `390px` on iPhone 14), so the breakpoint catches both.
+
+### What's next
+
+- **v0.7.11**: Windows-containers-mode detection (#291) — bsdigital-class regression. Closed-bug effort ~4-6h, requires Windows VM verification.
+- **v0.7.12**: Tailscale Safari auth-link fix (#146) — discovered during scoping to be a "rebuild from scratch" effort (~8-12h) because the v0.7.0 virgin-upstream migration dropped the client-side tile that v0.5.4 originally fixed. Needs real Safari verification + `/test/tailscale/set-state` test-hook expansion first.
+
+---
+
 ## [0.7.9] - 2026-05-22
 
 Three real bug fixes off the backlog. One was a P1 data-loss bug that had been quietly costing users their workspace files since v0.3.x.
