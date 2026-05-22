@@ -1,0 +1,45 @@
+name: validate-overlay
+
+# Per #328 + the v0.7.13 retrospective: the Docker container build in
+# build-container.yml runs check-overlay-basis.sh as its first step, but
+# the round-trip is 3+ minutes per arch before the first failure surfaces.
+# This workflow runs the same gate (plus two more) in <30 seconds on any
+# PR that touches the overlay or the submodules — so anchor drift, dirty
+# submodule state, and stale series files surface immediately, not after
+# a CI runner has already booted a build VM.
+#
+# Mirrors what `make validate-overlay` does locally for pre-commit users.
+
+on:
+  pull_request:
+    paths:
+      - 'packages/fox-overlay/**'
+      - 'forks/**'
+      - 'packages/integration/Dockerfile'
+      - 'packages/integration/entrypoint.sh'
+      - '.github/workflows/validate-overlay.yml'
+  workflow_dispatch: {}
+
+concurrency:
+  group: validate-overlay-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout PR (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Set up Python (for bootstrap import smoke)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Run validate-overlay
+        run: bash packages/fox-overlay/scripts/validate-overlay.sh
