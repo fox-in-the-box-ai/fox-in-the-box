@@ -252,19 +252,22 @@ The app itself is free and open source. You only pay for AI usage at your provid
 
 ## Roadmap
 
-What we're working on next. No promises on dates — this is a small team — but this is the direction.
+What we're working on next. No promises on dates — this is a small team — but this is the direction. v0.7.x is the stabilization cycle: v0.8.0 only ships once the verification rebuild is complete and the project is genuinely solid.
 
-**Just shipped (v0.5.3)**
-- **Custom Ollama URL** — point Fox at an Ollama daemon on your NAS, your LAN, anywhere reachable from the container. Settings → Providers → Local Ollama → "Custom Ollama URL (advanced)".
+**Just shipped (v0.7.6)**
+- **Silent failover to local AI** — when a remote provider has a transient failure (rate limit, 5xx, etc.) and your local llama-server is ready, Fox auto-swaps to local and tells you. Your message stays in the transcript; one tap re-sends to local. Closes the local-AI happy path that's been incomplete since v0.5.x.
 
-**Coming soon (v0.5.x)**
-- **Safety guardrails — opt-in PII detection** (v0.5.4) — first layer in a guardrail plugin scaffold (Microsoft Presidio, rule-based, on-device, no LLM cost). Toggleable in Settings; <30 ms p95 when on.
-- **Pydantic business-rule validators** (v0.5.5) — short-circuit obviously-bad outputs before they reach you (length, schema, allowed-topic checks). Each rule is per-workspace toggle.
+**v0.7.x stabilization in flight**
+- **Documentation at parity with shipped reality** (v0.7.7) — this audit
+- **Playwright E2E test foundation** (v0.7.7 → v0.7.8) — replacing the manual smoke-checklist gate that has been the human-in-the-loop release process since v0.4.7
+- **Polish on the local-AI surface** — picker categorization, settings styling
+- **Diagnostic report button** in the launcher — one-click bundle of version + container digest + supervisord state + recent logs for filing useful bug reports
 
-**On the horizon**
-- UI overhaul — clean, professional design system replacing the developer-tool look (v0.6.0)
-- Llama Guard 3 1B content safety — local on-device classifier, async parallel to streaming, wipes unsafe responses in-place (v0.7.0)
-- Routines — teach Fox multi-step workflows via conversation, runs on a schedule, dry-run preview before activating (v0.8.0)
+**Eventually (v0.8.0 and beyond)**
+- UI overhaul — a clean, professional design system replacing the current developer-tool look
+- Network isolation mode for enterprise — air-gapped Docker deployment
+- Routines — teach Fox multi-step workflows via conversation, runs on a schedule
+- Content-safety classifier (Llama Guard 3 1B), guardrail plugins, business-rule validators — opt-in safety layer for users who want it
 
 **Have an idea?** [Open a discussion](https://github.com/fox-in-the-box-ai/fox-in-the-box/discussions) or [file a feature request](https://github.com/fox-in-the-box-ai/fox-in-the-box/issues/new).
 

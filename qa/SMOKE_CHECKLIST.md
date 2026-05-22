@@ -1,6 +1,6 @@
 # Fox in the Box — Smoke Test Checklist
 
-**When to run:** Before tagging any minor version bump (v0.5.0, v0.6.0, …) and after any change to onboarding, providers, Tailscale, local fallback, or the Docker image. Per roadmap Rule 5: stabilization pass before every minor release.
+**When to run:** Before tagging any minor version bump (v0.6.0, v0.7.0, v0.8.0, …) and after any change to onboarding, providers, Tailscale, local fallback, or the Docker image. Per roadmap Rule 5: stabilization pass before every minor release. Per v0.7.x cycle policy: v0.8.0 only when the verification rebuild (Playwright p0 → p1 → p2) covers the manual gates here.
 
 **How long it takes:** ~30 minutes if everything passes. Plan ~2 hours if something fails (fix → rebuild → re-run from the failed step).
 
@@ -10,8 +10,8 @@ Pull the image you're testing — **don't `docker build` locally** (a local buil
 
 ```bash
 # Pick ONE of the three IMAGE variants below depending on what you're smoking:
-IMAGE=ghcr.io/fox-in-the-box-ai/cloud:stable      # the just-released version (today: v0.6.1)
-# IMAGE=ghcr.io/fox-in-the-box-ai/cloud:v0.6.1    # explicit pin (use during a multi-version comparison)
+IMAGE=ghcr.io/fox-in-the-box-ai/cloud:stable      # the just-released version (today: v0.7.6)
+# IMAGE=ghcr.io/fox-in-the-box-ai/cloud:v0.7.6    # explicit pin (use during a multi-version comparison)
 # IMAGE=ghcr.io/fox-in-the-box-ai/cloud:latest    # the candidate built from main, pre-tag
 
 docker pull "$IMAGE"
@@ -29,7 +29,7 @@ sleep 15   # extra time for entrypoint operator-grant + supervisord settle
 
 **The smoke container is at `http://127.0.0.1:8788`. Your real install (port 8787) is unaffected.**
 
-**Currently testing:** v0.6.1 (= `:stable` as of 2026-05-18). Container digest expected: `sha256:296436733b...` — verify with `docker manifest inspect "$IMAGE" | jq -r '.manifests[0].digest'`.
+**Currently testing:** v0.7.6 (= `:stable` as of 2026-05-22). Use `docker manifest inspect "$IMAGE" | jq -r '.manifests[0].digest'` to capture the digest for the current run; record it in the SMOKE log if a release is on the line.
 
 ---
 
