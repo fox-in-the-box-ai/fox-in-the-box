@@ -21,36 +21,81 @@ Before tagging anything:
 - [ ] **`qa/SMOKE_CHECKLIST.md` run end-to-end against a fresh container built from `main`**
 - [ ] CHANGELOG entry drafted in concise / sectioned style (see prior releases for tone — `Fixed`/`Added`/`What's next`)
 
-## Cutting the release
+## Cutting a release — two flows
 
-Patch releases (v0.X.Y → v0.X.Y+1) and minor bumps (v0.X.0 → v0.X+1.0) follow the same flow.
+Fox in the Box has two distinct release paths since v0.7.0. Pick based on what changed.
+
+### Flow A — Fox-code release (overlay / Electron / packaging changed)
+
+Use this when overlay code, Electron app, install scripts, container build, or any other Fox-owned code changed. Bumps the FITB version + ships DMG/exe/container/GitHub Release.
+
+Per-release rule: bundle the change with the v0.7.5 pattern — one PR for the code change, a separate companion PR for release mechanics (VERSION + CHANGELOG + smoke row). Keeps reviews focused and lets the release-mechanics PR ride on the code PR's CI verdict.
 
 ```bash
-# 1. Branch from main
+# 1. Code PR (already merged at this point — example: PR #314 failover engine)
+
+# 2. Branch for release mechanics
 git checkout main && git pull --ff-only
-git checkout -b release/0.5.0
+git submodule update --init forks/hermes-webui
+git checkout -b release/v0.7.6
 
-# 2. Bump version files
-echo "0.5.0" > VERSION
-# Edit packages/electron/package.json — change "version" field
-# Edit CHANGELOG.md — add new section at top, copy your draft
+# 3. Bump version files + CHANGELOG + smoke-checklist row
+echo "0.7.6" > VERSION
+# Edit packages/electron/package.json — bump "version" to match
+# Edit CHANGELOG.md — add new ## [0.7.6] section at top with prose lead + sections
+# Edit qa/SMOKE_CHECKLIST.md — add Section L row + update "Last updated:" line
 
-# 3. Commit + push
-git add VERSION packages/electron/package.json CHANGELOG.md
-git commit -m "release: v0.5.0"
-git push -u origin release/0.5.0
+# 4. Commit + push + PR
+git add VERSION packages/electron/package.json CHANGELOG.md qa/SMOKE_CHECKLIST.md
+git commit -m "release(v0.7.6): <theme> (release mechanics)"
+git push -u origin release/v0.7.6
+gh pr create --title "release(v0.7.6): <theme>" --body "..."
 
-# 4. Open PR via gh CLI, admin-merge once CI is green
-gh pr create --title "release: v0.5.0" --body "..."
-gh pr merge <PR#> --squash --delete-branch --admin
-
-# 5. Pull main, tag, push tag (the tag push triggers .github/workflows/release.yml)
+# 5. Once CI is green, merge + tag + push tag (the tag push triggers release.yml)
+gh pr merge <PR#> --squash
 git checkout main && git pull --ff-only
-git tag v0.5.0
-git push origin v0.5.0
+git submodule update --init forks/hermes-webui
+git tag -a v0.7.6 -m "v0.7.6 — <theme>"
+git push origin v0.7.6
 ```
 
 The `release.yml` workflow runs automatically on tag push. It chains `build-container.yml` (multi-arch Docker → GHCR) and `build-electron.yml` (signed macOS DMGs + signed Windows exe) and creates the GitHub Release with the CHANGELOG entry as the body.
+
+### Flow B — Option B upstream-only bump (since v0.7.0)
+
+Use this when the only change is bumping a pinned upstream tag in `packages/fox-overlay/versions.toml` (typically via the auto-issue opened by `upstream-watch.yml`). The Fox VERSION does NOT bump; instead, `build-container.yml` auto-retags `:stable` to the new digest after merge.
+
+```bash
+# 1. Branch + bump
+git checkout main && git pull --ff-only
+git checkout -b bump/upstream-webui-vX.Y.Z
+
+# 2. Update the submodule pointer
+cd forks/hermes-webui && git fetch --tags && git checkout vX.Y.Z && cd ../..
+# Update packages/fox-overlay/versions.toml — change `hermes_webui_tag`
+# (or `hermes_agent_tag`) and add a history entry under `[meta]`.
+
+# 3. Verify basis is clean
+bash packages/fox-overlay/scripts/check-overlay-basis.sh
+
+# 4. Commit + push + PR — PR title MUST start with `bump(upstream):`
+git add forks/hermes-webui packages/fox-overlay/versions.toml
+git commit -m "bump(upstream): webui vX.Y.W → vX.Y.Z (closes #NNN)"
+git push -u origin bump/upstream-webui-vX.Y.Z
+gh pr create --title "bump(upstream): webui vX.Y.W → vX.Y.Z (closes #NNN)" --body "..."
+
+# 5. CI runs the Option B diff guard (.github/workflows/option-b-diff-guard.yml)
+#    — fails the PR if the diff touches anything outside forks/hermes-* +
+#    versions.toml. Once CI is green, squash-merge with the SAME `bump(upstream):`
+#    subject — build-container.yml's merge job regexes the commit subject and
+#    auto-bumps :stable on match.
+
+gh pr merge <PR#> --squash --subject "bump(upstream): webui vX.Y.W → vX.Y.Z (closes #NNN)"
+```
+
+**No tag push, no GitHub Release, no DMG/exe rebuild for Option B.** `:stable` advances; users on the desktop app get the new container content on next launch. The Option B diff guard (since v0.7.5) prevents an unintended Fox-code change from sneaking through under a `bump(upstream):` subject — that protects against the original FITB#122 class of regression.
+
+See [`docs/architecture/upstream-overlay.md`](architecture/upstream-overlay.md) → "Versioning policy (Option B)" for the design rationale.
 
 ## Verifying the release
 
@@ -78,6 +123,22 @@ If a release ships and is broken in a way the smoke checklist missed:
 2. If the issue is severe (data loss, security), draft a GitHub Security Advisory and pin a notice on the README until the hotfix is out.
 3. Update the smoke checklist with the missed scenario so future releases catch it.
 
+### User-side rollback escape hatch (v0.7.5+)
+
+Users stranded by a bad release before a hotfix lands can roll back manually via the `FITB_IMAGE` env override (no Fox-side work needed):
+
+```bash
+# install.sh user: roll back to a known-good prior tag
+FITB_IMAGE=ghcr.io/fox-in-the-box-ai/cloud:v0.7.5 ./install.sh
+
+# Electron app user (macOS): set the env var before launching
+FITB_IMAGE=ghcr.io/fox-in-the-box-ai/cloud:v0.7.5 open -a "Fox in the Box"
+
+# Windows: set FITB_IMAGE as a User environment variable, then relaunch
+```
+
+This is a self-service escape hatch — communicate the tag to roll back to in the hotfix's GitHub Release notes if a release goes sideways.
+
 ## Where the configuration lives
 
 | Concern | File |
@@ -93,9 +154,16 @@ If a release ships and is broken in a way the smoke checklist missed:
 
 ## Naming conventions
 
-- **Branches:** `feat/description`, `fix/description`, `docs/description`, `release/X.Y.Z`, `qa/...`
+- **Branches:**
+  - `feat/description` — Fox-code feature work
+  - `fix/description` — bug fix
+  - `docs/description` — docs-only change
+  - `release/vX.Y.Z` — release-mechanics PR (Flow A)
+  - `bump/upstream-<repo>-vX.Y.Z` — Option B upstream bump (Flow B)
+  - `qa/...` — verification work
 - **Tags:** `vX.Y.Z` (no `release-` prefix, no underscores)
-- **Commit messages:** Conventional Commits (`feat(scope): …`, `fix(scope): …`, `docs(scope): …`, `release: vX.Y.Z`)
+- **Commit messages:** Conventional Commits (`feat(scope): …`, `fix(scope): …`, `docs(scope): …`, `release(vX.Y.Z): …`, `bump(upstream): …`)
+  - The `bump(upstream): …` prefix is **load-bearing**: `build-container.yml`'s merge job regexes the subject line; the Option B diff guard workflow keys off the PR title. Don't use this prefix for anything other than upstream-pin bumps.
 - **Co-author lines:** **never** add `Co-authored-by` for AI tools. The repo's git identity must always be a human.
 
 ## Related

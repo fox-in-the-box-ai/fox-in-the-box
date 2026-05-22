@@ -100,7 +100,7 @@ When dev mode hides the bug, you need the actual built image. Build the producti
 
 ```bash
 docker build -f packages/integration/Dockerfile \
-  -t fitb:repro --build-arg FITB_VERSION=v0.5.0 .
+  -t fitb:repro --build-arg FITB_VERSION=v0.7.6 .
 docker run --rm --cap-add=NET_ADMIN --device /dev/net/tun \
   --sysctl net.ipv4.ip_forward=1 \
   -p 127.0.0.1:8788:8787 \

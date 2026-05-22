@@ -47,7 +47,9 @@ overlay basis is still clean for the proposed bump.
 | You want to… | Use |
 |---|---|
 | Add a new HTTP route Fox provides on top of upstream | `webui_modules/` — register with `fox_overlay.dispatch.register_get/post` |
-| Modify upstream Python behavior at a small, well-defined point | `webui_patches/` (runtime, `inspect.getsource` + textual substitution via `substitute_function` / `substitute_method`) — preferred over a static patch when the change is small and may need to survive frequent upstream churn |
+| Add a content file alongside upstream (e.g. a Fox-specific `SOUL.md` persona) | `agent_overlay/<file>` + a Dockerfile `RUN cp` block at build time. New in v0.7.3 (PR #297). Mirrors the existing `agent_memory_plugins/` install pattern. |
+| Modify upstream Python behavior **in-function** at a small, well-defined point | `webui_patches/` with `substitute_function` / `substitute_method` (runtime, `inspect.getsource` + textual anchor substitution) — preferred over a static patch when the change is small and may need to survive frequent upstream churn |
+| **Mutate the return value of an upstream function (post-call)** | `webui_patches/` with the **wrap-and-splice pattern** (new in v0.7.4, see `_wrap_get_available_models` in `webui_patches/config.py`). Replace the module attribute with a closure that calls the original then mutates the result. Invariant to upstream internal refactors as long as signature + return-shape hold. Use when the change is "add behavior after the call," NOT "modify code inside a 1200-line function body" — anchored substitution deep inside large functions is fragile. |
 | Add a few lines of code to a load-bearing upstream module where module-load ordering matters (e.g. bootstrap, dispatcher hook) | Patch series (`patches/webui/` or `patches/agent/`) — applied at Docker build time, so the imports are statically there |
 | Delete an upstream file Fox doesn't ship | Add to `.fox-removals` |
 | Add an agent monkey-patch (target_model fix, etc.) | `agent_plugins/.../monkey_patches/` (entry-point loaded via `fox_overlay.agent_plugins.register()`) |
@@ -93,14 +95,52 @@ sentinel resolution via `__func__`. Models patch was the first user (now
 removed because upstream caught up); pattern remains for future class-method
 patches.
 
-### Wrapping rather than substituting (suggested for v0.7.x)
+### Wrapping rather than substituting (shipped in v0.7.4)
 
 Phase 8 follow-up #241 discovered: when upstream extensively refactors the
 target function's surrounding code (not just renames a kwarg), textual
-substitution becomes infeasible. The proposed approach for future
-re-implementation of #89 + #129b features (v0.7.x): subscribe to
-`put('apperror', ...)` events as a downstream consumer rather than
-substituting in-place. Avoids anchor fragility entirely.
+substitution becomes infeasible. **Resolved in v0.7.4 with the
+wrap-and-splice pattern** — the first such use is
+`_wrap_get_available_models` in `fox_overlay/webui_patches/config.py`,
+which adds a Fox OLLAMA group to the picker output by wrapping upstream's
+`get_available_models()` rather than splicing inside its ~1200-line body.
+Wrap depends only on the function's signature + return-shape, both
+self-checked at apply-time. **Use this pattern whenever the change is a
+post-call mutation of the return value; reserve `substitute_function` for
+genuine in-function modifications where the anchor is short and stable.**
+
+### Multi-substitution on a single function (shipped in v0.7.6)
+
+`substitute_function` accepts a list of `(old, new)` tuples and applies
+them sequentially — each anchor must still appear exactly once in the
+upstream source. v0.7.6 ships 3 substitutions on
+`_run_agent_streaming` (FITB#9 plumbing + #303 silent-failover success
+path + #303 silent-failover exception path). Each substitution has its
+own anchor; the three are independent splice points within the same
+upstream function. This is the right shape when one function needs
+multiple, structurally-distinct mid-body insertions.
+
+### Fail-loud anchor drift (shipped in v0.7.5)
+
+`fox_overlay.bootstrap.install()` used to demote `AssertionError` from
+`webui_patches.apply_all()` to a WARNING and continue — meaning anchor
+drift would ship silently-broken Fox to users. v0.7.5 changed this:
+`AssertionError` re-raises (aborts container boot, CI catches), other
+exceptions log via `_log.exception` with full traceback (still degrade
+one patch but keep webui usable). The fail-loud path is the entire
+reason `substitute_function`'s anchor self-check exists in the first
+place; pre-v0.7.5 that signal was being swallowed.
+
+### Option B diff guard (shipped in v0.7.5)
+
+`.github/workflows/option-b-diff-guard.yml` fails any PR titled
+`bump(upstream): …` whose diff touches anything outside the upstream-pin
+allow-list (`forks/hermes-*` submodule pointers +
+`packages/fox-overlay/versions.toml`). Closes the last hole in the
+Option B auto-bump trust model — a typo'd or copy-pasted
+`bump(upstream):` subject on a Fox-code PR can no longer silently ship
+arbitrary code to `:stable`. See `docs/RELEASE_WORKFLOW.md` Flow B for
+the user-facing process.
 
 ## Phase summary (shipped)
 
@@ -112,7 +152,7 @@ substituting in-place. Avoids anchor fragility entirely.
 | 3 | Agent monkey-patches (entry-point loaded): runtime_provider, auxiliary_client, cron_diagnostics. Bootstrap shim added to fork's gateway/run.py. mem0_oss kept as fork plugin pending Phase 8 relocation. |
 | 4 | Dispatcher mechanism + 2-patch webui series (server.py + routes.py hooks). Option E discovered. |
 | 5 | 5 additive webui modules: ollama, tailscale, local_fallback, models_download, hostname. session_recovery deferred (route-less). |
-| 6 | 4 webui mid-file monkey-patches: providers, models, config, streaming. updates.py removed (Fox edits superseded by upstream / dropped). |
+| 6 | 4 webui mid-file monkey-patches initially: providers, models, config, streaming. **Updates over time:** providers retired v0.6.2 (#269) — upstream's per-turn env reload covers Fox's original concern. models retired Phase 8 #239 — upstream v0.51.84 ships Fox's #1558 P0 guard natively. Today (v0.7.6): config + streaming only. updates.py removed (Fox edits superseded by upstream / dropped). |
 | 7 | Onboarding wholesale-replace via overlay (incl. setup files moved). `.fox-removals` Dockerfile consumer wired. |
 | 8 | Re-point submodules at virgin upstream (webui v0.51.84 + agent v2026.5.16). Refresh all anchors. mem0_oss relocated. versions.toml + check-overlay-basis.sh shipped. Bootstrap shim extracted from fork to managed patch. |
 | 9 | Nightly upstream-watch CI workflow opens issues on drift. |
