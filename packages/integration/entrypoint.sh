@@ -157,6 +157,20 @@ if [ -f "$HERMES_ENV" ]; then
     set +a
 fi
 
+# ── 5a. Test-mode overrides (v0.7.7 #264) ──────────────────────────────────────
+# When FITB_TEST_MODE=1 is set, Fox's webui_modules/test_hooks.py registers
+# POST /test/* routes that let Playwright reset state between specs. Also
+# pre-sets OPENROUTER_BASE_URL and OLLAMA_BASE_URL to mock-friendly defaults
+# so tests can intercept those URLs via Playwright route handlers without
+# needing to know what the test container's host networking looks like.
+# NEVER set this in production: the /test/* routes bypass auth and mutate
+# persisted state.
+if [ "${FITB_TEST_MODE:-0}" = "1" ]; then
+    echo "[entrypoint] FITB_TEST_MODE=1 — exporting test-mode defaults (do not use in production)"
+    export OPENROUTER_BASE_URL="${OPENROUTER_BASE_URL:-http://127.0.0.1:9001/openrouter}"
+    export OLLAMA_BASE_URL="${OLLAMA_BASE_URL:-http://127.0.0.1:9002/ollama}"
+fi
+
 # ── 5b. Patch hermes.yaml with runtime env vars ────────────────────────────────
 # Replace ${BRAVE_API_KEY} placeholder so Hermes MCP server gets the real key.
 HERMES_YAML="/data/config/hermes.yaml"

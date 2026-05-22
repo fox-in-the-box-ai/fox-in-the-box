@@ -1,0 +1,229 @@
+name: Playwright
+
+# Phase 0 (v0.7.7) — infra-only. One trivial spec, smoke job runs on PR but
+# is NOT a required check yet. Phase 1 (v0.7.8) adds ~12 real specs and
+# makes smoke required.
+
+on:
+  pull_request:
+    paths:
+      - 'qa/playwright/**'
+      - 'packages/fox-overlay/**'
+      - 'packages/integration/**'
+      - '.github/workflows/playwright.yml'
+  schedule:
+    # Nightly full (chromium + firefox + webkit × 4 shards) — 04:00 UTC
+    - cron: '0 4 * * *'
+    # Weekly electron-parity (macos + windows) — Sunday 04:00 UTC
+    - cron: '0 4 * * 0'
+  workflow_dispatch: {}
+
+concurrency:
+  group: playwright-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    # PR-triggered smoke — chromium only, ~5 min budget. Becomes required
+    # check in Phase 1; for Phase 0 it runs but is non-blocking.
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - uses: pnpm/action-setup@v4
+        # pnpm version comes from root package.json's "packageManager" field
+        # (pnpm@9.0.0). action-setup@v4 rejects having both `version:` here
+        # AND `packageManager:` in package.json, so we omit `version:` here.
+
+      - name: Install Playwright workspace deps
+        working-directory: qa/playwright
+        run: pnpm install --frozen-lockfile=false
+
+      - name: Cache Playwright browsers
+        id: pw-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: pw-browsers-${{ runner.os }}-${{ hashFiles('qa/playwright/package.json') }}
+
+      - name: Install Playwright browsers (chromium only)
+        if: steps.pw-cache.outputs.cache-hit != 'true'
+        working-directory: qa/playwright
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Pull :stable container
+        run: docker pull ghcr.io/fox-in-the-box-ai/cloud:stable
+
+      - name: Start container
+        run: |
+          docker run -d --name fitb-playwright \
+            --cap-add=NET_ADMIN --device /dev/net/tun \
+            --sysctl net.ipv4.ip_forward=1 \
+            -e FITB_TEST_MODE=1 \
+            -p 127.0.0.1:8801:8787 \
+            -v fitb-playwright-data:/data \
+            ghcr.io/fox-in-the-box-ai/cloud:stable
+
+      - name: Wait for /health
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:8801/health > /dev/null; then
+              echo "Container ready after ${i}s"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Container did not become healthy in 60s — dumping logs:"
+          docker logs fitb-playwright
+          exit 1
+
+      - name: Run smoke project
+        working-directory: qa/playwright
+        env:
+          PLAYWRIGHT_BASE_URL: http://127.0.0.1:8801
+        run: pnpm test:e2e:smoke
+
+      - name: Upload report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-smoke
+          path: qa/playwright/playwright-report/
+          retention-days: 7
+
+      - name: Container logs on failure
+        if: failure()
+        run: docker logs fitb-playwright || true
+
+      - name: Teardown
+        if: always()
+        run: |
+          docker stop fitb-playwright 2>/dev/null || true
+          docker rm fitb-playwright 2>/dev/null || true
+          docker volume rm fitb-playwright-data 2>/dev/null || true
+
+  full:
+    # Nightly cron — full browser matrix × 4 shards. Phase 0: matrix shape
+    # exists but the only spec is the smoke /health one, so each shard just
+    # runs that spec (cheap). Phase 1+ scales up the spec count.
+    if: github.event_name == 'schedule' && github.event.schedule == '0 4 * * *'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+        shard: [1, 2, 3, 4]
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - uses: pnpm/action-setup@v4
+        # pnpm version comes from root package.json's "packageManager" field
+        # (pnpm@9.0.0). action-setup@v4 rejects having both `version:` here
+        # AND `packageManager:` in package.json, so we omit `version:` here.
+
+      - name: Install Playwright workspace deps
+        working-directory: qa/playwright
+        run: pnpm install --frozen-lockfile=false
+
+      - name: Install Playwright browsers (${{ matrix.browser }})
+        working-directory: qa/playwright
+        run: pnpm exec playwright install --with-deps ${{ matrix.browser }}
+
+      - name: Pull :stable container
+        run: docker pull ghcr.io/fox-in-the-box-ai/cloud:stable
+
+      - name: Start container
+        run: |
+          docker run -d --name fitb-playwright-${{ matrix.shard }} \
+            --cap-add=NET_ADMIN --device /dev/net/tun \
+            --sysctl net.ipv4.ip_forward=1 \
+            -e FITB_TEST_MODE=1 \
+            -p 127.0.0.1:880${{ matrix.shard }}:8787 \
+            -v fitb-playwright-data-${{ matrix.shard }}:/data \
+            ghcr.io/fox-in-the-box-ai/cloud:stable
+
+      - name: Wait for /health
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:880${{ matrix.shard }}/health > /dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs fitb-playwright-${{ matrix.shard }}
+          exit 1
+
+      - name: Run smoke project (Phase 0 — same one spec, full matrix)
+        working-directory: qa/playwright
+        env:
+          PLAYWRIGHT_BASE_URL: http://127.0.0.1:880${{ matrix.shard }}
+          PLAYWRIGHT_NIGHTLY: '1'
+        run: pnpm test:e2e:smoke
+
+      - name: Upload report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-${{ matrix.browser }}-shard${{ matrix.shard }}
+          path: qa/playwright/playwright-report/
+          retention-days: 14
+
+      - name: Teardown
+        if: always()
+        run: |
+          docker stop fitb-playwright-${{ matrix.shard }} 2>/dev/null || true
+          docker rm fitb-playwright-${{ matrix.shard }} 2>/dev/null || true
+          docker volume rm fitb-playwright-data-${{ matrix.shard }} 2>/dev/null || true
+
+  electron-parity:
+    # Weekly cron — Sunday only. Phase 0: stub matrix that confirms the OS
+    # runners can install Playwright + see the workspace; Phase 1+ adds
+    # specs that launch the actual signed Electron app.
+    if: github.event_name == 'schedule' && github.event.schedule == '0 4 * * 0'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - uses: pnpm/action-setup@v4
+        # pnpm version comes from root package.json's "packageManager" field
+        # (pnpm@9.0.0). action-setup@v4 rejects having both `version:` here
+        # AND `packageManager:` in package.json, so we omit `version:` here.
+
+      - name: Install Playwright workspace deps
+        working-directory: qa/playwright
+        run: pnpm install --frozen-lockfile=false
+
+      - name: Install Playwright browsers (chromium)
+        working-directory: qa/playwright
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Phase 0 stub — list tests so the workspace + browsers exist
+        working-directory: qa/playwright
+        run: pnpm exec playwright test --list

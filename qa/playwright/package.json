@@ -1,0 +1,18 @@
+{
+  "name": "@fox-in-the-box/playwright",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Playwright E2E test suite for Fox in the Box. Phase 0 (v0.7.7) ships the rails + one /health spec; Phase 1 (v0.7.8) adds wizard/endpoint/overlay smoke specs; Phase 2 (deferred) adds critical-path coverage.",
+  "scripts": {
+    "test:e2e": "playwright test",
+    "test:e2e:smoke": "playwright test --project=smoke",
+    "test:e2e:headed": "playwright test --headed",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:codegen": "playwright codegen http://localhost:8801",
+    "test:e2e:install-browsers": "playwright install --with-deps chromium"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0",
+    "@types/node": "^20.0.0"
+  }
+}
