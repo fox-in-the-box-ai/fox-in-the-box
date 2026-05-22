@@ -46,6 +46,39 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # v0.7.15 SMOKE_LOG gate — per the v0.7.13 retrospective on #331.
+      # Forces a written audit trail: every release tag must have a
+      # matching entry in qa/SMOKE_LOG.md before the release publishes.
+      # An entry is what proves the smoke checklist was actually run for
+      # this version (pre-v0.7.14 the "Currently testing: vX.Y.Z" header
+      # in SMOKE_CHECKLIST.md was the only signal, and it sat at v0.7.6
+      # for 6 releases — which is how #331 shipped in production for
+      # weeks). A bypass is possible by adding an entry with an explicit
+      # "Bypass reason:" line — the gate just requires the matching header
+      # exists, so the maintainer must consciously lie in writing if they
+      # skip the smoke. Both states leave an audit trail.
+      - name: Smoke-log gate (require qa/SMOKE_LOG.md entry for this tag)
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          if [ ! -f qa/SMOKE_LOG.md ]; then
+            echo "::error::qa/SMOKE_LOG.md does not exist. This file is required since v0.7.14. Restore it before tagging a release."
+            exit 1
+          fi
+          if ! grep -qE "^## ${TAG}( |$|\\b)" qa/SMOKE_LOG.md; then
+            echo "::error::qa/SMOKE_LOG.md has no '## ${TAG}' entry."
+            echo "::error::Per v0.7.15 process gate: every release tag must have a matching entry in qa/SMOKE_LOG.md documenting which manual smoke gates were run (or explicitly bypassed)."
+            echo "::error::Add a section like:"
+            echo "::error::"
+            echo "::error::  ## ${TAG} — $(date +%Y-%m-%d) (initials)"
+            echo "::error::  - [x] Section A — Header health"
+            echo "::error::  - ... (etc, see SMOKE_LOG.md format)"
+            echo "::error::"
+            echo "::error::To bypass deliberately (hotfix or infrastructure-only release), add the entry with a 'Bypass reason:' line."
+            exit 1
+          fi
+          echo "✅ SMOKE_LOG.md entry for ${TAG} present"
+
       - name: Log in to GHCR
         uses: docker/login-action@v3
         with:

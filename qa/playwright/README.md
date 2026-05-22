@@ -35,6 +35,19 @@ pnpm --filter @fox-in-the-box/playwright test:e2e:smoke
 docker stop fitb-playwright && docker rm fitb-playwright && docker volume rm fitb-playwright-data
 ```
 
+## Required CI checks (v0.7.15+)
+
+The `smoke` job is **intended-required** as of v0.7.15. The deferral pattern that let `#331` ship broken for 6 releases is what closed this — the spec count has grown to 7 with the `wizard-renders` redirect-fires assertion now in place, which is enough to start gating merges.
+
+Branch-protection enforcement is a GitHub-UI setting the workflow can't toggle itself. To complete the flip:
+
+1. Repo settings → Branches → Edit `main` protection rule
+2. Under "Require status checks to pass before merging," add:
+   - `smoke` (the Playwright job)
+   - `validate` (the overlay-validation job from v0.7.14)
+
+After the flip, every PR must pass both before merge. Pre-existing PRs may need a rebase to pick up the new gate.
+
 ## File layout
 
 ```

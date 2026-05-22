@@ -1,8 +1,12 @@
 name: Playwright
 
-# Phase 0 (v0.7.7) — infra-only. One trivial spec, smoke job runs on PR but
-# is NOT a required check yet. Phase 1 (v0.7.8) adds ~12 real specs and
-# makes smoke required.
+# Phase 0 (v0.7.7) shipped the rails. Phase 1 partial (v0.7.8-v0.7.13)
+# accreted 7 real specs covering endpoints sweep, /health, static-overlay,
+# test-hooks safety, mobile avatar, wizard assets, and (v0.7.15) the
+# wizard redirect — the load-bearing spec for #331's permanent regression
+# net. v0.7.15 marks the smoke job intended-required: see the README's
+# branch-protection section for the flip. The "non-required" deferral
+# pattern is exactly what let #331 ship for 6 releases — closing it.
 
 on:
   pull_request:
@@ -24,8 +28,10 @@ concurrency:
 
 jobs:
   smoke:
-    # PR-triggered smoke — chromium only, ~5 min budget. Becomes required
-    # check in Phase 1; for Phase 0 it runs but is non-blocking.
+    # PR-triggered smoke — chromium only, ~5 min budget. Intended REQUIRED
+    # check as of v0.7.15 — the workflow can't enforce that itself
+    # (branch-protection is a GitHub-UI setting), so maintainers must flip
+    # it. See qa/playwright/README.md "Required CI checks" for the steps.
     if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 10

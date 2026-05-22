@@ -7,6 +7,31 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.7.15] - 2026-05-22
+
+**Permanent regression net for #331 + SMOKE_LOG enforcement gate.** The infrastructure half of the v0.7.13 retrospective's findings — Playwright spec that would have caught #331 had it existed, plus a release-time gate that refuses to publish a tag without a written audit-trail entry in `qa/SMOKE_LOG.md`. The deferral pattern that let #331 ship for 6 releases is closed at the bone.
+
+### Added
+
+- **`wizard-renders` redirect-fires spec** in `qa/playwright/tests/smoke/wizard-renders.spec.ts`. The deferred half of v0.7.13's spec (chicken-and-egg with `:stable`-at-PR-CI now unblocked — v0.7.13 has been live since this morning). Asserts: (a) `POST /test/reset` succeeds; (b) GET `/` on a fresh container redirects to `/setup`; (c) `/setup` serves the Fox wizard with `#wizard` + `#progress-bar` elements (NOT upstream's chat shell). Three independent assertions catching three distinct failure modes — the patch missing, the patch wired wrong, or the wizard HTML overwritten with garbage. **This spec is the permanent regression net for #331.**
+- **`release.yml` SMOKE_LOG gate.** Per the v0.7.13 retro's "stop shipping without verification" recommendation: every release tag must have a matching `## vX.Y.Z` entry in `qa/SMOKE_LOG.md` before the GitHub Release publishes. Bypass via "Bypass reason:" line — the gate just requires the header, so the maintainer must consciously lie in writing if they skip the smoke. Both states leave audit trails.
+
+### Changed
+
+- **Playwright `smoke` job marked intended-required.** Workflow comment updated from "non-blocking" to "intended REQUIRED check as of v0.7.15." The actual branch-protection enforcement is a GitHub-UI setting the workflow can't toggle itself; `qa/playwright/README.md` now has a "Required CI checks" section documenting the 2-click flip. **Per the v0.7.13 retro, the indefinite "Phase 1 makes smoke required" deferral was exactly the structural gap that let #331 slip — closing it.**
+
+### Behind the scenes
+
+- Total Playwright smoke suite: **7 specs** (was 6 — added the wizard-renders redirect-fires + Fox-wizard-HTML-serves assertions).
+- v0.7.15 itself ships with a `qa/SMOKE_LOG.md` bypass entry — the release that *adds* the SMOKE_LOG gate can't pre-exist its own gate. Forward, v0.7.16+ must have real entries (no more pure-bypass releases).
+
+### What's next
+
+- **v0.7.16:** Windows installer UX bundle (#324 + #325 + #330) — z-order fixes for Docker Desktop install dialog + access-mode modal, plus "installation auto-resumes after reboot" copy. First release subject to the new SMOKE_LOG gate; must include a real Section H/L gate run.
+- **v0.7.17:** Minimum brand alignment for installer (#323 — Fox avatar + 1 accent color, scoped down; defer full design-system pass to v0.8/#64).
+
+---
+
 ## [0.7.14] - 2026-05-22
 
 **Process meta-fixes from the v0.7.13 retrospective.** Three convergent recommendations from the 6-perspective retro that caught #331: (1) catch anchor drift locally instead of waiting 3+ minutes for CI Docker build; (2) atomic patch generation that prevents the "uncommitted fork state leaks into the diff" failure mode (commit e9bd4cd); (3) written audit trail forcing actual smoke-checklist execution before a tag publishes. No user-visible change — pure infrastructure.
