@@ -7,6 +7,31 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.7.12] - 2026-05-22
+
+Tailscale auth link, sticky. The `/api/tailscale/up/poll` response now serves a stable auth URL across the entire `awaiting-auth` window even when the daemon thread momentarily returns empty mid-poll — fixes the "link flashes for ~1s and disappears" symptom Safari users hit (#146). Server-side fix in `tailscale.py`; client-side tile rebuild (the bigger architectural piece per the 4-architect scoping) deferred to v0.7.13 if this MVP doesn't fully resolve.
+
+### Fixed
+
+- **Tailscale auth link stays visible until the auth flow actually ends (#146 — closes pending Safari verification).** Three latent races in `webui_modules/tailscale.py` were causing transient empty `auth_url` values in the poll response: the daemon thread's 1-second scrape loop could return empty between the attempt start and the first successful URL capture, a stale daemon thread from a superseded attempt could overwrite the active attempt's URL with empty, and the `awaiting-auth → running` state promotion in `get_up_progress()` left the `auth_url` field as-was while the state itself flipped. Safari with default popup-blocker settings re-renders the auth tile from every poll response — a single tick of empty `auth_url` would clear the link from the DOM, then the user lost the click. Now: `_up_state` maintains a sticky `last_auth_url` whenever a non-empty value is ever observed for the current attempt; `get_up_progress()` prefers the live `auth_url` and falls back to the sticky copy when the live value is transiently empty; sticky is cleared only on `logout()` + on a fresh `start_up()` (new attempt = new URL). Added a `cleared: bool` field to the poll response so client code that knows about the new contract can distinguish "transient empty — keep your rendered link" from "attempt is over — remove the link." Terminal states (`running` / `failed` / `idle`) clear the URL regardless of stickiness — once the attempt is done, continuing to serve the link would confuse the user.
+
+### Heads-up
+
+- **Real Safari verification on a Mac with an active tailnet is still needed** before declaring #146 fully closed. The server-side fix removes the source of the transient blank — if Safari's render logic re-renders from every poll, the link should now stay because the poll value stays. If Safari users still report the symptom post-merge, the bug is client-side (upstream's JS clearing the link on its own timer) and v0.7.13 brings the client-side tile rebuild (`fox-overlay.js` DOM mutation observer + sticky render) per the original 4-architect scoping plan.
+- The `/test/tailscale/set-state` hook (planned for this release per scoping) is **not** included — it's a separate test-infra PR worth doing on its own when the Playwright Phase 1 wizard specs need it.
+
+### Behind the scenes
+
+- **7 new pytest tests** in `packages/fox-overlay/tests/test_tailscale_overlay.py` covering: sticky population on non-empty auth_url, no overwrite on empty auth_url, fallback on transient blank, terminal-state clearing for running/failed/idle, state promotion clears link cleanly, `cleared` field always present in poll response.
+- The scoped server-side-only MVP is intentional: smaller fix, faster ship, tests the hypothesis that the bug is the source data (server-side race) and not the rendering (client-side timer). If the hypothesis holds, the bigger client-side rebuild becomes unnecessary. The scoping doc estimated 8-12h for the full rebuild; this MVP came in at ~2h.
+
+### What's next
+
+- **v0.7.13 candidates** depending on user feedback: (a) client-side Tailscale tile rebuild in `fox-overlay.js` if Safari still hits the symptom; (b) "Docker Desktop installed but not running" detection (the broader class of WSL2-bootstrap regression not fully addressed by v0.7.11); (c) Windows installer Docker Desktop dialog z-order fix (#324, filed today).
+- v0.7.x continues — v0.8.0 only when the verification rebuild is genuinely solid.
+
+---
+
 ## [0.7.11] - 2026-05-22
 
 Windows users no longer cycle through a 4-minute WSL repair + reboot loop when Docker Desktop is in Windows-containers mode. Fox now detects the mismatch in ~10 seconds and shows the exact tray-menu steps to switch modes.

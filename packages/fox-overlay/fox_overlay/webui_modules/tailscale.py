@@ -323,6 +323,19 @@ _up_lock = threading.Lock()
 _up_state: dict[str, Any] = {
     "state": "idle",
     "auth_url": "",
+    # v0.7.12 (#146): sticky copy of the most recent non-empty auth_url
+    # for the *current* attempt. Some clients (notably Safari with default
+    # popup-blocker settings) re-render the auth tile from every poll
+    # response — if the daemon thread momentarily returns "" (the gap
+    # between attempt-start and the first scrape, the gap between auth
+    # success and the Running transition, or a stale poll racing a fresh
+    # logout/start_up), the link briefly disappears and the user loses
+    # the click. By returning `last_auth_url` from get_up_progress when
+    # `auth_url` itself is empty, the client sees a stable URL string
+    # across the entire awaiting-auth window even if upstream JS doesn't
+    # have its own client-side sticky cache.
+    # Cleared on logout + on each fresh start_up (new attempt = new URL).
+    "last_auth_url": "",
     "started_at": 0.0,
     "ended_at": 0.0,
     "error": "",
@@ -354,11 +367,22 @@ def _set_up_state(attempt_id: int | None = None, **fields) -> None:
     """Update the shared state dict. If attempt_id is provided, the update
     is silently ignored when it doesn't match the current attempt — this
     is how stale daemon threads (from cancelled/superseded attempts)
-    avoid clobbering the active attempt's state."""
+    avoid clobbering the active attempt's state.
+
+    v0.7.12 (#146): also maintains `last_auth_url` as a sticky copy
+    whenever `auth_url` is set to a non-empty value. Read-side (poll
+    response) prefers `auth_url` then falls back to `last_auth_url` —
+    keeps clients from seeing a transient blank during the awaiting-auth
+    window even if a stale daemon scrape returns empty for one tick.
+    """
     with _up_lock:
         if attempt_id is not None and attempt_id != _up_state.get("attempt_id"):
             return
         _up_state.update(fields)
+        # Maintain the sticky last_auth_url alongside any auth_url update.
+        new_auth_url = fields.get("auth_url")
+        if new_auth_url:  # truthy non-empty string only
+            _up_state["last_auth_url"] = new_auth_url
 
 
 def _build_up_argv(opts: dict) -> list[str]:
@@ -642,6 +666,9 @@ def start_up(opts: dict) -> dict[str, Any]:
         _up_state.update({
             "state": "starting",
             "auth_url": "",
+            # v0.7.12 (#146): fresh attempt → drop the previous attempt's
+            # sticky URL so the new poll won't return a stale link.
+            "last_auth_url": "",
             "started_at": time.time(),
             "ended_at": 0.0,
             "error": "",
@@ -714,9 +741,33 @@ def get_up_progress() -> dict[str, Any]:
             _attempt_configure_serve(snap.get("attempt_id"))
             with _up_lock:
                 snap = dict(_up_state)
+    # v0.7.12 (#146): prefer current auth_url, fall back to the sticky
+    # `last_auth_url` from earlier in the same attempt. Lets the client
+    # ride out transient empty windows (stale daemon scrape, post-auth
+    # pre-Running gap) without losing the rendered link.
+    #
+    # Once state is terminal (running / failed / idle) the link's job is
+    # over and continuing to serve it would confuse the user (running =
+    # they already authed successfully; failed = the error is what they
+    # need to see; idle = no auth flow in flight). Clear unconditionally
+    # in those states regardless of whether the daemon thread happened to
+    # leave a residual non-empty auth_url in _up_state.
+    is_terminal = snap["state"] in ("running", "failed", "idle")
+    if is_terminal:
+        effective_auth_url = ""
+    else:
+        effective_auth_url = snap["auth_url"] or snap.get("last_auth_url", "")
+
     return {
         "state": snap["state"],
-        "auth_url": snap["auth_url"],
+        "auth_url": effective_auth_url,
+        # v0.7.12 (#146): explicit `cleared` flag tells the client
+        # whether an empty `auth_url` means "still working, transient
+        # blank — keep your rendered link" (cleared=False) or "attempt
+        # is over, remove the link from the UI" (cleared=True). Clients
+        # that don't yet read this field still benefit from the sticky
+        # `auth_url` above.
+        "cleared": is_terminal,
         "error": snap["error"],
         "started_at": snap["started_at"],
         "ended_at": snap["ended_at"],
@@ -757,6 +808,9 @@ def logout() -> dict[str, Any]:
         _up_state.update({
             "state": "idle",
             "auth_url": "",
+            # v0.7.12 (#146): logout clears the sticky URL too — the next
+            # Connect starts an entirely fresh auth flow with a fresh URL.
+            "last_auth_url": "",
             "error": "",
             "started_at": 0.0,
             "ended_at": 0.0,
