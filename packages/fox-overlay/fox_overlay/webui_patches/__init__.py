@@ -33,22 +33,10 @@ def apply_all() -> None:
     """
     from . import config
     config.apply()
-    # providers.py patch retired in v0.6.2 (#269) — the Fox supervisor-
-    # restart hook on set_provider_key was dead code. Upstream already
-    # reloads ~/.hermes/.env per-turn via
-    # _reload_runtime_env_preserving_config_authority() at
-    # gateway/run.py:15103, which picks up rotated keys without any
-    # gateway restart. Repro at fox-in-the-box-ai/fox-in-the-box#163.
-    # The overlay was actively worse than upstream — it disrupted
-    # in-flight SSE streams that upstream deliberately preserves by
-    # using invalidate_models_cache() instead of reload_config()
-    # (see upstream api/providers.py:2039-2041).
-    #
-    # models.py patch removed in Phase 8 follow-up #239 — upstream
-    # v0.51.84 now provides Fox's #1558 P0 guard NATIVELY.
+    # Note: providers.py patch retired v0.6.2 (#269) — upstream's per-turn
+    # env reload at gateway/run.py covers the original use case. models.py
+    # patch removed Phase 8 #239 — upstream v0.51.84 ships Fox's #1558 P0
+    # guard natively. See git history for the dropped patches.
     from . import streaming
     streaming.apply()
-    _log.warning(
-        "[fox-overlay] webui_patches.apply_all() complete (%d patch modules)",
-        2,  # config + streaming (providers retired v0.6.2 #269; models removed Phase 8 #239; updates DELETE PATH Phase 6)
-    )
+    _log.warning("[fox-overlay] webui_patches.apply_all() complete (%d patch modules)", 2)
