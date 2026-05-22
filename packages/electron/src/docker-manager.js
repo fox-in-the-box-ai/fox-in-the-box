@@ -326,7 +326,14 @@ async function ensureDockerAccessModeChosen() {
 function buildContainerCreateOptions(dataDir, accessMode) {
   const hostConfig = {
     AutoRemove: true,
-    Binds: [`${dataDir}:/data`],
+    // /app/workspace bind added in v0.7.9 (#145): the agent's
+    // default_workspace is /app/workspace, which lived on the container's
+    // writable layer and was wiped on every AutoRemove recreate. Map it
+    // to a host directory next to dataDir so files survive Fox restarts.
+    // The dataDir itself is already mapped to /data; workspace gets its
+    // own mount so existing :stable users don't see their dataDir's tree
+    // change shape.
+    Binds: [`${dataDir}:/data`, `${dataDir}/workspace:/app/workspace`],
     PortBindings: {
       [PORT]: [
         {

@@ -7,6 +7,34 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.7.9] - 2026-05-22
+
+Three real bug fixes off the backlog. One was a P1 data-loss bug that had been quietly costing users their workspace files since v0.3.x.
+
+### Fixed
+
+- **Workspace files now persist across container restarts (#145 — closes).** Pre-v0.7.9, when the agent wrote a file (via `terminal()` or `execute_code`), it landed in `/app/workspace` inside the container — which was on the writable layer of an `AutoRemove` container that recreated on every Fox app launch. Every restart silently wiped the workspace. Now `/app/workspace` is a host-bound volume next to the existing `/data` mount, so files survive. For Electron users: workspace lives at `~/.foxinthebox/workspace` (or `~/Library/Application Support/Fox in the Box/workspace` on macOS). For `install.sh` users: same — `$FOX_DATA_DIR/workspace`. **Heads-up: existing pre-v0.7.9 workspace contents were on the ephemeral layer and are already gone — this fix prevents future loss, not recovery.**
+- **A runaway agent script can no longer hang the WebUI (#149 — closes).** The hermes-gateway supervisord program is now launched with `nice -n 10`, so the gateway and all its child processes (terminal, execute_code, MCP servers) run at lower CPU priority. The WebUI stays at normal priority and preempts cleanly when the user clicks anything. Reproduction case the bug originally documented (benchmark script pegging all cores, requiring a reboot) is no longer fatal — the WebUI stays responsive even while the runaway script keeps running.
+- **Fox overlay bootstrap signature now lands in `docker logs` (#302 — closes).** Pre-v0.7.9, `[fox-overlay] bootstrap installed: dispatcher frozen, N GET + M POST handlers registered` went only to Python's logging at WARNING level, which supervisord captured to `/data/logs/hermes-webui.err`. Ops running `docker logs <container>` to check "did Fox load?" saw nothing — even though the overlay loaded fine. Bootstrap now ALSO writes the line directly to PID 1's stdout via `/proc/1/fd/1`, bypassing supervisord's per-program capture. The file-logged copy stays for searchability + rotation.
+
+### Heads-up for upgraders
+
+- The first launch after upgrade creates `~/.foxinthebox/workspace` (or platform-equivalent) — empty. If you previously had files inside the agent's workspace, they're already lost; this fix means new files going forward will persist.
+- The CPU-priority change is invisible in normal use. You may notice slightly higher latency on agent tool calls under heavy CPU load (the gateway is now preemptible) — that's the point. WebUI is never starved.
+- `docker logs` will now show the `[fox-overlay] bootstrap installed: ...` line within ~1s of container start. If you've been monitoring container health by other signals, this is one more.
+
+### Behind the scenes
+
+- The bootstrap log dual-write is best-effort: silently no-ops if `/proc/1/fd/1` isn't writable (non-Linux container runtime, restricted namespaces). The Python log path is unchanged so observability isn't worse than v0.7.8 anywhere.
+- `nice -n 10` on the gateway means descendant processes inherit niceness (Linux kernel behavior). No code change inside the agent or its tool implementations — pure ops fix at the supervisord layer.
+
+### What's next
+
+- v0.7.10 candidates: testid retrofit + wizard-happy-path Playwright spec (the largest remaining Phase 1 single piece); #146 Tailscale Safari auth-link timing (needs Safari verification); #291 Windows-containers detection.
+- v0.7.x continues — v0.8.0 only when the verification rebuild is genuinely solid.
+
+---
+
 ## [0.7.8] - 2026-05-22
 
 Playwright Phase 1 partial — 4 new integration specs added on top of Phase 0's `/health` baseline. Total verification suite: **5 specs** running on every PR against `:stable`. The remaining 8 Phase 1 specs (wizard flows, retry-panel, settings persistence, sentinel checks, `.fox-removals` enforcement) land in v0.7.9+ once the supporting test-hooks expand.
