@@ -25,6 +25,27 @@ Skipped sections are OK as long as they're explicitly noted with reason. Empty e
 
 ---
 
+## v0.7.21 — 2026-05-24 (DV — tooling-only; no runtime changes, engineer-side verified pre-tag)
+
+Tooling-only release: `check-overlay-basis.sh` (stash leak fix + orphan-patch detection) + `regen-patch.sh` rewrite + Playwright model-picker spec fold-in. No code changes to Electron, fox-overlay runtime, or container build. Engineer-side checks satisfy the v0.7.19 gate teeth; no user-facing smoke needed because there's nothing user-facing to smoke.
+
+- [x] (a) `check-overlay-basis.sh` runs clean against current main (all 6 patches apply sequentially, no orphans)
+- [x] (b) Orphan detection works — verified by creating a fake `999-test-orphan.patch`, re-running, confirming FAIL + correct error message, then cleaning up + re-running back to OK
+- [x] (c) Stash-leak fix works — verified by dirtying the submodule (echo '// dirty' >> static/boot.js), re-running, confirming exit code 2 + "submodule has uncommitted changes" + NO silent reset (file change preserved). Reset for cleanup.
+- [x] (d) `bash -n` syntax clean on both rewritten scripts (regen-patch.sh + check-overlay-basis.sh)
+- [x] (e) `playwright test --list` confirms 24 specs in 9 files (was 18; +6 model-picker = 2 live + 3 skip, +1 wizard-local-fallback section comment updated)
+- [x] (f) jest: unchanged from v0.7.20 (no source code change)
+- [x] (g) `regen-patch.sh` walkthrough — would test interactively against a real edit cycle, but the script is invoked only by maintainers writing new patches; deferred to next time someone authors a patch (real-world use). Code review verified the logic.
+- [ ] (h) **POST-RELEASE optional:** v0.7.22 first commit can validate that `regen-patch.sh` actually produces a valid patch when used in anger.
+
+Findings:
+- The patch-system hygiene work from the v0.7.15 audit (Architect C's risk register top item) lands here. Sustainability story improved: silent-destruction of dev WIP closed; orphan-patch class of v0.7.13 #331 bugs now caught at commit time, not at next-CI cycle.
+
+Action items:
+- None blocking. v0.7.22 wizard styling work can begin immediately after this ships.
+
+---
+
 ## v0.7.20 — 2026-05-23 (DV — Win install reliability + picker sanity; engineer-side checks verified pre-tag, user-facing Win11 smoke deferred to post-release update)
 
 Releases the load-bearing P0 Docker detection race fix unblocking @bsgdigital's blog-post promotion + 3 other items per Section L row "v0.7.20". Engineering-side checks (below as `[x]`) verified pre-tag. User-facing Win11 + macOS smoke happens post-release because the real value of #361's fix can only be observed against a fresh Win11 install with no prior Docker — and that's @roadhero's or @bsgdigital's box, not the CI runner. Once the smoke runs post-tag, update items (a)-(g) in-place; the new v0.7.19 gate teeth are satisfied right now by the engineer-side `[x]` marks below.

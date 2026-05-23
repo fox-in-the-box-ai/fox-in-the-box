@@ -97,16 +97,24 @@ test.describe('Phase 1 — wizard local-fallback API surface', () => {
   });
 });
 
-// ── v0.7.20 #336 — UNSKIP TARGET: :stable >= v0.7.20 ────────────────────────
+// ── #336 STATUS: tactical fix shipped v0.7.20, test infrastructure pending ──
 // Tracking: https://github.com/fox-in-the-box-ai/fox-in-the-box/issues/336
 //
-// Today this would fail because local_fallback.enable() always returns
-// get_status() with no `error` field. The v0.7.20 fix will plumb structured
-// errors through the enable path so the wizard alert can show "<actual cause>"
-// instead of "unknown error".
+// v0.7.20 shipped the TACTICAL fix: local_fallback.enable() now captures
+// exceptions into errors[] + setup.js:447 has a fallback chain that
+// never produces "unknown error". The `error` field IS populated when
+// enable() catches an exception.
 //
-// When v0.7.20 ships, remove `.skip` and rebase against the implementation.
-test.describe.skip('Phase 1 — v0.7.20 #336 local-fallback error UX (unskip after v0.7.20)', () => {
+// However these tests still require TEST INFRASTRUCTURE we don't have:
+// the `x-fitb-test-fail: supervisor-unavailable` header was a speculative
+// contract — v0.7.20 doesn't expose a failure-injection knob. Without one,
+// these tests would always see `ok: true` (because enable() doesn't fail
+// in the CI container) and the failure-path assertions can't be exercised.
+//
+// Unskip when (a) a /test/inject-failure hook is added (v0.7.22+ test-infra
+// work), OR (b) the root-cause Windows #336 fix lands and we have a real
+// failure mode to reproduce on Linux too.
+test.describe.skip('Phase 1 — #336 local-fallback error UX (tactical fix shipped v0.7.20; unskip pending failure-injection hook)', () => {
   test('enable() failure response includes a non-empty `error` string', async ({ baseURL }) => {
     // To exercise the failure path on demand, v0.7.20 should introduce a
     // FITB_TEST_MODE-only knob to force enable() to fail (e.g. a header
