@@ -11,13 +11,11 @@ name: validate-overlay
 # Mirrors what `make validate-overlay` does locally for pre-commit users.
 
 on:
+  # v0.7.19+ branch protection requires `validate` as a status check on
+  # every PR merge to main. See note in .github/workflows/playwright.yml
+  # for the same rationale — required-but-path-filtered creates a chicken-
+  # and-egg that blocks docs-only PRs (PR #354 was the first to hit it).
   pull_request:
-    paths:
-      - 'packages/fox-overlay/**'
-      - 'forks/**'
-      - 'packages/integration/Dockerfile'
-      - 'packages/integration/entrypoint.sh'
-      - '.github/workflows/validate-overlay.yml'
   workflow_dispatch: {}
 
 concurrency:

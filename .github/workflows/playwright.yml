@@ -9,12 +9,14 @@ name: Playwright
 # pattern is exactly what let #331 ship for 6 releases — closing it.
 
 on:
+  # v0.7.19+ branch protection requires `smoke` as a status check on every
+  # PR merge to main. If we kept path filters here, docs-only PRs (which
+  # never touch qa/playwright/** or packages/fox-overlay/**) would never
+  # trigger the workflow, never post a status, and the required check would
+  # block merge forever (the chicken-and-egg that bit PR #354). Trade: every
+  # PR pays ~3 min for Playwright smoke against :stable, even docs-only PRs.
+  # Acceptable cost for an unconditional gate.
   pull_request:
-    paths:
-      - 'qa/playwright/**'
-      - 'packages/fox-overlay/**'
-      - 'packages/integration/**'
-      - '.github/workflows/playwright.yml'
   schedule:
     # Nightly full (chromium + firefox + webkit × 4 shards) — 04:00 UTC
     - cron: '0 4 * * *'
