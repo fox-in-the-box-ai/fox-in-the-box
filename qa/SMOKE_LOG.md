@@ -25,6 +25,29 @@ Skipped sections are OK as long as they're explicitly noted with reason. Empty e
 
 ---
 
+## v0.7.18 — 2026-05-23 (DV — first TRUE non-bypass; covers upgrade-path + reset + ollama tile)
+
+Pre-tag smoke on PR-built container image + Mac DMG + Win11 install. Fill in `[x]` before pushing the tag:
+
+- [ ] (a) #340 Upgrade: install v0.7.18 over v0.7.17 → container auto-recreates with new image digest
+- [ ] (b) #340 `/data` + workspace survive the recreate
+- [ ] (c) #341 Tray "Reset Fox completely…" menu item present; confirm dialog defaults to Cancel
+- [ ] (d) #341 Confirm "Yes, reset everything" → container + image gone, app quits, userData dir gone within ~10s
+- [ ] (e) #341 Relaunch shows fresh wizard
+- [ ] (f) #337 Ollama tile shows "Install Ollama from ollama.com/download" when no Ollama
+- [ ] (g) #337 With Ollama installed but no models → tile shows "Pull a model" hint
+- [ ] (h) #337 After `ollama pull phi4-mini` → tile shows the real model
+- [ ] (i) Regression: OpenRouter + Anthropic + Gemini chats still work
+- [ ] (j) Playwright CI: test-hooks-safety unskip passes + wizard-renders 5 specs all pass
+
+Findings:
+- (fill in pre-tag)
+
+Action items:
+- (fill in pre-tag)
+
+---
+
 ## v0.7.17 — 2026-05-23 (DV — first non-bypass entry; ends 3-release streak)
 
 The release that ends the bypass streak. Pre-tag smoke executed against the PR's built container image.

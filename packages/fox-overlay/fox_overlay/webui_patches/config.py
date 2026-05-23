@@ -118,8 +118,21 @@ def _check_signature(callable_obj, expected: str, label: str) -> None:
 
 
 def _splice_ollama_group(result: dict) -> None:
-    """Append a local-Ollama group to ``result['groups']`` if the daemon
-    is reachable and has installed models. No-op otherwise.
+    """Append a local-Ollama group to ``result['groups']``.
+
+    v0.7.18 #337: ALWAYS adds the group, with state-aware content. Previously
+    no-op'd when the daemon wasn't reachable or had no models, leaving users
+    who hadn't installed Ollama with no way to discover Fox supports it.
+    Now:
+      * daemon reachable + models present → standard model list (pre-v0.7.18 behavior)
+      * daemon reachable, no models      → synthetic placeholder entry with `pull` hint
+      * daemon not reachable             → synthetic placeholder entry with `install` hint
+
+    Synthetic entries use `id` prefix ``__ollama_hint:`` so the frontend (and
+    any downstream selection code) can detect + render them as
+    non-selectable. The placeholder is intentionally crude — a proper
+    in-settings install/pull hint UI lands in a follow-up. This change is
+    purely about making Ollama discoverable from the picker.
 
     Sourced from ``fox_overlay.webui_modules.ollama.get_models()``,
     which already owns daemon detection, custom-URL handling (#109),
@@ -132,22 +145,6 @@ def _splice_ollama_group(result: dict) -> None:
     except ImportError:
         return
 
-    status = _fox_ollama.get_models()
-    if not isinstance(status, dict) or not status.get("running"):
-        return
-
-    models = []
-    for entry in status.get("models") or []:
-        if not isinstance(entry, dict):
-            continue
-        name = (entry.get("name") or "").strip()
-        if not name:
-            continue
-        models.append({"id": name, "label": _format_ollama_label(name)})
-
-    if not models:
-        return
-
     groups = result.setdefault("groups", [])
     if not isinstance(groups, list):
         return
@@ -155,11 +152,46 @@ def _splice_ollama_group(result: dict) -> None:
     if any(isinstance(g, dict) and g.get("provider_id") == "ollama" for g in groups):
         return
 
-    groups.append({
+    status = _fox_ollama.get_models()
+    daemon_running = isinstance(status, dict) and bool(status.get("running"))
+
+    models: list[dict] = []
+    if daemon_running:
+        for entry in status.get("models") or []:
+            if not isinstance(entry, dict):
+                continue
+            name = (entry.get("name") or "").strip()
+            if not name:
+                continue
+            models.append({"id": name, "label": _format_ollama_label(name)})
+
+    if daemon_running and models:
+        ollama_status = "ready"
+        status_message = None
+    elif daemon_running and not models:
+        ollama_status = "no_models"
+        status_message = "Ollama detected. Pull a model: ollama pull phi4-mini"
+        models = [{
+            "id": "__ollama_hint:no_models",
+            "label": "Pull a model: ollama pull phi4-mini",
+        }]
+    else:
+        ollama_status = "no_daemon"
+        status_message = "Ollama not installed. Download from ollama.com/download — refresh after."
+        models = [{
+            "id": "__ollama_hint:no_daemon",
+            "label": "Install Ollama from ollama.com/download",
+        }]
+
+    group: dict = {
         "provider": "Ollama",
         "provider_id": "ollama",
         "models": models,
-    })
+    }
+    if status_message:
+        group["status_message"] = status_message
+        group["ollama_status"] = ollama_status
+    groups.append(group)
 
 
 def _wrap_get_available_models(upstream_module) -> None:

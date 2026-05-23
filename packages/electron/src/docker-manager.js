@@ -460,9 +460,55 @@ async function createAndStartContainer() {
   }
 }
 
+/**
+ * Resolve the digest of the currently-tagged IMAGE on disk. Returns null if
+ * the image isn't pulled locally (which means createAndStartContainer will
+ * trigger a fresh create against whatever the upstream registry serves).
+ */
+async function _getCurrentImageId() {
+  try {
+    const inspect = await docker.getImage(IMAGE).inspect();
+    return inspect && inspect.Id ? inspect.Id : null;
+  } catch (err) {
+    log.debug('Image inspect failed (probably not pulled):', err.message);
+    return null;
+  }
+}
+
 async function ensureContainerRunning() {
   const existing = await getContainerByName({ all: true });
   if (existing) {
+    // v0.7.18 #340: if the existing container was created from a stale image
+    // (older digest than what's currently tagged IMAGE), recreate it. Without
+    // this check, upgrades publish a new container image but users keep
+    // running the old container against the old image — the v0.7.17 Anthropic
+    // fix shipped to :stable but @roadhero's machine stayed on v0.7.16 until
+    // we manually `docker rm` + `docker rmi`'d it.
+    //
+    // Compare existing.ImageID (full sha256 of the image the container was
+    // created from) against the current `IMAGE` tag's resolved digest. If
+    // they differ → stop, remove, and fall through to createAndStartContainer.
+    // The bind mounts on /data + /app/workspace preserve user data across
+    // recreate; nothing else is lost.
+    const currentImageId = await _getCurrentImageId();
+    if (currentImageId && existing.ImageID && existing.ImageID !== currentImageId) {
+      log.info(
+        `Container image is stale (existing=${existing.ImageID.slice(0, 19)}…, ` +
+        `current=${currentImageId.slice(0, 19)}…) — recreating against new image`,
+      );
+      const container = docker.getContainer(existing.Id);
+      try {
+        if (existing.State === 'running') {
+          await container.stop({ t: 10 });
+        }
+        await container.remove({ force: true });
+      } catch (err) {
+        log.warn('Failed to remove stale container before recreate:', err.message);
+      }
+      const created = await createAndStartContainer();
+      return { ...created, reason: 'recreated-after-image-upgrade' };
+    }
+
     const container = docker.getContainer(existing.Id);
     if (existing.State === 'running') {
       log.info('Container already running:', CNAME);
@@ -502,6 +548,45 @@ async function restartContainer() {
   const container = docker.getContainer(running.Id);
   await container.restart({ t: 10 });
   log.info('Container restarted:', CNAME);
+}
+
+/**
+ * v0.7.18 #341: complete docker-side teardown for the tray Reset Fox flow.
+ *
+ * Stops + force-removes the named container (if any), then untags the
+ * `:stable` image so the next launch pulls a fresh manifest. Safe to call
+ * when the container/image don't exist — each step swallows its own
+ * "not found" failure independently so we make best effort across both.
+ */
+async function removeContainerAndImage() {
+  if (!docker) return;
+  // 1) Container
+  try {
+    const existing = await getContainerByName({ all: true });
+    if (existing) {
+      const container = docker.getContainer(existing.Id);
+      try {
+        if (existing.State === 'running') await container.stop({ t: 10 });
+      } catch (err) {
+        log.debug('removeContainerAndImage: stop failed:', err.message);
+      }
+      try {
+        await container.remove({ force: true });
+        log.info('removeContainerAndImage: container removed');
+      } catch (err) {
+        log.warn('removeContainerAndImage: container remove failed:', err.message);
+      }
+    }
+  } catch (err) {
+    log.warn('removeContainerAndImage: container lookup failed:', err.message);
+  }
+  // 2) Image
+  try {
+    await docker.getImage(IMAGE).remove({ force: true });
+    log.info(`removeContainerAndImage: image ${IMAGE} removed`);
+  } catch (err) {
+    log.debug(`removeContainerAndImage: image remove failed (may not be pulled): ${err.message}`);
+  }
 }
 
 async function getDiagnostics() {
@@ -616,5 +701,6 @@ module.exports = {
   startContainer,
   stopContainer,
   restartContainer,
+  removeContainerAndImage,
   getDiagnostics,
 };
