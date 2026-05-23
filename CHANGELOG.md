@@ -7,6 +7,36 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.7.18] - 2026-05-23
+
+**Upgrades just work + Reset Fox tray menu + Ollama tile always present.** Most of v0.7.18 traces back to one debugging session with @roadhero post-v0.7.17 release where we discovered: (1) Fox doesn't re-create the container when the image updates, so users stay on the old container after upgrading, (2) cleaning Fox state required `cmd /c rd /s /q` voodoo because there was no in-app reset, and (3) the Ollama provider tile was hidden entirely when Ollama wasn't installed, so users couldn't even discover local-models support.
+
+### Added
+
+- **Tray menu: "Reset Fox completely…"** — one click to stop the container, remove the image, and delete all Fox data + settings + conversations. Replaces the manual docker-stop / docker-rm / docker-rmi / cmd-rd dance documented in the v0.7.17 debug thread. Spawns a detached cleanup process so the userData dir deletion happens AFTER Electron releases its LevelDB locks (the inline-delete-while-running failure mode we hit). Includes a destructive-action confirmation dialog (default = Cancel). (`packages/electron/src/{tray-manager,docker-manager}.js`)
+
+### Fixed
+
+- **#340 Container is re-created when the image updates.** `ensureContainerRunning` (`packages/electron/src/docker-manager.js:453+`) now compares the existing container's `ImageID` to the currently-tagged `:stable` image digest. If they differ, the old container is stopped, removed, and a fresh one is created from the new image. Bind mounts on `/data` and `/app/workspace` preserve all user data across the recreate. Closes the root cause of the v0.7.17→v0.7.18 upgrade-loop debug session.
+- **#337 Ollama tile is always present in the model picker.** `_splice_ollama_group` (`packages/fox-overlay/fox_overlay/webui_patches/config.py:120+`) was a no-op when the Ollama daemon wasn't reachable or had no installed models — so users without Ollama saw no hint that Fox supported local models at all. Now the group is always present, with state-aware content: "Install Ollama from ollama.com/download" when no daemon, "Pull a model: ollama pull phi4-mini" when daemon-up-but-empty, and the standard model list otherwise. Synthetic hint entries use the `__ollama_hint:` ID prefix so future frontend work can render them as non-selectable.
+
+### Changed
+
+- **`wizard-renders` redirect-fires + `test-hooks-safety` specs are both live in CI smoke now.** `test-hooks-safety.spec.ts:30` was `describe.skip` for v0.7.17 only (chicken-and-egg from the patch-003 `/test/` whitelist landing in the same release). With `:stable` advancing to v0.7.17, the unskip can finally land. Both regression nets are live + asserting from this release forward.
+
+### Behind the scenes
+
+- **First non-bypass `qa/SMOKE_LOG.md` entry — for real this time.** v0.7.14, v0.7.15, v0.7.16 shipped as bypass entries; v0.7.17 was tagged with the entry header but checkboxes unchecked. v0.7.18 runs the Section L row against a real Win11 + Mac smoke before tag.
+- The Reset Fox spawn-detached-cleanup pattern is documented for re-use: the `spawnDetachedCleanup` helper in `tray-manager.js` is the canonical "delete userData on exit" primitive.
+
+### What's next
+
+- **v0.7.19:** path alignment — `productName: fox-in-the-box` in package.json so userData drops the `@` prefix; one-time migration shim from old `@fox-in-the-box` dir. Surfaced by @roadhero in the v0.7.17 debug as the systemic root of the cleanup mess.
+- **#336 wizard local-fallback "unknown error":** still open; waiting on Win11 container logs to diagnose. Likely scoped into v0.7.19 or v0.7.20.
+- Remaining meta-gaps from the v0.7.15 audit: orphan-patch detection in `check-overlay-basis.sh`, the broken `regen-patch.sh` rewrite.
+
+---
+
 ## [0.7.17] - 2026-05-23
 
 **Anthropic, Gemini, and Bedrock providers actually work now + the redirect-fires Playwright spec goes live.** v0.7.16's post-release smoke surfaced a class of bug: upstream's hermes-agent gates each provider's Python package behind an optional `pyproject.toml` extra (their lazy-deps policy), and the container build was installing hermes-agent without any extras. Result: a user adding an Anthropic key (or picking Gemini natively) hit `ImportError: The 'anthropic' package is required` at first message. Same shape would have surfaced for Gemini + Bedrock the moment anyone tried them. All three now installed at container build time. Also unskips the `wizard-renders` redirect-fires assertions deferred from v0.7.15 (chicken-and-egg now resolved — `:stable` is v0.7.16 which has patch 003 actually applied).
