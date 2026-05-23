@@ -9,9 +9,9 @@ releases without carrying a perpetually-conflicting fork.
 
 | Path | Purpose |
 |---|---|
-| `patches/{agent,webui}/` | Quilt-style patch series applied at Docker build time. Today: 1 agent patch (gateway bootstrap shim), 2 webui patches (server.py + routes.py dispatcher hooks). |
+| `patches/{agent,webui}/` | Quilt-style patch series applied at Docker build time. Today: 1 agent patch (gateway bootstrap shim), 3 webui patches (server.py bootstrap + routes.py dispatcher hook + server.py onboarding-redirect added in v0.7.13/v0.7.15). |
 | `.fox-removals` | File paths from upstream that Fox doesn't ship (consumed by the Dockerfile installer). |
-| `fox_overlay/webui_modules/` | Additive HTTP route modules — register handlers with `fox_overlay.dispatch.register_get/post`. Today: ollama, tailscale, local_fallback, models_download, hostname, onboarding. |
+| `fox_overlay/webui_modules/` | Additive HTTP route modules — register handlers with `fox_overlay.dispatch.register_get/post`. Today: ollama, tailscale, local_fallback, models_download, hostname, onboarding, test_hooks (FITB_TEST_MODE=1 only). |
 | `fox_overlay/webui_patches/` | Runtime monkey-patches on upstream webui modules via `inspect.getsource` + textual substitution. Today: config (settings defaults + #303 OLLAMA picker splice), streaming (FITB#9 plumbing + #303 silent failover). |
 | `fox_overlay/agent_plugins/` | Entry-point-loaded agent monkey-patches (runtime_provider, auxiliary_client, cron_diagnostics). |
 | `fox_overlay/agent_memory_plugins/` | Fox-only memory providers COPYd into upstream's `plugins/memory/` dir at build time. |

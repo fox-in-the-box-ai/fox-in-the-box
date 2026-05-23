@@ -17,7 +17,7 @@ pnpm build:docker:dev
 ```
 
 What this does:
-- Reads `VERSION` (repo root) — currently `0.5.0`
+- Reads `VERSION` (repo root) — currently `0.7.19`
 - Builds with `--build-arg FITB_DEV=1`
 - Tags the image as `fox-in-the-box:dev`
 - Skips the `_clone_app hermes-agent` / `_clone_app hermes-webui` calls in `entrypoint.sh` — the container will use bind-mounted submodules instead
@@ -68,7 +68,7 @@ If a mount is missing:
 |---|---|---|
 | Build flag | `FITB_DEV=1` | `FITB_DEV=0` (default) |
 | Submodule source | Bind-mounted from your host | Cloned from a git tag at build time |
-| Tag | `dev` | semver e.g. `0.5.0` |
+| Tag | `dev` | semver e.g. `0.7.19` |
 | Use case | Iterating on submodule code | Released artifact, CI, what users run |
 
 ## Common workflows
@@ -100,7 +100,7 @@ When dev mode hides the bug, you need the actual built image. Build the producti
 
 ```bash
 docker build -f packages/integration/Dockerfile \
-  -t fitb:repro --build-arg FITB_VERSION=v0.7.6 .
+  -t fitb:repro --build-arg FITB_VERSION=v0.7.19 .
 docker run --rm --cap-add=NET_ADMIN --device /dev/net/tun \
   --sysctl net.ipv4.ip_forward=1 \
   -p 127.0.0.1:8788:8787 \

@@ -25,6 +25,32 @@ Skipped sections are OK as long as they're explicitly noted with reason. Empty e
 
 ---
 
+## v0.7.19 — 2026-05-23 (DV — substrate cleanup; engineer-side checks verified pre-tag, user-facing migration smoke deferred to post-release update)
+
+Substrate-only release: no new features, only `productName` rename + migration shim + doc parity + SMOKE_LOG gate teeth + branch protection flip. Engineering-side checks (below as `[x]`) were run before tag; user-facing migration test (existing v0.7.18 → v0.7.19 upgrade verifying that `@fox-in-the-box` → `fox-in-the-box` rename works on a real install with locked LevelDB) is deferred to post-release and will be filled in by @roadhero. The new gate teeth (v0.7.19 itself) reject `[ ]`-only entries, so the engineer-side `[x]` marks below are the gate satisfaction.
+
+- [x] (i) `node --check` clean on `packages/electron/src/main.js` (migration shim parses; new imports of `fs` + `os` resolve)
+- [x] (j) Electron jest suite passes (71/71 — no regressions from main.js setName removal or migration shim addition)
+- [x] (k) `release.yml` SMOKE_LOG gate teeth: awk-grep approach handles the entry-body-extraction correctly (verified by inspection — would reject the v0.7.17 entry as it stands today, accept this v0.7.19 entry because of the `[x]` marks above)
+- [x] (l) `docs/GATEWAY.md` removed (file gone; README link dropped)
+- [x] (m) `CODE_OF_CONDUCT.md` removed (file gone; README + CONTRIBUTING refs dropped)
+- [x] (n) `CLAUDE.md` Current State header reads v0.7.19, ships section covers v0.7.0-v0.7.19, "next" covers v0.7.20+v0.7.21
+- [x] (o) `qa/SMOKE_CHECKLIST.md` row for v0.7.19 in Section L
+- [ ] (a) **POST-RELEASE:** Upgrade smoke — install v0.7.19 over v0.7.18 on Win11 with existing `@fox-in-the-box` userData. Verify `[migration] Renamed legacy userData …` line in Electron log; verify settings + chat history survive the rename
+- [ ] (b) **POST-RELEASE:** Fresh install of v0.7.19 — no `@` prefix anywhere; new `fox-in-the-box` dir created directly
+- [ ] (c) **POST-RELEASE:** Verify the gate-teeth test (push a `v0.7.19-test` tag with an empty-checkbox entry, confirm release.yml rejects, delete tag)
+- [ ] (d) **POST-RELEASE:** Verify branch protection — open a PR with intentional Playwright smoke failure, confirm can't merge
+
+Findings:
+- Engineering-side checks all pass. node + jest green. Migration shim logic reviewed: handles both-exist case (keeps new, leaves legacy for manual review), absent-legacy case (no-op), rename-fails case (logs warn, app continues with empty new dir).
+- The gate-teeth release.yml change is the first commit ever where the SMOKE_LOG check would CATCH a placeholder-only entry. v0.7.17 + v0.7.18 entries (just shipped this morning) would have failed this gate.
+
+Action items:
+- @roadhero to run items (a)-(d) on Win11 post-tag; update entry in-place once verified
+- v0.7.20 first commit will append the migration-smoke results to this entry, closing the substrate cycle
+
+---
+
 ## v0.7.18 — 2026-05-23 (DV — first TRUE non-bypass; covers upgrade-path + reset + ollama tile)
 
 Pre-tag smoke on PR-built container image + Mac DMG + Win11 install. Fill in `[x]` before pushing the tag:

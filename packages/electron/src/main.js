@@ -3,6 +3,8 @@
 const { app, BrowserWindow, dialog, shell, clipboard, ipcMain } = require('electron');
 const { spawn, exec } = require('child_process');
 const path = require('path');
+const fs = require('fs');
+const os = require('os');
 const log = require('electron-log');
 const docker = require('./docker-manager');
 const { waitUntilHealthy } = require('./health-check');
@@ -34,9 +36,53 @@ app.on('window-all-closed', (e) => {
   e.preventDefault();
 });
 
+// v0.7.19: one-time migration from the legacy `@fox-in-the-box` userData
+// dir (npm-scope-leaked-into-Electron path; package.json had no productName)
+// to the new `fox-in-the-box` path (productName added in v0.7.19). Runs
+// BEFORE app.whenReady() so the rename happens before Electron's session/
+// LevelDB layer creates the new path. If the rename fails (perms, file
+// locks), we log and continue — Electron will create a fresh `fox-in-the-box`
+// dir and the user can manually salvage `@fox-in-the-box` via Tray → Reset.
+function migrateLegacyUserData() {
+  const newPath = app.getPath('userData');  // resolves to .../fox-in-the-box
+  let legacyPath;
+  switch (process.platform) {
+    case 'win32':
+      legacyPath = path.join(os.homedir(), 'AppData', 'Roaming', '@fox-in-the-box');
+      break;
+    case 'darwin':
+      legacyPath = path.join(os.homedir(), 'Library', 'Application Support', '@fox-in-the-box');
+      break;
+    default:
+      legacyPath = path.join(os.homedir(), '.config', '@fox-in-the-box');
+      break;
+  }
+  if (!fs.existsSync(legacyPath)) return;
+  if (fs.existsSync(newPath)) {
+    log.info(
+      `[migration] Both legacy (${legacyPath}) and new (${newPath}) userData dirs exist — ` +
+      `keeping new, leaving legacy alone for manual review.`,
+    );
+    return;
+  }
+  try {
+    fs.renameSync(legacyPath, newPath);
+    log.info(`[migration] Renamed legacy userData ${legacyPath} -> ${newPath}`);
+  } catch (err) {
+    log.warn(
+      `[migration] Failed to rename legacy userData (${legacyPath} -> ${newPath}): ` +
+      `${err.message}. Manual cleanup may be needed via Tray → Reset Fox completely…`,
+    );
+  }
+}
+
+migrateLegacyUserData();
+
 app.whenReady().then(main).catch(handleStartupError);
 app.setAppUserModelId('io.foxinthebox.desktop');
-app.setName('Fox in the box');
+// v0.7.19: `app.setName('Fox in the box')` removed — `productName: fox-in-the-box`
+// in package.json now drives the userData path, which is what we want
+// (drops the `@` prefix that came from the npm scope `@fox-in-the-box/electron`).
 
 // ─── Progress window ─────────────────────────────────────────────────────────
 

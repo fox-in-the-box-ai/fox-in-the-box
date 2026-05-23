@@ -46,17 +46,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # v0.7.15 SMOKE_LOG gate — per the v0.7.13 retrospective on #331.
-      # Forces a written audit trail: every release tag must have a
-      # matching entry in qa/SMOKE_LOG.md before the release publishes.
-      # An entry is what proves the smoke checklist was actually run for
-      # this version (pre-v0.7.14 the "Currently testing: vX.Y.Z" header
-      # in SMOKE_CHECKLIST.md was the only signal, and it sat at v0.7.6
-      # for 6 releases — which is how #331 shipped in production for
-      # weeks). A bypass is possible by adding an entry with an explicit
-      # "Bypass reason:" line — the gate just requires the matching header
-      # exists, so the maintainer must consciously lie in writing if they
-      # skip the smoke. Both states leave an audit trail.
+      # SMOKE_LOG gate.
+      # v0.7.15 added the header check (every release tag must have a matching
+      # `## vX.Y.Z` entry in qa/SMOKE_LOG.md). v0.7.19 added the body check
+      # (the entry must contain at least one `- [x]` line OR an explicit
+      # `Bypass reason:` line). The v0.7.16/17/18 bypass streak revealed the
+      # original gate's loophole: the header existed but the body was empty
+      # `[ ]` placeholders, so the gate passed while the smoke hadn't actually
+      # run. Real smoke leaves real check-marks; bypass leaves a written
+      # justification. Empty placeholders are no longer accepted.
       - name: Smoke-log gate (require qa/SMOKE_LOG.md entry for this tag)
         run: |
           set -euo pipefail
@@ -77,7 +75,22 @@ jobs:
             echo "::error::To bypass deliberately (hotfix or infrastructure-only release), add the entry with a 'Bypass reason:' line."
             exit 1
           fi
-          echo "✅ SMOKE_LOG.md entry for ${TAG} present"
+          # v0.7.19 body check: capture the entry block (header → next ## v or EOF)
+          # and require at least one of: a `- [x]` checked-box line, OR a
+          # `Bypass reason:` line. Catches the v0.7.16-18 pattern where the
+          # entry header existed but every box was `[ ]` unchecked.
+          ENTRY="$(awk -v tag="^## ${TAG}" '
+            $0 ~ tag {flag=1; next}
+            flag && /^## v[0-9]+\.[0-9]+/ {flag=0}
+            flag {print}
+          ' qa/SMOKE_LOG.md)"
+          if ! printf '%s\n' "$ENTRY" | grep -qE '^- \[x\]|^Bypass reason:'; then
+            echo "::error::qa/SMOKE_LOG.md entry for ${TAG} exists but has no checked boxes and no 'Bypass reason:' line."
+            echo "::error::Per v0.7.19 gate teeth: the entry body must contain at least one '- [x]' (real smoke was run) OR a 'Bypass reason:' line (explicit waiver in writing)."
+            echo "::error::Empty '- [ ]' placeholders mean the smoke wasn't actually performed — exactly the pattern the v0.7.13 retro recommended catching."
+            exit 1
+          fi
+          echo "✅ SMOKE_LOG.md entry for ${TAG} present + body is non-empty (has checked boxes or explicit bypass)"
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
