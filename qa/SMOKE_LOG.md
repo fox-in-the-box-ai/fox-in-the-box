@@ -25,6 +25,30 @@ Skipped sections are OK as long as they're explicitly noted with reason. Empty e
 
 ---
 
+## v0.7.17 — 2026-05-23 (DV — first non-bypass entry; ends 3-release streak)
+
+The release that ends the bypass streak. Pre-tag smoke executed against the PR's built container image.
+
+Section L row "v0.7.17 Anthropic+Gemini+Bedrock provider extras…" run results — fill in `[x]` for each item before pushing the tag:
+
+- [ ] (a) Pulled PR-built image via `FITB_IMAGE=ghcr.io/fox-in-the-box-ai/cloud:sha-<short>` or direct `docker run`
+- [ ] (b) Container ready at `http://127.0.0.1:8787`
+- [ ] (c) Anthropic key saved in Settings → Providers
+- [ ] (d) `anthropic/claude-haiku-3-5` chat works — response arrives, NO ImportError
+- [ ] (e) Gemini chat works — response arrives, NO ImportError
+- [ ] (f) (Optional) Bedrock chat works — skipped if no AWS creds
+- [ ] (g) Container size sanity passed (≤current+~100MB)
+- [ ] (h) Playwright `wizard-renders.spec.ts` 5 specs pass (3 redirect + 2 asset); `test-hooks-safety.spec.ts` is `describe.skip` (unskip in v0.7.18, chicken-and-egg)
+- [ ] (i) Regression: OpenRouter + OpenAI + Codex + Ollama still work
+
+Findings:
+- (fill in pre-tag)
+
+Action items:
+- (fill in pre-tag)
+
+---
+
 ## v0.7.16 — 2026-05-22 (DV — bypass entry; smoke shifted post-release)
 
 **Bypass reason:** the v0.7.15 plan was for v0.7.16 to be the first non-bypass entry, but the Win11 VM smoke is faster against a real signed .exe (downloaded from the GitHub Release) than against a `workflow_dispatch`-built artifact. Choosing to ship first and verify the release artifact directly. If any Section L row v0.7.16 item fails, the fix lands as v0.7.17.

@@ -302,8 +302,16 @@ RUN set -eu; \
     done; \
     rm -f /tmp/fox-removals
 
+    # v0.7.17: install provider extras for every adapter the FITB UI presents
+    # natively. Upstream pyproject.toml gates each provider's python package
+    # behind an extra (lazy-deps policy); without these the provider throws
+    # `ImportError: The '<pkg>' package is required` at first message.
+    # Coverage: anthropic (Sonnet/Haiku/Opus native), google (Gemini native +
+    # cloudcode adapters), bedrock (boto3 for AWS Bedrock). OpenRouter +
+    # OpenAI + Codex + Ollama don't need extras (openai pkg is core; Ollama
+    # is HTTP-only). Revisit when adding more providers to the picker.
 RUN set -eux; \
-    pip install -e /app/hermes-agent --quiet --no-cache-dir; \
+    pip install -e '/app/hermes-agent[anthropic,bedrock,google]' --quiet --no-cache-dir; \
     if [ -f /app/hermes-webui/pyproject.toml ] || [ -f /app/hermes-webui/setup.py ]; then \
         pip install -e /app/hermes-webui --quiet --no-cache-dir; \
     elif [ -f /app/hermes-webui/requirements.txt ]; then \

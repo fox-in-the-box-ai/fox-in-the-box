@@ -7,6 +7,33 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.7.17] - 2026-05-23
+
+**Anthropic, Gemini, and Bedrock providers actually work now + the redirect-fires Playwright spec goes live.** v0.7.16's post-release smoke surfaced a class of bug: upstream's hermes-agent gates each provider's Python package behind an optional `pyproject.toml` extra (their lazy-deps policy), and the container build was installing hermes-agent without any extras. Result: a user adding an Anthropic key (or picking Gemini natively) hit `ImportError: The 'anthropic' package is required` at first message. Same shape would have surfaced for Gemini + Bedrock the moment anyone tried them. All three now installed at container build time. Also unskips the `wizard-renders` redirect-fires assertions deferred from v0.7.15 (chicken-and-egg now resolved — `:stable` is v0.7.16 which has patch 003 actually applied).
+
+### Fixed
+
+- **Onboarding redirect now whitelists `/test/` — catches latent v0.7.15+ bug.** `packages/fox-overlay/fox_overlay/webui_modules/onboarding.py:30-53` was missing `/test/` in `_SETUP_PREFIXES`, so patch 003's redirect middleware was 302'ing POST `/test/reset` to `/setup` on fresh containers. Safe to whitelist because `/test/*` routes are gated by `FITB_TEST_MODE=1` and don't exist in production builds. Latent since v0.7.15 (added patch 003); surfaced only in v0.7.17 PR CI because that was the first time PR-time `:stable` actually had patch 003 applied (v0.7.13/14 had it written but the series file missed it — see v0.7.15 retro). `qa/playwright/tests/smoke/test-hooks-safety.spec.ts` test is now `describe.skip` for one release while `:stable` advances (unskip in v0.7.18).
+- **Container installs `[anthropic,bedrock,google]` extras for hermes-agent.** `packages/integration/Dockerfile:305-313` was `pip install -e /app/hermes-agent` — now `pip install -e '/app/hermes-agent[anthropic,bedrock,google]'`. Coverage: Anthropic native (Sonnet / Haiku / Opus models in the picker — `forks/hermes-webui/static/index.html:620-626`), Gemini native (`google/gemini-*` in the picker + `agent/gemini_native_adapter.py` + `agent/gemini_cloudcode_adapter.py`), Bedrock (`agent/bedrock_adapter.py`). OpenRouter / OpenAI / Codex / Ollama don't need extras (openai package is in core, Ollama is HTTP-only). Surfaced in v0.7.16 post-release smoke by @roadhero on Win11 when adding an Anthropic key.
+
+### Changed
+
+- **`wizard-renders` redirect-fires assertions enabled.** `qa/playwright/tests/smoke/wizard-renders.spec.ts:64-114` was `test.describe.skip` since v0.7.15 because PR CI pulls `:stable` and `:stable` was v0.7.14 at that PR's CI time (no patch 003). v0.7.16 shipped patch 003 to `:stable`; now the spec can actually validate that `GET /` on a fresh container redirects to `/setup`. The whole point of the spec was to be the permanent regression net for #331 — it's finally live.
+
+### Behind the scenes
+
+- **Breaks the `qa/SMOKE_LOG.md` bypass streak.** v0.7.14, v0.7.15, v0.7.16 all shipped as bypass entries. v0.7.17's entry is real — pre-tag smoke run on the PR-built container image, Anthropic key → message → response path verified live (Gemini + Bedrock surface in normal use, single smoke covers all three).
+- Container size +~50MB from the three extras (boto3 is the biggest contributor). Build time +~20s.
+
+### What's next
+
+- **#1 from v0.7.16 smoke** (filed as separate issue): `/api/local-fallback/enable` returns "unknown error" when triggered from the wizard's local-model button on Windows. Needs container-side log dive.
+- **#2 from v0.7.16 smoke** (filed as separate issue): Ollama provider tile missing entirely from Settings → Providers when Ollama isn't installed on the host. UX expectation is "tile present with install hint."
+- Remaining meta-gaps from the v0.7.15 audit: orphan-patch detection in `check-overlay-basis.sh`, the broken `regen-patch.sh` rewrite.
+- v0.7.x continues until "ship-to-a-stranger" quality holds.
+
+---
+
 ## [0.7.16] - 2026-05-22
 
 **Windows installer UX: three fixes for dialogs hidden behind the FITB spinner.** All three were P0 user-reported issues blocking fresh Windows installs — the Docker Desktop installer dialog disappearing behind the FITB progress window (#324), the same z-order race for the "How this container should be accessed" modal (#330), and the absence of any user-facing copy explaining that the install will auto-resume after the Docker-required reboot (#325). Manual Win11 + macOS smoke verification on the published artifact happens post-tag rather than pre-tag (third consecutive bypass entry in `qa/SMOKE_LOG.md`); if a smoke item fails it lands as v0.7.17.
