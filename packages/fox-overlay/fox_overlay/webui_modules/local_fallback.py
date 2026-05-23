@@ -383,8 +383,24 @@ def enable() -> dict[str, Any]:
     schedules llama-server start when the model file lands.
 
     Returns the post-call status snapshot the UI uses to render the
-    tile state immediately."""
-    set_enabled(True)
+    tile state immediately.
+
+    v0.7.20 #336 tactical: previously, exceptions during model-download
+    initiation or llama-server scheduling were swallowed silently via
+    logger.exception() and the returned status had no indication that
+    something failed. The wizard's setup.js:447 alert defaulted to
+    'unknown error' for the user. Now we collect failure context into
+    `errors: [...]` on the returned status so the alert can surface what
+    actually went wrong (and future bug reports carry the real string,
+    not a generic 'unknown'). The root cause fix per-platform still
+    requires the Win11 docker-logs Stan @bsgdigital is capturing.
+    """
+    errors: list[str] = []
+    try:
+        set_enabled(True)
+    except Exception as exc:
+        logger.exception("Local fallback: set_enabled failed")
+        errors.append(f"set_enabled: {exc}")
 
     # Make sure the model is on disk (or downloading).
     try:
@@ -392,8 +408,9 @@ def enable() -> dict[str, Any]:
         model = KNOWN_MODELS.get(MODEL_ID)
         if model and not _is_final_present(model):
             start_download(MODEL_ID)
-    except Exception:
+    except Exception as exc:
         logger.exception("Local fallback: could not initiate model download")
+        errors.append(f"start_download: {exc}")
 
     # If model already present, start immediately. Otherwise spawn the
     # background watcher that starts llama-server once the file appears.
@@ -406,10 +423,19 @@ def enable() -> dict[str, Any]:
             threading.Thread(
                 target=_start_when_ready, name="local-fallback-watcher", daemon=True,
             ).start()
-    except Exception:
+    except Exception as exc:
         logger.exception("Local fallback: could not schedule llama-server start")
+        errors.append(f"schedule_llama_server: {exc}")
 
-    return get_status()
+    status = get_status()
+    if errors:
+        # Preserve any existing error/errors fields; append our context.
+        status["errors"] = list(status.get("errors") or []) + errors
+        # Also populate the singular `error` field that setup.js:447 reads
+        # first — surface the first new error there for user-facing copy.
+        if not status.get("error"):
+            status["error"] = errors[0]
+    return status
 
 
 def disable() -> dict[str, Any]:

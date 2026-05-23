@@ -444,12 +444,24 @@ async function useLlamaCppFallback() {
   try {
     const r = await post('/api/local-fallback/enable', {});
     if (!r.data || r.data.enabled === false) {
-      alert('Could not enable local fallback: ' + ((r.data && r.data.error) || 'unknown error'));
+      // v0.7.20 #336 tactical: surface real backend context instead of
+      // 'unknown error'. Backend now populates r.data.error (single line)
+      // + r.data.errors (full list) when enable() catches exceptions.
+      // Fall back to HTTP status + raw response shape if even those are
+      // missing — anything is better than 'unknown error' for diagnosing
+      // the Win11 repro Stan @bsgdigital flagged.
+      const data = r.data || {};
+      const detail = data.error
+        || (Array.isArray(data.errors) && data.errors.join('; '))
+        || `HTTP ${r.status || '?'} — ${JSON.stringify(data).slice(0, 200)}`;
+      alert('Could not enable local fallback: ' + detail
+        + '\n\nIf this is a fresh install on Windows, please open an issue on GitHub'
+        + ' with the message above + the output of `docker logs fox-in-the-box`.');
       return;
     }
     snapshot = r.data;
   } catch (e) {
-    alert('Network error while enabling local fallback.');
+    alert('Network error while enabling local fallback: ' + (e && e.message ? e.message : 'no detail'));
     return;
   }
 

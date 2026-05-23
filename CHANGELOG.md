@@ -7,6 +7,37 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.7.20] - 2026-05-23
+
+**Windows install reliability + picker sanity + #336 diagnostics.** Stan @bsgdigital's Win11 smoke caught the load-bearing P0 race that made fresh-install Fox fail to detect Docker after reboot. v0.7.20 fixes that, fixes the Ollama-under-Custom mis-categorization in the picker, auto-preselects a usable chat model on first open, and surfaces real backend errors in the wizard's local-fallback failure path so future bug reports carry diagnostics instead of "unknown error."
+
+### Fixed
+
+- **#361 P0: Docker detection race on Windows.** `ensureDockerWindows` polling loop in `packages/electron/src/startup.js:482+` previously `break`'d on the first `WSL_BACKEND_MISSING` diagnostic — a TRANSIENT state during fresh Docker Desktop boot. Fix: tolerate the WSL-missing signal as long as the Docker Desktop PROCESS is still alive (5 consecutive reports = ~60s patience before escalating to recovery). Timeout extended 180s → 240s for fresh-install-on-slower-hardware. Progress UI shows "Waiting for Docker WSL backend to register… (Ns)" so users see what's happening. Closes Stan's "не детектить коли завантажується докер" diagnosis. **Unblocks @bsgdigital's blog-post promotion.**
+- **#278 Ollama models classified under OLLAMA group, not CUSTOM.** `packages/fox-overlay/fox_overlay/webui_modules/ollama.py:459,492` set_active_model now writes `provider: "ollama"` instead of `provider: "custom"`. Backend routing unchanged (upstream's `hermes_cli/auth.py:1412` aliases `ollama → custom` in PROVIDER_REGISTRY, so same HTTP path); only picker categorization changes. Also closes #343 (v0.7.18-era duplicate).
+- **#344 Chat auto-preselects first usable model on open.** New JS extension `packages/fox-overlay/webui_static/chat-model-preselect.js` runs after DOM ready, checks if a usable model is selected, picks the first one if not (skipping `__ollama_hint:` synthetic entries from v0.7.18 #337). Empty state when zero models available: composer chip shows "Model not selected" with `title` pointing to Settings → Providers. Wired into the Dockerfile's `HERMES_WEBUI_EXTENSION_SCRIPT_URLS`.
+
+### Changed
+
+- **#336 tactical: wizard local-fallback alert surfaces real backend errors.** `packages/fox-overlay/fox_overlay/webui_modules/local_fallback.py:enable()` now collects exception context into `errors: [...]` on the returned status instead of silently swallowing into `logger.exception`. `packages/fox-overlay/webui_static/setup.js:447` reads `r.data.error`, falls back to `r.data.errors.join('; ')`, falls back to HTTP-status + raw-body summary, never to "unknown error". Future Win11 repros carry diagnostics. **Root-cause fix for #336 still pending** — needs the Win11 `docker logs` Stan is capturing.
+
+### Behind the scenes — test coverage closing SWE C's audit gaps
+
+- **`tests/electron/tray-manager.test.js`** (new, +182 LOC). Was at 0% coverage when v0.7.18 #341 Reset Fox tray shipped. Now pins three contracts: cancel-confirm early-returns without touching state; confirm-confirm calls removeContainerAndImage → spawn detached cleanup → app.quit() in that order; dialog defaultId=cancelId=0.
+- **`tests/electron/docker-manager.test.js`** (+151 LOC, 4 tests). Pins the v0.7.18 #340 stale-image recreate branch — mock returns stale ImageID, asserts force-remove + recreate.
+- **`tests/electron/startup.test.js`** (+46 LOC, 2 tests). Pins the new v0.7.20 #361 WSL-transient tolerance + the WSL-process-gone fast-bail path.
+- **`qa/playwright/tests/smoke/wizard-local-fallback.spec.ts`** (new). Contract spec for #336 — 2 live (status endpoint shape + UI state), 2 `describe.skip` pending v0.7.20 fix landing in `:stable`.
+
+**Total jest tests: 71 → 83 (+12).** Total Playwright smoke: 14 → 18 (+4).
+
+### What's next
+
+- **v0.7.21:** #362 interactive install UX overhaul (Apple-polish step states with retry buttons + WebUI styling), #353 NVidia-style installer modes, tooling cleanup (regen-patch.sh rewrite, check-overlay-basis.sh stash leak fix, orphan-patch detection).
+- **#336 root cause:** waiting on Stan's Win11 `docker logs` to identify the actual local-fallback failure on Windows. v0.7.20 ships diagnostics so the next repro carries the real error string.
+- **#360 Fox-branded UI variant** (bot name + avatar + empty state) — defects in PR #327 documented; redo when someone scopes the trigger-class mechanism.
+
+---
+
 ## [0.7.19] - 2026-05-23
 
 **Substrate cleanup — no new features, all groundwork.** The systemic root of yesterday's cleanup mess (Electron's `@fox-in-the-box` userData dir name) gets fixed. The doc rot the 6-hat audit flagged (CLAUDE.md "Current State (as of v0.7.6)" 13 releases stale, dead `docs/GATEWAY.md` describing a parked product line, empty `CODE_OF_CONDUCT.md` broken link) gets cleared. The `qa/SMOKE_LOG.md` gate that's been routed around in writing for 4 consecutive releases gets teeth. Branch protection finally enforces the smoke + validate-overlay checks v0.7.15 designed as required.
