@@ -9,7 +9,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [0.7.21] - 2026-05-24
 
-**Tooling cleanup + Playwright net.** The patch-system hygiene work the v0.7.15 audit recommended finally lands. `check-overlay-basis.sh` stops silently destroying submodule work-in-progress; it now also catches the v0.7.13 #331 failure mode at commit-time (orphan patches sitting in directory but missing from series). `regen-patch.sh` (broken-on-arrival since v0.7.14 — had a `# Wait that's not right. Let me redo:` comment shipped to main) is rewritten to actually work. Plus folds in the Playwright model-picker coverage agent 1 wrote during the v0.7.20 session.
+**Tooling cleanup + Playwright net + one onboarding-redirect whitelist tweak.** The patch-system hygiene work the v0.7.15 audit recommended finally lands. `check-overlay-basis.sh` stops silently destroying submodule work-in-progress; it now also catches the v0.7.13 #331 failure mode at commit-time (orphan patches sitting in directory but missing from series). `regen-patch.sh` (broken-on-arrival since v0.7.14 — had a `# Wait that's not right. Let me redo:` comment shipped to main) is rewritten to actually work. Plus folds in the Playwright model-picker coverage agent 1 wrote during the v0.7.20 session, and adds `/api/models` to the patch-003 whitelist so the new specs can reach it on fresh containers (same shape as v0.7.17's `/test/` whitelist).
 
 ### Fixed
 
@@ -24,6 +24,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Changed
 
 - **`wizard-local-fallback.spec.ts` skip comments updated** to reflect v0.7.20 tactical-fix-shipped + failure-injection-hook-needed status. Same unskip target as the model-picker specs: when #365 lands the test harness.
+- **`/api/models` added to `_SETUP_PREFIXES` whitelist** in `packages/fox-overlay/fox_overlay/webui_modules/onboarding.py`. Same shape as v0.7.17's `/test/` whitelist fix — the public read endpoint should work regardless of onboarding state, so the model-picker spec can hit it on fresh containers. (The 2 currently-live model-picker tests are still `describe.skip` for this PR because `:stable` doesn't yet have the whitelist; they unskip in v0.7.22.)
 
 ### Behind the scenes
 

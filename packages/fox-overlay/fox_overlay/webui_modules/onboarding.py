@@ -49,6 +49,12 @@ _SETUP_PREFIXES = (
     # first :stable with patch 003 actually applied — v0.7.13/14 had
     # patch 003 written but the series file missed it).
     "/test/",
+    # v0.7.21: /api/models is a public read endpoint that should work
+    # regardless of onboarding state — it's how the chat UI populates the
+    # model picker, and the model-picker.spec.ts smoke needs to hit it
+    # against a fresh container without first completing onboarding.
+    # Same shape as the /test/ whitelist above.
+    "/api/models",
 )
 
 
