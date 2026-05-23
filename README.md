@@ -145,8 +145,35 @@ For local iteration on the bundled `hermes-agent` / `hermes-webui` submodules, s
 
 ## Requirements
 
-- **Windows 10** or later, **macOS 12** (Monterey) or later, or **any Linux** with Docker.
-- An **[OpenRouter](https://openrouter.ai)** API key (required for setup). Additional providers — Anthropic, OpenAI, etc. — are configurable in Settings after install.
+**Operating system**
+
+- **Windows 10 or later** (Windows 11 recommended).
+- **macOS 12** (Monterey) or later — Apple Silicon or Intel.
+- **Linux** with Docker Engine 20.10 or later.
+
+**Docker**
+
+- **Docker Desktop** on Windows and macOS; **Docker Engine** on Linux. Fox auto-installs Docker Desktop on Windows if it isn't present and walks you through the install + reboot.
+- **Windows: Linux-containers mode is required** (Docker Desktop's default). If you've previously switched to Windows-containers mode, Fox detects it and exits with an actionable error — right-click the Docker Desktop tray icon → **Switch to Linux containers...** and relaunch Fox.
+- **Windows: the WSL 2 backend is required.** Docker Desktop's installer enables it for you. In Docker Desktop settings make sure **General → "Use the WSL 2 based engine"** is checked. If WSL2 isn't installed when Fox launches, it'll attempt the repair automatically (may require a reboot).
+
+**CPU virtualization** *(Windows only)*
+
+- **Hardware virtualization must be enabled in BIOS/UEFI** — `VT-x` on Intel CPUs, `AMD-V` / `SVM Mode` on AMD CPUs. Required by both Docker Desktop and WSL2.
+- Most consumer PCs ship with it enabled. If Docker reports "WSL2 backend not running" or "virtualization disabled," reboot into BIOS, look for **Intel Virtualization Technology** / **SVM Mode** / **VT-x**, enable it, save, reboot.
+- Apple Silicon and Intel Macs have virtualization on by default — nothing to configure.
+
+**Provider API key** *(at least one)*
+
+- An **[OpenRouter](https://openrouter.ai)** API key (recommended — one key gives you hundreds of models, no per-provider setup).
+- Or any other supported provider — Anthropic, OpenAI, Google Gemini, DeepSeek, Mistral, etc. Configurable in Settings after install. See [Supported providers](#supported-providers) below.
+
+**Local AI models** *(optional)*
+
+- To run local models via Ollama, **install Ollama separately on your host machine** — not inside the Fox container. Download from [ollama.com/download](https://ollama.com/download).
+- Fox auto-detects a running Ollama daemon via `host.docker.internal:11434` and surfaces every installed model in **Settings → Providers → Local Ollama** with one-click switching.
+- Pull at least one model first (`ollama pull phi4-mini`, `ollama pull llama3.2:3b`, etc.) — or use Fox's one-click pull from the recommended set inside the app.
+- Ollama is not required if you only use cloud providers.
 
 ---
 
