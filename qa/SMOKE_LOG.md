@@ -38,7 +38,7 @@ Section L row "v0.7.17 Anthropic+Gemini+Bedrock provider extras…" run results 
 - [ ] (e) Gemini chat works — response arrives, NO ImportError
 - [ ] (f) (Optional) Bedrock chat works — skipped if no AWS creds
 - [ ] (g) Container size sanity passed (≤current+~100MB)
-- [ ] (h) Playwright `wizard-renders.spec.ts` 5 specs pass (3 redirect + 2 asset)
+- [ ] (h) Playwright `wizard-renders.spec.ts` 5 specs pass (3 redirect + 2 asset); `test-hooks-safety.spec.ts` is `describe.skip` (unskip in v0.7.18, chicken-and-egg)
 - [ ] (i) Regression: OpenRouter + OpenAI + Codex + Ollama still work
 
 Findings:

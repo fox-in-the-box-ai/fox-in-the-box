@@ -40,6 +40,15 @@ _SETUP_PREFIXES = (
     "/extensions/",
     "/health",
     "/static/favicon",
+    # v0.7.17: /test/* routes are gated by FITB_TEST_MODE=1 in fox-overlay's
+    # bootstrap, so in production builds they don't exist and whitelisting
+    # them is a no-op. In CI / playwright runs FITB_TEST_MODE=1 is set and
+    # /test/reset MUST return JSON, not get 302'd to /setup. Latent bug
+    # since v0.7.15 (the release that added patch 003); only surfaced in
+    # v0.7.17 PR CI because PR-time `:stable` was finally v0.7.16 (the
+    # first :stable with patch 003 actually applied — v0.7.13/14 had
+    # patch 003 written but the series file missed it).
+    "/test/",
 )
 
 
