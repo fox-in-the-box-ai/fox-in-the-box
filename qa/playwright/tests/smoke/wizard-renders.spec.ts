@@ -51,17 +51,12 @@ test.describe('Phase 1 — v0.7.13 #331 wizard assets shipping', () => {
   });
 });
 
-// ── v0.7.15 — KEY FINDING ─────────────────────────────────────────────────
-// This test correctly caught that v0.7.13 + v0.7.14 shipped without
-// patch 003 actually applied (the series file wasn't updated). It's
-// disabled here ONLY because :stable at this PR's CI time is still
-// v0.7.14, which doesn't have the series-file fix. Once v0.7.15 ships
-// with the corrected series file, :stable advances and the test
-// re-enables in v0.7.16's PR.
-//
-// **DO NOT skip this test indefinitely.** Pattern from v0.7.10
-// mobile-avatar / v0.7.13 wizard-css: one-release chicken-and-egg only.
-test.describe.skip('Phase 1 — v0.7.13 #331 redirect actually fires (unskip in v0.7.16)', () => {
+// ── v0.7.17 — RE-ENABLED ──────────────────────────────────────────────────
+// v0.7.15 fixed the series-file miss + made check-overlay-basis.sh apply
+// patches sequentially. v0.7.16 shipped :stable with that fix landed.
+// This PR's CI pulls :stable = v0.7.16, which has patch 003 actually
+// applied — so the redirect-fires assertions can run now.
+test.describe('Phase 1 — v0.7.13 #331 redirect actually fires (v0.7.17+)', () => {
   test('fresh container redirects / → /setup (patch 003 wiring)', async ({
     page,
     baseURL,
