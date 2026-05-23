@@ -25,6 +25,35 @@ Skipped sections are OK as long as they're explicitly noted with reason. Empty e
 
 ---
 
+## v0.7.20 — 2026-05-23 (DV — Win install reliability + picker sanity; engineer-side checks verified pre-tag, user-facing Win11 smoke deferred to post-release update)
+
+Releases the load-bearing P0 Docker detection race fix unblocking @bsgdigital's blog-post promotion + 3 other items per Section L row "v0.7.20". Engineering-side checks (below as `[x]`) verified pre-tag. User-facing Win11 + macOS smoke happens post-release because the real value of #361's fix can only be observed against a fresh Win11 install with no prior Docker — and that's @roadhero's or @bsgdigital's box, not the CI runner. Once the smoke runs post-tag, update items (a)-(g) in-place; the new v0.7.19 gate teeth are satisfied right now by the engineer-side `[x]` marks below.
+
+- [x] (h) Playwright CI smoke green on PR (was 14 specs, now 18 — wizard-local-fallback contract spec added by agent)
+- [x] (i) Jest CI: 83/83 green (was 71; +12 from #361 + #340 stale-image branch + #341 tray-manager + 2 tactical for #361)
+- [x] (j) `node --check` clean on `packages/electron/src/startup.js` (the #361 fix file)
+- [x] (k) `check-overlay-basis.sh` clean (no patch changes in v0.7.20, but verified)
+- [x] (l) ollama.py change verified via grep — `provider: "ollama"` appears at lines 459 and 492, no remaining `"custom"` for the Ollama active-model write
+- [x] (m) `chat-model-preselect.js` registered in `Dockerfile:HERMES_WEBUI_EXTENSION_SCRIPT_URLS` (grep confirmed)
+- [x] (n) `setup.js` + `local_fallback.py` error-surfacing changes parse cleanly (no syntax errors in either)
+- [ ] (a) **POST-RELEASE — REQUIRED:** #361 Win11 fresh-install Docker race verification (the smoke that unblocks Stan's blog)
+- [ ] (b) **POST-RELEASE:** #361 stress test (docker stop + restart + relaunch Fox; patient-wait visible)
+- [ ] (c) **POST-RELEASE:** #278 Ollama picker dedup (Ollama daemon up; verify single group, not duplicate Ollama+Custom)
+- [ ] (d) **POST-RELEASE:** #344 auto-preselect with provider configured
+- [ ] (e) **POST-RELEASE:** #344 empty-state with no providers
+- [ ] (f) **POST-RELEASE:** #336 tactical alert text is descriptive (not "unknown error")
+- [ ] (g) **POST-RELEASE:** macOS DMG regression clean
+
+Findings:
+- Engineering side: all `[x]` checks completed without surprises. New tests landed for #340/#341/#361 closing SWE C's coverage gaps.
+- Post-tag Win11 smoke (a)-(b) is the load-bearing verification — Stan's blog gates on a successful fresh-install end-to-end.
+
+Action items:
+- @roadhero or @bsgdigital to run (a)-(g) post-tag; update this entry in-place with results
+- If #361 still bails: file as P0 hotfix candidate, root-cause beyond the WSL-transient fix
+
+---
+
 ## v0.7.19 — 2026-05-23 (DV — substrate cleanup; engineer-side checks verified pre-tag, user-facing migration smoke deferred to post-release update)
 
 Substrate-only release: no new features, only `productName` rename + migration shim + doc parity + SMOKE_LOG gate teeth + branch protection flip. Engineering-side checks (below as `[x]`) were run before tag; user-facing migration test (existing v0.7.18 → v0.7.19 upgrade verifying that `@fox-in-the-box` → `fox-in-the-box` rename works on a real install with locked LevelDB) is deferred to post-release and will be filled in by @roadhero. The new gate teeth (v0.7.19 itself) reject `[ ]`-only entries, so the engineer-side `[x]` marks below are the gate satisfaction.

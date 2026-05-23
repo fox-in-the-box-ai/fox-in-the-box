@@ -436,3 +436,154 @@ test('isDaemonRunning resets the error code on each call', async () => {
   await docker.isDaemonRunning();
   expect(docker.getLastDaemonErrorCode()).toBeNull();
 });
+
+// ── v0.7.18 #340: container auto-recreate on image upgrade ──────────────────
+//
+// Failure mode this catches: prior to v0.7.18, after `:stable` advanced to a
+// new image digest (e.g. the v0.7.17 hermes-agent extras fix), a user with a
+// running container created from the OLD image would keep running the OLD
+// image forever — Docker pulls the new tag, but `docker run` reuses the
+// existing container as-is. @roadhero's Win11 box sat on v0.7.16 for a week
+// after v0.7.17 shipped until we manually `docker rm`'d. The recreate path
+// in ensureContainerRunning() compares `existing.ImageID` vs the current
+// `docker.getImage(IMAGE).inspect().Id` and force-removes the stale container
+// so the next create grabs the new image. This test pins that contract so a
+// refactor can't silently regress it (no CI smoke catches this — CI always
+// runs against a fresh container).
+
+test('ensureContainerRunning recreates container when image digest is stale (#340)', async () => {
+  // Existing container was created from the OLD image digest.
+  mockDockerInstance.listContainers.mockResolvedValueOnce([
+    {
+      Id: 'stale-container-1',
+      State: 'exited',
+      Names: ['/fox-in-the-box'],
+      ImageID: 'sha256:OLD0000000000000000000000000000000000000000000000000000000000000',
+    },
+  ]);
+
+  // `docker.getImage(IMAGE).inspect()` reports the CURRENT (new) digest.
+  const mockImage = {
+    inspect: jest.fn().mockResolvedValue({
+      Id: 'sha256:NEW1111111111111111111111111111111111111111111111111111111111111',
+    }),
+  };
+  mockDockerInstance.getImage = jest.fn().mockReturnValue(mockImage);
+
+  // The stale container object: must support remove({ force: true }). State
+  // is 'exited' so stop() should NOT be called (covered by the conditional
+  // `if (existing.State === 'running')` branch).
+  const staleContainer = {
+    stop:   jest.fn().mockResolvedValue({}),
+    remove: jest.fn().mockResolvedValue({}),
+    start:  jest.fn().mockResolvedValue({}),
+  };
+  // The freshly-created container (after recreate).
+  const freshContainer = { start: jest.fn().mockResolvedValue({}) };
+
+  // First getContainer call: stale (to remove it). createContainer returns
+  // the fresh one.
+  mockDockerInstance.getContainer.mockReturnValueOnce(staleContainer);
+  mockDockerInstance.createContainer.mockResolvedValue(freshContainer);
+
+  const result = await docker.ensureContainerRunning();
+
+  // The contract: stale container is force-removed, fresh one is created and
+  // started, and the reason field signals what happened so callers/log
+  // readers can tell a recreate from an ordinary start.
+  expect(staleContainer.remove).toHaveBeenCalledWith({ force: true });
+  expect(staleContainer.stop).not.toHaveBeenCalled(); // State was 'exited'
+  expect(mockDockerInstance.createContainer).toHaveBeenCalledTimes(1);
+  expect(freshContainer.start).toHaveBeenCalledTimes(1);
+  expect(result.reason).toBe('recreated-after-image-upgrade');
+});
+
+test('ensureContainerRunning stops running container before recreate when image is stale (#340)', async () => {
+  // Same scenario as above but the stale container is currently running.
+  // The stop({ t: 10 }) call must precede remove({ force: true }) to give
+  // hermes-agent/webui graceful shutdown, otherwise users lose in-flight
+  // chat turns on every upgrade.
+  mockDockerInstance.listContainers.mockResolvedValueOnce([
+    {
+      Id: 'stale-running-1',
+      State: 'running',
+      Names: ['/fox-in-the-box'],
+      ImageID: 'sha256:OLD',
+    },
+  ]);
+  mockDockerInstance.getImage = jest.fn().mockReturnValue({
+    inspect: jest.fn().mockResolvedValue({ Id: 'sha256:NEW' }),
+  });
+  const staleContainer = {
+    stop:   jest.fn().mockResolvedValue({}),
+    remove: jest.fn().mockResolvedValue({}),
+  };
+  mockDockerInstance.getContainer.mockReturnValueOnce(staleContainer);
+  mockDockerInstance.createContainer.mockResolvedValue({
+    start: jest.fn().mockResolvedValue({}),
+  });
+
+  await docker.ensureContainerRunning();
+
+  expect(staleContainer.stop).toHaveBeenCalledWith({ t: 10 });
+  expect(staleContainer.remove).toHaveBeenCalledWith({ force: true });
+  // Order check: stop must fire before remove.
+  const stopOrder   = staleContainer.stop.mock.invocationCallOrder[0];
+  const removeOrder = staleContainer.remove.mock.invocationCallOrder[0];
+  expect(stopOrder).toBeLessThan(removeOrder);
+});
+
+test('ensureContainerRunning does NOT recreate when image digest matches (#340 no-op path)', async () => {
+  // Guard against the inverse regression: don't blow away the user's
+  // container on every launch just because the digest comparison branch
+  // exists. If digests match, we take the ordinary started-existing path.
+  mockDockerInstance.listContainers.mockResolvedValueOnce([
+    {
+      Id: 'fresh-1',
+      State: 'exited',
+      Names: ['/fox-in-the-box'],
+      ImageID: 'sha256:SAME',
+    },
+  ]);
+  mockDockerInstance.getImage = jest.fn().mockReturnValue({
+    inspect: jest.fn().mockResolvedValue({ Id: 'sha256:SAME' }),
+  });
+  const container = {
+    start:  jest.fn().mockResolvedValue({}),
+    remove: jest.fn(),
+  };
+  mockDockerInstance.getContainer.mockReturnValue(container);
+
+  const result = await docker.ensureContainerRunning();
+
+  expect(container.remove).not.toHaveBeenCalled();
+  expect(mockDockerInstance.createContainer).not.toHaveBeenCalled();
+  expect(container.start).toHaveBeenCalledTimes(1);
+  expect(result.reason).toBe('started-existing');
+});
+
+test('ensureContainerRunning skips digest check when image not pulled locally (#340 fallback)', async () => {
+  // If `docker.getImage(IMAGE).inspect()` throws (image not pulled yet —
+  // e.g. user manually removed it), _getCurrentImageId returns null and
+  // the recreate branch is skipped. The container falls through to the
+  // ordinary start path. This guards against accidentally treating a
+  // "no local image" situation as "stale image" and nuking the container.
+  mockDockerInstance.listContainers.mockResolvedValueOnce([
+    {
+      Id: 'fresh-2',
+      State: 'running',
+      Names: ['/fox-in-the-box'],
+      ImageID: 'sha256:ANY',
+    },
+  ]);
+  mockDockerInstance.getImage = jest.fn().mockReturnValue({
+    inspect: jest.fn().mockRejectedValue(new Error('No such image: ...')),
+  });
+  const container = { start: jest.fn(), remove: jest.fn() };
+  mockDockerInstance.getContainer.mockReturnValue(container);
+
+  const result = await docker.ensureContainerRunning();
+
+  expect(container.remove).not.toHaveBeenCalled();
+  expect(result.reason).toBe('already-running');
+});

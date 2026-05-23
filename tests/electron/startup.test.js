@@ -323,4 +323,50 @@ describe('ensureDockerWindows', () => {
     expect(result).toEqual({ result: 'started-after-recovery' });
     expect(deps.waitForDaemon).toHaveBeenCalledTimes(2);
   });
+
+  // v0.7.20 #361 — Docker detection race fix
+  test('tolerates transient WSL_BACKEND_MISSING when Docker process is still running, eventually succeeds', async () => {
+    // Simulates the @bsgdigital Win11 scenario: fresh Docker Desktop install +
+    // reboot, Docker process is up but WSL distros take a few seconds to
+    // register. Previously this broke the polling loop on first sight of
+    // WSL_BACKEND_MISSING — now it should keep polling as long as the
+    // Docker process is still alive.
+    let waitCallCount = 0;
+    const deps = makeDeps({
+      _findExe: jest.fn().mockResolvedValue('C:\\Docker\\Docker Desktop.exe'),
+      waitForDaemon: jest.fn().mockImplementation(async () => {
+        waitCallCount++;
+        // First 3 polls: not ready. 4th poll: daemon comes up.
+        return waitCallCount >= 4;
+      }),
+      diagnoseDocker: jest.fn().mockResolvedValue({
+        issueCode: 'WSL_BACKEND_MISSING',
+        desktopProcessRunning: true,
+      }),
+    });
+    const result = await ensureDockerWindows(deps);
+    expect(result).toEqual({ result: 'started' });
+    expect(waitCallCount).toBeGreaterThanOrEqual(4);
+    // Recovery should NOT have been attempted since daemon came up during
+    // the patient-retry window — Stan's exact scenario, now handled.
+    expect(deps.attemptRecover).not.toHaveBeenCalled();
+  });
+
+  // v0.7.20 #361 — defensive: ensure we still break out if WSL is genuinely broken
+  test('breaks polling when WSL_BACKEND_MISSING AND Docker process is gone (still escalates to recovery)', async () => {
+    const deps = makeDeps({
+      _findExe: jest.fn().mockResolvedValue('C:\\Docker\\Docker Desktop.exe'),
+      waitForDaemon: jest.fn().mockResolvedValue(false),
+      diagnoseDocker: jest.fn().mockResolvedValue({
+        issueCode: 'WSL_BACKEND_MISSING',
+        desktopProcessRunning: false,
+      }),
+      attemptRecover: jest.fn().mockResolvedValue({ attempted: false, errors: ['nope'] }),
+    });
+    await expect(ensureDockerWindows(deps)).rejects.toMatchObject({
+      code: 'WSL_BACKEND_MISSING',
+    });
+    // Should bail FAST when process is gone — no patient retry, no streak built up
+    expect(deps.diagnoseDocker).toHaveBeenCalledTimes(1);
+  });
 });

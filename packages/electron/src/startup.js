@@ -479,8 +479,13 @@ async function ensureDockerWindows(deps) {
     // the user can see daemon-ready progress.
     setForegroundYield(false);
 
-    let remainingMs = 180_000;
+    // v0.7.20 #361: extended from 180s → 240s. Fresh-Docker-install on reboot
+    // (RunOnce path) can take longer than 3 min on slower hardware as Docker
+    // Desktop initializes its WSL2 distros for the first time. @bsgdigital
+    // hit this on Win11 — Fox was bailing before Docker finished starting.
+    let remainingMs = 240_000;
     let diagnostics = null;
+    let wslBackendMissingStreak = 0;
     while (remainingMs > 0) {
       // Shorter slices re-run diagnosis sooner when the daemon is stuck (WSL / relaunch paths).
       const sliceMs = Math.min(12_000, remainingMs);
@@ -500,9 +505,34 @@ async function ensureDockerWindows(deps) {
         }
       }
 
+      // v0.7.20 #361: WSL_NOT_INITIALIZED / WSL_BACKEND_MISSING is TRANSIENT
+      // during fresh Docker Desktop startup. The distros register a few
+      // seconds AFTER the Docker process appears; diagnoseWindowsDocker
+      // probes `wsl -l -v` and can return the missing-backend code while
+      // Docker is still initializing. Previously this code `break`ed the
+      // polling loop on first sight → false-positive WSL recovery flow.
+      //
+      // Fix: tolerate the WSL-missing signal as long as the Docker Desktop
+      // PROCESS is still alive. If process is gone, treat as real (break
+      // to the recovery flow below). If process is alive, treat as
+      // "still booting" and keep polling. Track a streak so genuinely
+      // broken WSL eventually breaks out instead of timing out.
       if (diagnostics.issueCode === 'WSL_NOT_INITIALIZED' || diagnostics.issueCode === 'WSL_BACKEND_MISSING') {
         if (await isDaemonRunning()) return { result: 'started' };
-        break;
+        if (!diagnostics.desktopProcessRunning) {
+          // Docker process is gone AND WSL is missing — really broken, escalate.
+          break;
+        }
+        wslBackendMissingStreak += 1;
+        if (wslBackendMissingStreak >= 5) {
+          // ~60s of consecutive WSL-missing reports despite Docker process
+          // being up. WSL initialization is genuinely stuck; fall through
+          // to recovery.
+          break;
+        }
+        showProgress(`Waiting for Docker WSL backend to register… (${wslBackendMissingStreak * 12}s)`);
+      } else {
+        wslBackendMissingStreak = 0;
       }
     }
 
