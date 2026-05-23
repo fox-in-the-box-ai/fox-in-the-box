@@ -10,20 +10,21 @@
 # for shell-friendly grepping.
 
 [upstream]
-hermes_webui_tag = "v0.51.107"
+hermes_webui_tag = "v0.51.118"
 hermes_webui_url = "https://github.com/nesquena/hermes-webui"
 hermes_agent_tag = "v2026.5.16"
 hermes_agent_url = "https://github.com/NousResearch/hermes-agent"
 
 [meta]
-pinned_at = "2026-05-22"
-pinned_in_pr = "fox-in-the-box-ai/fox-in-the-box#296"  # Option B bump closing the v0.51.95 → v0.51.103 auto-issue (we picked the higher v0.51.107 to minimize round-trips)
+pinned_at = "2026-05-23"
+pinned_in_pr = "fox-in-the-box-ai/fox-in-the-box#349"  # Option B bump closing the v0.51.107 → v0.51.118 auto-issue
 phase = "container-only-bump"
-notes = "Second Option B upstream-only bump (no Fox version change, no DMG/exe rebuild). Auto-issue #296 surfaced webui v0.51.95 → v0.51.103 was available; by the time we acted, upstream had reached v0.51.107 — bumping to the actual latest minimizes round-trips. check-overlay-basis.sh confirmed clean against the new pair. Container :stable auto-advances via build-container.yml merge step on this PR's squash commit (subject prefix bump(upstream):)."
+notes = "Third Option B upstream-only bump. Auto-issue #349 surfaced webui v0.51.107 → v0.51.118 (11 patch versions). check-overlay-basis.sh confirmed clean against the new pin (no anchor drift in the 3 webui patches). Container :stable auto-advances via build-container.yml merge step on this PR's squash commit (subject prefix bump(upstream):). Agent pin (v2026.5.16) unchanged."
 
 [history]
 prior_pins = [
   # newest first
+  "webui=v0.51.107, agent=v2026.5.16 — second Option B bump #296 (2026-05-22)",
   "webui=v0.51.95, agent=v2026.5.16 — first Option B exercise #289 (2026-05-20)",
   "webui=v0.51.92, agent=v2026.5.16 — v0.6.3 #276 (2026-05-19)",
   "webui=v0.51.84, agent=v2026.5.16 — Phase 8 ATOMIC #237 (2026-05-17)",
