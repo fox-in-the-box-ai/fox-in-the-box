@@ -222,11 +222,9 @@ See **[docs/RESET.md](docs/RESET.md)** for the full reset procedure (Windows and
 - [CHANGELOG.md](CHANGELOG.md) — release history
 - [CONTRIBUTING.md](CONTRIBUTING.md) — how to contribute
 - [SECURITY.md](SECURITY.md) — vulnerability reporting
-- [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) — community standards
 - [docs/DEV_MODE.md](docs/DEV_MODE.md) — local development with bind-mounted submodules
 - [docs/RELEASE_WORKFLOW.md](docs/RELEASE_WORKFLOW.md) — how releases are cut
 - [docs/RESET.md](docs/RESET.md) — full reset / clean install
-- [docs/GATEWAY.md](docs/GATEWAY.md) — Hermes Agent gateway internals
 - [qa/SMOKE_CHECKLIST.md](qa/SMOKE_CHECKLIST.md) — pre-release verification gate
 
 ---

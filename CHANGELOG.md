@@ -7,6 +7,38 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.7.19] - 2026-05-23
+
+**Substrate cleanup — no new features, all groundwork.** The systemic root of yesterday's cleanup mess (Electron's `@fox-in-the-box` userData dir name) gets fixed. The doc rot the 6-hat audit flagged (CLAUDE.md "Current State (as of v0.7.6)" 13 releases stale, dead `docs/GATEWAY.md` describing a parked product line, empty `CODE_OF_CONDUCT.md` broken link) gets cleared. The `qa/SMOKE_LOG.md` gate that's been routed around in writing for 4 consecutive releases gets teeth. Branch protection finally enforces the smoke + validate-overlay checks v0.7.15 designed as required.
+
+### Changed
+
+- **`productName: fox-in-the-box` in `packages/electron/package.json`.** Electron's userData path now resolves to `~/AppData/Roaming/fox-in-the-box` on Windows, `~/Library/Application Support/fox-in-the-box` on macOS, `~/.config/fox-in-the-box` on Linux — dropping the `@` prefix that came from the npm scope `@fox-in-the-box/electron` leaking into Electron's default app-name resolution. The wrong path was the systemic root of the v0.7.17→v0.7.18 cleanup mess where every standard cleanup command (Remove-Item, the old `clean-windows-desktop.ps1`) targeted `Fox in the box` and silently no-op'd.
+- **One-time migration shim** at `packages/electron/src/main.js`. If the legacy `@fox-in-the-box` userData dir exists and the new `fox-in-the-box` dir doesn't, rename it. Runs before `app.whenReady()` so Electron creates its session/LevelDB in the right place. Zero-loss for existing users; falls back gracefully if the rename fails (permissions, locks).
+- **`app.setName('Fox in the box')` removed** from main.js. Was no-op'd by Electron's path-resolution timing anyway; productName in package.json is now the canonical control.
+
+### Fixed (audit-discovered)
+
+- **`docs/GATEWAY.md` deleted.** 410-line doc described a Stripe-billed LLM proxy that was parked alongside #90 + #91 weeks ago; README.md linked to it as "Hermes Agent gateway internals" — completely wrong subject. Worst doc rot in the repo per Architect B's audit.
+- **`CODE_OF_CONDUCT.md` deleted** (was 0 bytes; broken link from README + CONTRIBUTING). Both references removed.
+- **`docs/DEV_MODE.md` version refs refreshed** (3 places: `0.5.0` → `0.7.19`, `FITB_VERSION=v0.7.6` → `v0.7.19`).
+- **`qa/SMOKE_CHECKLIST.md` header refreshed** (currently-testing line: v0.7.6 → v0.7.19).
+- **`packages/fox-overlay/README.md`** — patch count 2 → 3 (the v0.7.13/v0.7.15 onboarding-redirect patch was never added). `webui_modules` list updated with `test_hooks`.
+- **`docs/architecture/upstream-overlay.md`** — same patch count + test_hooks fixes.
+
+### Behind the scenes
+
+- **SMOKE_LOG gate teeth (`release.yml`).** v0.7.15's gate required only a matching `## vX.Y.Z` header. v0.7.19 adds a body-content check: the entry MUST contain at least one `- [x]` (real smoke was performed) OR an explicit `Bypass reason:` line (in-writing waiver). Closes the v0.7.16-v0.7.18 loophole where the header existed but every checkbox was `[ ]` placeholder — "structurally non-bypass, factually bypass."
+- **Branch protection flipped** post-merge: `main` requires Playwright `smoke` + `validate-overlay` jobs in addition to the existing container build/smoke. The v0.7.15 "intended REQUIRED" deferral that's sat for 3 weeks is closed.
+- **8 issues silently fixed but never closed → closed by audit:** #340 (v0.7.18), #341 (v0.7.18 in-app; carved to #346), #330 (v0.7.16), #325 (v0.7.16), #343 (dup of #278), #280 (v0.7.18 #337), #290 (windows-real-smoke.yml shipped), #319 (automation noise). Backlog drops 27 → ~20 actionable.
+
+### What's next
+
+- **v0.7.20:** Picker sanity + #336. Chat auto-preselect (#344), Ollama dedupe in Custom (#278), wizard local-fallback "unknown error" diagnosis (#336 — needs Win11 logs).
+- **v0.7.21:** Tooling cleanup. `check-overlay-basis.sh` stash leak, `regen-patch.sh` rewrite, orphan-patch detection, test coverage for `tray-manager.js` + `docker-manager.js` #340 stale-image branch.
+
+---
+
 ## [0.7.18] - 2026-05-23
 
 **Upgrades just work + Reset Fox tray menu + Ollama tile always present.** Most of v0.7.18 traces back to one debugging session with @roadhero post-v0.7.17 release where we discovered: (1) Fox doesn't re-create the container when the image updates, so users stay on the old container after upgrading, (2) cleaning Fox state required `cmd /c rd /s /q` voodoo because there was no in-app reset, and (3) the Ollama provider tile was hidden entirely when Ollama wasn't installed, so users couldn't even discover local-models support.

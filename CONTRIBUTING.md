@@ -86,8 +86,3 @@ See [AGENTS.md](AGENTS.md) for the full development workflow used by coding agen
 - Do not leave debug logging (`console.log`, `print`) in committed code
 - Do not hardcode paths — use environment variables or the `/data` mount point
 
----
-
-## Code of Conduct
-
-This project follows the [Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.md). By participating, you agree to uphold its standards.
