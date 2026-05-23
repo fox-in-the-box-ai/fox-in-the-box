@@ -166,9 +166,48 @@ This is a self-service escape hatch — communicate the tag to roll back to in t
   - The `bump(upstream): …` prefix is **load-bearing**: `build-container.yml`'s merge job regexes the subject line; the Option B diff guard workflow keys off the PR title. Don't use this prefix for anything other than upstream-pin bumps.
 - **Co-author lines:** **never** add `Co-authored-by` for AI tools. The repo's git identity must always be a human.
 
+## Release advisories — "clean install recommended" callout
+
+Some release windows carry a known caveat — a class of bug that's known but not yet covered by automated smoke. During those windows, every GitHub Release body gets a callout at the top of the notes telling users to do a clean install instead of upgrading in place.
+
+### When to add the callout
+
+Add the advisory to a release if **any** of these are true:
+
+- Recent release(s) shipped upgrade-path fixes that haven't been verified end-to-end on a real upgrade across the OS matrix (Win11 + macOS + Linux)
+- A user has reported an upgrade-in-place failure mode in the last two releases that we haven't reproduced + fixed
+- The current `qa/SMOKE_LOG.md` shows two or more consecutive entries with no `[x]` on the upgrade-row checkboxes
+- A schema or path change shipped (e.g. v0.7.19's `@fox-in-the-box` → `fox-in-the-box` userData migration) and the migration shim hasn't been validated on a real install with prior data
+
+The callout uses this template (drop in at the top of the release body, immediately after the `# vX.Y.Z — …` title):
+
+```markdown
+> **Heads up — clean install recommended.** Until Fox's upgrade path is fully validated end-to-end with automated smoke, the cleanest experience is to use **Tray → Reset Fox completely…** (v0.7.18+) or follow [`docs/RESET.md`](https://github.com/fox-in-the-box-ai/fox-in-the-box/blob/main/docs/RESET.md) before installing this release. This advisory will be removed once the upgrade path is verified across the matrix.
+```
+
+Adjust the link/wording for very old releases where the in-app Tray reset isn't available — point at the manual `packages/scripts/clean-windows-desktop.ps1` flow instead.
+
+### When to remove the callout
+
+Drop the advisory from new release notes (and consider editing recently-published ones) once **all** of these hold:
+
+1. A release tagged with a real (non-bypass) `qa/SMOKE_LOG.md` entry where the Section L "upgrade" row checkboxes are all `[x]` on **both Win11 and macOS** (Linux is a stretch goal — drop it from the gate if it becomes a bottleneck)
+2. The release immediately following that one ships without anyone needing the cleanup script or Tray Reset as a workaround
+3. No new upgrade-path bug has been filed in the two-release window after the criterion-1 release
+
+If a regression resurfaces after the callout is dropped, re-add it for the next two releases and re-evaluate against the criteria.
+
+### How to apply / un-apply
+
+```bash
+# Edit a published release's notes — keeps the tag, title, and assets, only changes the body
+gh release edit vX.Y.Z --notes-file qa/release-notes/vX.Y.Z.md
+```
+
+Maintain the canonical text in `qa/release-notes/vX.Y.Z.md` so the local file matches what's on GitHub. When dropping the advisory, delete the callout block from every still-relevant release's local file + push via `gh release edit` to keep the public copy in sync.
+
 ## Related
 
 - [`qa/SMOKE_CHECKLIST.md`](../qa/SMOKE_CHECKLIST.md) — pre-release verification gate
 - [`docs/DEV_MODE.md`](DEV_MODE.md) — local development with bind-mounted submodules (separate from release flow)
 - [`CHANGELOG.md`](../CHANGELOG.md) — every shipped release with what changed and why
-- [`CLAUDE.md`](../CLAUDE.md) — instructions for AI coding agents working in this repo
