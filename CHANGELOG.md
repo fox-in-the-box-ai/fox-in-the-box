@@ -7,6 +7,27 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.7.23] - 2026-05-24
+
+**Fox branding lands in the WebUI + provider card styling consistency.** The bot name, assistant avatar, and empty-state copy now read "Fox in the Box" instead of upstream's "Hermes" defaults. Provider card buttons in Settings also inherit the Fox design tokens.
+
+### Added
+
+- **Fox bot name (#360).** Chat messages from the assistant now show "Fox in the box" instead of "Hermes". Patch 004 in the webui series overrides `window._botName` at runtime, keyed on the `.fox-in-the-box` class now injected by `fox-overlay.js`.
+- **Fox avatar in chat (#360).** Assistant messages show the Fox avatar image instead of the "H" initial-letter circle. Patch 005 fixes the asset path (`/extensions/fox_avatar_cropped.jpg`) that was wrong in the original PR #327.
+- **Fox empty-state branding (#360).** The empty chat screen now reads "Think less. Start here." with Fox-tone suggestion copy. Patch 006.
+- **`.fox-in-the-box` class trigger.** `fox-overlay.js` now sets `document.documentElement.classList.add('fox-in-the-box')` on load — the missing wire that activates all class-conditional CSS and JS.
+
+### Fixed
+
+- **#279 Provider card button/input font consistency.** `provider-card-btn` and `provider-card-input` elements in Settings now inherit Manrope font and Fox border-radius tokens instead of defaulting to browser defaults.
+
+### What's next
+
+- **v0.7.24:** #358 Tailscale URL surfaced after container start + next issue batch.
+
+---
+
 ## [0.7.22] - 2026-05-24
 
 **Wizard styling parity with Hermes WebUI.** The setup wizard now uses the same navy + gold dark palette and Sora/Manrope typography as the main chat UI, addressing Stan's feedback that onboarding felt disconnected from the app it leads into.

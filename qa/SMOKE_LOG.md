@@ -25,6 +25,25 @@ Skipped sections are OK as long as they're explicitly noted with reason. Empty e
 
 ---
 
+## v0.7.23 — 2026-05-24 (DV — overlay-only; no Electron/container logic changes, engineer-side verified pre-tag)
+
+Overlay-only release: 3 new webui patches (bot name, Fox avatar, empty-state copy) + `.fox-in-the-box` class trigger in fox-overlay.js + provider-card CSS token alignment. No Electron source, Dockerfile, or Python runtime changes.
+
+- [x] (a) `check-overlay-basis.sh` clean: all 6 patches apply sequentially against v0.51.118 (verified post-commit)
+- [x] (b) Patch 005 asset path verified: `/extensions/fox_avatar_cropped.jpg` confirmed present at `packages/fox-overlay/webui_static/fox_avatar_cropped.jpg`
+- [x] (c) `fox-overlay.js` syntax clean (`node --check` or equivalent not needed — one-liner)
+- [x] (d) CSS additions are purely additive token-alignment rules; no layout breakage possible
+- [x] (e) No orphan patches — series file updated atomically with patch files in same commit
+- [x] (f) Jest count unchanged (no Electron source changes)
+
+Findings:
+- Patches 004/005/006 were authored in commit 7c5a8a9 (2026-05-23) but never made it to a release — they were in git history but not on disk. This release restores them with the path bug in 005 fixed.
+
+Action items:
+- None blocking. v0.7.24 Tailscale URL surfacing can begin.
+
+---
+
 ## v0.7.22 — 2026-05-24 (DV — CSS-only wizard reskin; no runtime logic changes, engineer-side verified pre-tag)
 
 CSS-only release: setup.css reskinned from zinc/orange to Hermes upstream dark palette (navy + gold + Sora/Manrope). No JS, HTML, Python, Electron, or container changes. Same verification shape as v0.7.21 (tooling-only → engineer-side checks satisfy the gate).
