@@ -7,6 +7,21 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.7.22] - 2026-05-24
+
+**Wizard styling parity with Hermes WebUI.** The setup wizard now uses the same navy + gold dark palette and Sora/Manrope typography as the main chat UI, addressing Stan's feedback that onboarding felt disconnected from the app it leads into.
+
+### Changed
+
+- **Setup wizard reskinned to Hermes upstream dark palette (#364).** Replaced standalone zinc/orange color scheme (`#0e0e10` bg, `#f97316` accent) with Hermes dark-mode tokens (navy `#0D0D1A`, gold `#FFD700`, surface `#1A1A2E`). Added Sora variable font for headings and Manrope for body text. Ollama detection box now uses `#4DD0E1` (Hermes `--info`) instead of the non-standard teal. Pure CSS change — no layout, HTML, or JS modifications.
+
+### What's next
+
+- **v0.7.23:** #362 interactive install UX overhaul (Apple-polish step states + retry buttons) + #353 NVidia-style installer modes.
+- **v0.7.23+ also:** #365 test-infrastructure hooks (`/test/seed-provider` + `/test/skip-onboarding` + `/test/inject-failure`) unblocks 5 currently-skipped Playwright specs.
+
+---
+
 ## [0.7.21] - 2026-05-24
 
 **Tooling cleanup + Playwright net + one onboarding-redirect whitelist tweak.** The patch-system hygiene work the v0.7.15 audit recommended finally lands. `check-overlay-basis.sh` stops silently destroying submodule work-in-progress; it now also catches the v0.7.13 #331 failure mode at commit-time (orphan patches sitting in directory but missing from series). `regen-patch.sh` (broken-on-arrival since v0.7.14 — had a `# Wait that's not right. Let me redo:` comment shipped to main) is rewritten to actually work. Plus folds in the Playwright model-picker coverage agent 1 wrote during the v0.7.20 session, and adds `/api/models` to the patch-003 whitelist so the new specs can reach it on fresh containers (same shape as v0.7.17's `/test/` whitelist).

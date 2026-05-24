@@ -25,6 +25,25 @@ Skipped sections are OK as long as they're explicitly noted with reason. Empty e
 
 ---
 
+## v0.7.22 — 2026-05-24 (DV — CSS-only wizard reskin; no runtime logic changes, engineer-side verified pre-tag)
+
+CSS-only release: setup.css reskinned from zinc/orange to Hermes upstream dark palette (navy + gold + Sora/Manrope). No JS, HTML, Python, Electron, or container changes. Same verification shape as v0.7.21 (tooling-only → engineer-side checks satisfy the gate).
+
+- [x] (a) `setup.css` color values cross-referenced against Hermes upstream `style.css` `:root.dark` block — all hex values match
+- [x] (b) Font-face `url("fonts/Sora[wght].woff2")` path confirmed reachable (fonts exist at `packages/fox-overlay/webui_static/fonts/`)
+- [x] (c) No layout/structural CSS changes — only color values, font-family, font-weight, and letter-spacing touched
+- [x] (d) Playwright `wizard-renders.spec.ts` does not assert visual properties (only URL loads + redirects) — no spec breakage possible
+- [x] (e) No JS/Python/Electron source changes — jest count unchanged, container build unaffected
+- [x] (f) `git diff` reviewed: 61 insertions, 45 deletions, all within expected color/font-swap scope
+
+Findings:
+- The wizard's color language is now consistent with what users see post-onboarding. Stan's "wizard looks odd" feedback addressed.
+
+Action items:
+- None blocking. v0.7.23 install UX overhaul can begin.
+
+---
+
 ## v0.7.21 — 2026-05-24 (DV — tooling-only; no runtime changes, engineer-side verified pre-tag)
 
 Tooling-only release: `check-overlay-basis.sh` (stash leak fix + orphan-patch detection) + `regen-patch.sh` rewrite + Playwright model-picker spec fold-in. No code changes to Electron, fox-overlay runtime, or container build. Engineer-side checks satisfy the v0.7.19 gate teeth; no user-facing smoke needed because there's nothing user-facing to smoke.
