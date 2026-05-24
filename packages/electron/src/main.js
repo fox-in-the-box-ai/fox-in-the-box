@@ -468,6 +468,49 @@ function getRemediationForCode(code, platform) {
   return 'Check diagnostics and logs, then retry.';
 }
 
+// Poll /api/tailscale/status until it returns a tailnet_url or we time out.
+// Returns the HTTPS tailnet URL string, or null if not available in time.
+async function pollTailscaleUrl(timeoutMs = 30_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      const res = await fetch('http://127.0.0.1:8787/api/tailscale/status');
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.tailnet_url) return data.tailnet_url;
+      }
+    } catch (_) { /* not yet */ }
+    await new Promise((r) => setTimeout(r, 2_000));
+  }
+  return null;
+}
+
+// Opens Fox after container is healthy. If Tailscale mode is active (mode 2 or 3),
+// polls for the tailnet URL and shows a dialog surfacing it (#358).
+async function openFox() {
+  const mode = docker.getEffectiveAccessMode();
+  if (mode === '2' || mode === '3') {
+    showProgress('Waiting for Tailscale to connect…');
+    const tailnetUrl = await pollTailscaleUrl(30_000);
+    closeProgress();
+    if (tailnetUrl) {
+      const lines = mode === '3'
+        ? `Local access: http://localhost:8787\nFrom other devices: ${tailnetUrl}`
+        : `From other devices: ${tailnetUrl}`;
+      const { response } = await dialog.showMessageBox({
+        type: 'info',
+        title: 'Fox in the box — Ready',
+        message: 'Fox in the box is ready!',
+        detail: lines + '\n\nClick OK to open Fox.',
+        buttons: ['OK', 'Copy Tailscale URL'],
+        defaultId: 0,
+      });
+      if (response === 1) clipboard.writeText(tailnetUrl);
+    }
+  }
+  shell.openExternal(APP_HOME_URL);
+}
+
 async function startFromTray() {
   showProgress('Starting Fox in the box…');
   try {
@@ -478,7 +521,7 @@ async function startFromTray() {
       docker,
       waitUntilHealthy,
       showProgress,
-      openOnboarding: () => shell.openExternal(APP_HOME_URL),
+      openOnboarding: openFox,
     });
   } finally {
     closeProgress();
@@ -536,7 +579,7 @@ async function main() {
       ),
       showProgress,
       closeProgress,
-      openOnboarding: () => shell.openExternal(APP_HOME_URL),
+      openOnboarding: openFox,
       onDaemonNotReady: ({ platform }) => showDaemonRecoveryRequired(platform),
       getDialogParent,
       platform: process.platform,
