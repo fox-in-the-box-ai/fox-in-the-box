@@ -423,6 +423,7 @@ async function ensureDockerWindows(deps) {
     // `alwaysOnTop` flag while yielded so Docker's GUI installer isn't
     // covered by the FITB spinner. No-op when omitted (tests).
     setForegroundYield = () => {},
+    _sleep = (ms) => new Promise((r) => setTimeout(r, ms)),
   } = deps;
 
   const state = await detectWindowsDockerState(isDaemonRunning, _findExe);
@@ -483,7 +484,14 @@ async function ensureDockerWindows(deps) {
     // (RunOnce path) can take longer than 3 min on slower hardware as Docker
     // Desktop initializes its WSL2 distros for the first time. @bsgdigital
     // hit this on Win11 — Fox was bailing before Docker finished starting.
-    let remainingMs = 240_000;
+    //
+    // v0.7.30 @bsgdigital (Stan): Docker process is alive and all named pipes
+    // exist, but the daemon pipe isn't answering yet on reboot. The RunOnce
+    // path fires Fox immediately after login while Docker Desktop is still
+    // initializing its WSL distros. Give Docker a 15s head start before the
+    // first probe so we don't waste the first polling slice on a guaranteed miss.
+    await _sleep(15_000);
+    let remainingMs = 360_000;  // 240s → 360s: covers slower hardware on reboot
     let diagnostics = null;
     let wslBackendMissingStreak = 0;
     while (remainingMs > 0) {
@@ -524,10 +532,11 @@ async function ensureDockerWindows(deps) {
           break;
         }
         wslBackendMissingStreak += 1;
-        if (wslBackendMissingStreak >= 5) {
-          // ~60s of consecutive WSL-missing reports despite Docker process
+        if (wslBackendMissingStreak >= 10) {
+          // ~120s of consecutive WSL-missing reports despite Docker process
           // being up. WSL initialization is genuinely stuck; fall through
-          // to recovery.
+          // to recovery. Extended from 5→10 after @bsgdigital's Win11 log
+          // showed Docker taking 3+ min to register pipes on reboot.
           break;
         }
         showProgress(`Waiting for Docker WSL backend to register… (${wslBackendMissingStreak * 12}s)`);

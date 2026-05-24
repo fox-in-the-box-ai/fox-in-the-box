@@ -180,6 +180,7 @@ function makeDeps(overrides = {}) {
     showProgress:      jest.fn(),
     showRebootRequired: jest.fn(),
     _findExe:          jest.fn().mockResolvedValue(null),
+    _sleep:            jest.fn().mockResolvedValue(undefined),  // no-op in tests (15s settle delay)
     ...overrides,
   };
 }
