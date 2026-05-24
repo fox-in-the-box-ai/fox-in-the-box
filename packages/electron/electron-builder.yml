@@ -42,8 +42,8 @@ nsis:
   shortcutName: Fox in the Box
   installerIcon: assets/icon.ico
   uninstallerIcon: assets/icon.ico
-  installerHeaderImage: assets/installer/header.bmp
-  installerSidebarImage: assets/installer/sidebar.bmp
+  installerHeader: assets/installer/header.bmp
+  installerSidebar: assets/installer/sidebar.bmp
   include: build/installer.nsh
 
 mac:
