@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self';">
+<style>
+@font-face {
+  font-family: "Sora";
+  src: url("fonts/Sora.woff2") format("woff2-variations");
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: "Sora", "Segoe UI", system-ui, sans-serif;
+  background: #0D0D1A;
+  color: #FFF8DC;
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 48px;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.wrap { width: 100%; max-width: 420px; }
+
+.brand-name {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: #FFF8DC;
+  margin-bottom: 4px;
+}
+
+.gold-bar {
+  height: 2px;
+  background: linear-gradient(90deg, #FFD700 0%, rgba(255,215,0,0.2) 100%);
+  border-radius: 1px;
+  margin: 16px 0 28px;
+}
+
+.steps { display: flex; flex-direction: column; gap: 14px; margin-bottom: 24px; }
+
+.step {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  transition: color 0.25s ease;
+}
+.step.done    { color: #4CAF50; }
+.step.active  { color: #FFF8DC; font-weight: 600; }
+.step.pending { color: rgba(255,248,220,0.22); }
+
+.icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255,215,0,0.18);
+  border-top-color: #FFD700;
+  border-radius: 50%;
+  animation: spin 0.75s linear infinite;
+  flex-shrink: 0;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Diagnostics */
+.diag {
+  border-top: 1px solid rgba(255,255,255,0.07);
+  padding-top: 14px;
+}
+.diag summary {
+  font-size: 11px;
+  font-weight: 500;
+  color: rgba(255,248,220,0.38);
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: color 0.15s;
+  outline: none;
+}
+.diag summary:hover { color: rgba(255,248,220,0.62); }
+.diag summary::marker { display: none; }
+.diag summary::-webkit-details-marker { display: none; }
+.diag-arrow {
+  display: inline-block;
+  font-size: 8px;
+  transition: transform 0.2s ease;
+  line-height: 1;
+}
+details[open] .diag-arrow { transform: rotate(90deg); }
+
+.diag-body {
+  margin-top: 10px;
+  font-family: ui-monospace, "Cascadia Code", "Consolas", monospace;
+  font-size: 10.5px;
+  color: rgba(255,248,220,0.32);
+  line-height: 1.6;
+  max-height: 110px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.diag-body::-webkit-scrollbar { width: 3px; }
+.diag-body::-webkit-scrollbar-track { background: transparent; }
+.diag-body::-webkit-scrollbar-thumb { background: rgba(255,215,0,0.18); border-radius: 2px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand-name">Fox in the Box</div>
+  <div class="gold-bar"></div>
+  <div class="steps" id="steps"></div>
+  <details class="diag" id="diag">
+    <summary><span class="diag-arrow">▶</span> Diagnostics</summary>
+    <div class="diag-body" id="diag-body"></div>
+  </details>
+</div>
+
+<script>
+const STEPS = [
+  'Checking system',
+  'Setting up Docker',
+  'Pulling container image',
+  'Starting container',
+  'Waiting for Fox to be ready',
+  'Opening Fox',
+];
+
+let currentIdx = 0;
+
+function render(idx) {
+  currentIdx = idx;
+  document.getElementById('steps').innerHTML = STEPS.map((label, i) => {
+    let iconHtml, cls;
+    if (i < idx)       { iconHtml = '<span style="color:#4CAF50;font-size:15px;">✓</span>'; cls = 'done'; }
+    else if (i === idx) { iconHtml = '<div class="spinner"></div>'; cls = 'active'; }
+    else               { iconHtml = '<span style="opacity:0.35;font-size:11px;">○</span>'; cls = 'pending'; }
+    return `<div class="step ${cls}"><div class="icon">${iconHtml}</div><span>${label}</span></div>`;
+  }).join('');
+}
+
+function appendLog(line) {
+  const el = document.getElementById('diag-body');
+  el.textContent = el.textContent ? el.textContent + '\n' + line : line;
+  el.scrollTop = el.scrollHeight;
+}
+
+render(currentIdx);
+
+if (window.fitb) {
+  window.fitb.onStepUpdate((idx) => render(idx));
+  window.fitb.onLogLine((line) => appendLog(line));
+}
+</script>
+</body>
+</html>
