@@ -7,6 +7,20 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.7.25] - 2026-05-24
+
+**Network access dialog rewritten for non-technical users (#357).**
+
+### Changed
+
+- **#357 Network access dialog copy.** Replaced jargon-heavy installer copy ("bind 8787 on all interfaces", "Tailscale inside the container") with plain language. "Tailscale only" is now "This PC + other devices (Tailscale)" with a one-liner: "Tailscale connects your devices together so you can open Fox from anywhere on your personal network. Free, no subscription." The three button labels are now "This PC only", "This PC + other devices (Tailscale)", "Both".
+
+### What's next
+
+- **v0.7.26:** #353 NVidia-style installer modes (Express / Clean Install / Uninstall-with-cleanup) + #323 Windows installer design system styling.
+
+---
+
 ## [0.7.24] - 2026-05-24
 
 **Tailscale URL surfaced after startup (#358) + Fox WebUI branding.**

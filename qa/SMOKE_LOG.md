@@ -25,6 +25,23 @@ Skipped sections are OK as long as they're explicitly noted with reason. Empty e
 
 ---
 
+## v0.7.25 — 2026-05-24 (DV — copy-only change; engineer-side verified pre-tag)
+
+Copy-only release: network access dialog strings rewritten in docker-manager.js. No logic changes.
+
+- [x] (a) `node --check packages/electron/src/docker-manager.js` — syntax clean
+- [x] (b) Jest: 34/34 docker-manager tests green; 83/83 full suite green
+- [x] (c) Button indices unchanged (0=port-only, 1=Tailscale, 2=Both, 3=Cancel) — mode mapping logic untouched
+- [x] (d) `defaultId: 1` unchanged — Tailscale still the recommended default
+
+Findings:
+- Pure string change. No runtime behavior change.
+
+Action items:
+- None.
+
+---
+
 ## v0.7.24 — 2026-05-24 (DV — Electron-only change; engineer-side verified pre-tag)
 
 Electron-only release: `openFox()` + `pollTailscaleUrl()` helpers in main.js. No overlay, container, or Python changes.
