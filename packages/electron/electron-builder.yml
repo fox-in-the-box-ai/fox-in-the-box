@@ -36,7 +36,6 @@ win:
 nsis:
   oneClick: false
   perMachine: false
-  requestedExecutionLevel: asInvoker
   allowToChangeInstallationDirectory: false
   deleteAppDataOnUninstall: false
   uninstallDisplayName: Fox in the Box
