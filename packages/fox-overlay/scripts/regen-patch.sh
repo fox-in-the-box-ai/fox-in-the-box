@@ -8,10 +8,22 @@
 #
 # This script makes the workflow atomic:
 #   1. Force-reset the fork to its pinned commit (verbatim upstream)
-#   2. Apply all earlier patches in series so the new patch stacks correctly
-#   3. Drop into $EDITOR (or $SHELL) for the developer to make their edits
-#   4. On exit, export the diff to the named patch file
-#   5. Force-reset the fork again so nothing leaks into the parent repo
+#   2. Apply all EARLIER patches in series so the new patch stacks correctly
+#   3. Commit that state as a local baseline (the diff target)
+#   4. Drop into $SHELL for the developer to make their edits
+#   5. On exit, compute `git diff HEAD --` against the baseline commit and
+#      write that to the named patch file
+#   6. Force-reset the fork again so nothing leaks into the parent repo
+#
+# v0.7.21 rewrite: the previous version was broken-on-arrival. It tried
+# two diff approaches (mktemp snapshot + diff -ruN, then a second pass
+# with stash --keep-index + reset --hard + cp -r snapshot/*) — the
+# second pass OVERWROTE the dev's edits with the snapshot before
+# computing the diff, so the output was always empty. The "let me redo"
+# comment shipped to main in that version was the smoking gun. This
+# rewrite uses git as the diff engine (commit baseline + diff HEAD)
+# instead of filesystem snapshots, which sidesteps the ordering issue
+# entirely and produces patches in git's canonical unified format.
 #
 # Usage:
 #   make regen-patch FORK=webui PATCH=003-server-py-onboarding-redirect.patch
@@ -19,6 +31,11 @@
 #
 # Or directly:
 #   packages/fox-overlay/scripts/regen-patch.sh webui 003-server-py-onboarding-redirect.patch
+#
+# The named patch file does NOT need to exist beforehand — if you're
+# regenerating an existing patch, prior contents are overwritten. If you're
+# creating a new patch, supply the new filename + add it to the series file
+# afterward (the script reminds you).
 
 set -euo pipefail
 
@@ -42,6 +59,7 @@ FORK_DIR="forks/hermes-$FORK"
 PATCH_DIR="packages/fox-overlay/patches/$FORK"
 SERIES_FILE="$PATCH_DIR/series"
 TARGET_PATCH="$PATCH_DIR/$PATCH_NAME"
+TARGET_PATCH_ABS="$REPO_ROOT/$TARGET_PATCH"
 
 if [ ! -d "$FORK_DIR" ]; then
     echo "Submodule $FORK_DIR not found. Run: git submodule update --init $FORK_DIR" >&2
@@ -53,154 +71,148 @@ if [ ! -f "$SERIES_FILE" ]; then
     exit 1
 fi
 
-# ── Verify the fork is at the pinned commit (sanity check) ──
-PINNED_COMMIT=$(git ls-tree HEAD "$FORK_DIR" | awk '{print $3}')
-CURRENT_COMMIT=$(git -C "$FORK_DIR" rev-parse HEAD)
+# Verify the fork is at the pinned commit. If the submodule pointer drifts
+# from the parent repo's recorded pin, the regen would target a different
+# upstream tree — silently producing a patch that doesn't apply against
+# what the Dockerfile actually checks out.
+PINNED_COMMIT="$(git ls-tree HEAD "$FORK_DIR" | awk '{print $3}')"
+CURRENT_COMMIT="$(git -C "$FORK_DIR" rev-parse HEAD)"
 if [ "$PINNED_COMMIT" != "$CURRENT_COMMIT" ]; then
     echo "Submodule $FORK_DIR is at $CURRENT_COMMIT but parent repo pins it at $PINNED_COMMIT." >&2
     echo "Run: git submodule update --init $FORK_DIR" >&2
     exit 1
 fi
 
-# ── Force-reset the fork before doing anything ──
-echo "[regen-patch] Force-resetting $FORK_DIR to pinned commit (any local changes WILL be lost)..."
-git -C "$FORK_DIR" reset --hard --quiet
-git -C "$FORK_DIR" clean -fdx --quiet
+# Refuse to run with a dirty submodule — same rationale as
+# check-overlay-basis.sh's preflight. Pre-v0.7.21 this script would
+# `git reset --hard` unconditionally and silently destroy your work.
+DIRTY="$(git -C "$FORK_DIR" status --porcelain)"
+if [ -n "$DIRTY" ]; then
+    echo "Submodule $FORK_DIR has uncommitted changes:" >&2
+    printf '%s\n' "$DIRTY" | head -10 | sed 's/^/  /' >&2
+    echo "Commit or reset them explicitly before running regen-patch." >&2
+    exit 2
+fi
 
-# ── Apply all earlier patches in series ──
+echo "[regen-patch] Fork at pinned commit ${PINNED_COMMIT:0:12} — clean."
+
+# ── Apply all EARLIER patches in series ────────────────────────────────────
+# Stops when it encounters the target patch name OR runs out of patches
+# (the latter means we're authoring a brand-new patch at the end).
 APPLIED=()
-echo "[regen-patch] Applying earlier patches in series..."
+TARGET_FOUND=0
+echo "[regen-patch] Stacking earlier patches in series..."
 while IFS= read -r line; do
-    # Skip blanks + comments
     case "$line" in ''|\#*) continue ;; esac
-    # Stop when we reach our target patch (or any patch with our name)
     if [ "$line" = "$PATCH_NAME" ]; then
+        TARGET_FOUND=1
         break
     fi
     p="$PATCH_DIR/$line"
     if [ ! -f "$p" ]; then
-        echo "  ⚠️  series references missing patch: $p — skipping" >&2
+        echo "  ! series references missing patch: $p — skipping" >&2
         continue
     fi
     echo "  applying $line..."
-    if ! git -C "$FORK_DIR" apply "../../$p"; then
-        echo "  ❌ failed to apply $line — cannot stack $PATCH_NAME on top" >&2
+    if ! git -C "$FORK_DIR" apply "$REPO_ROOT/$p" 2>&1 | sed 's/^/      /'; then
+        echo "  failed to apply $line — cannot stack $PATCH_NAME on top." >&2
+        echo "  Resetting fork." >&2
         git -C "$FORK_DIR" reset --hard --quiet
+        git -C "$FORK_DIR" clean -fdx --quiet
         exit 1
     fi
     APPLIED+=("$line")
 done < "$SERIES_FILE"
 
-# Snapshot the post-earlier-patches state for the final diff
-SNAPSHOT_DIR="$(mktemp -d)"
-trap 'rm -rf "$SNAPSHOT_DIR"' EXIT
+if [ "$TARGET_FOUND" -eq 0 ]; then
+    echo "[regen-patch] $PATCH_NAME is not in series yet — will author as new patch at end."
+fi
 
-# Snapshot every file the fork has (small enough for our submodules)
-echo "[regen-patch] Snapshotting baseline..."
-git -C "$FORK_DIR" ls-files | while read -r f; do
-    mkdir -p "$SNAPSHOT_DIR/$(dirname "$f")"
-    cp "$FORK_DIR/$f" "$SNAPSHOT_DIR/$f"
-done
+# ── Commit baseline so we can diff against it cleanly ──────────────────────
+# `git diff HEAD` against this commit captures exactly the dev's edits in
+# canonical unified format — much cleaner than the mktemp-snapshot + diff -ruN
+# pattern the previous version tried (which had two competing diff blocks
+# fighting each other; see the v0.7.15 audit's "let me redo" finding).
+#
+# Local-only commit. The fork's reset --hard at the end discards it; nothing
+# leaks into the submodule's history or the parent repo.
+BASELINE_SHA="(no-baseline)"
+if [ "${#APPLIED[@]}" -gt 0 ]; then
+    git -C "$FORK_DIR" add -A
+    git -C "$FORK_DIR" -c user.name="regen-patch" -c user.email="regen-patch@local" \
+        commit --quiet --no-verify -m "regen-patch baseline: ${APPLIED[*]}"
+    BASELINE_SHA="$(git -C "$FORK_DIR" rev-parse HEAD)"
+fi
 
-# ── Hand off to interactive editor / shell ──
+# ── Hand off to interactive shell ──────────────────────────────────────────
 echo ""
 echo "════════════════════════════════════════════════════════════════════"
 echo " regen-patch interactive session"
 echo "════════════════════════════════════════════════════════════════════"
 echo ""
-echo " Fork:          $FORK_DIR (at pinned $PINNED_COMMIT)"
-echo " Patches stacked: ${APPLIED[*]:-none}"
-echo " Target patch:  $TARGET_PATCH"
+echo " Fork:              $FORK_DIR"
+echo " Pinned at:         ${PINNED_COMMIT:0:12}"
+echo " Patches stacked:   ${APPLIED[*]:-(none)}"
+echo " Baseline commit:   ${BASELINE_SHA:0:12}"
+echo " Target patch:      $TARGET_PATCH"
 echo ""
-echo " Now make your edits inside $FORK_DIR/, then exit this shell (Ctrl-D"
-echo " or 'exit'). The diff will be exported to the target patch file and"
-echo " the fork will be reset clean."
+echo " Make your edits inside $FORK_DIR/, then exit this shell (Ctrl-D or"
+echo " 'exit'). The diff vs the baseline commit will be written to the"
+echo " target patch file and the fork reset to pristine."
 echo ""
 echo "════════════════════════════════════════════════════════════════════"
 echo ""
 
-# Spawn a subshell in the fork directory
 (cd "$FORK_DIR" && "${SHELL:-bash}")
 
-# ── Compute diff and write the patch ──
+# ── Compute diff ───────────────────────────────────────────────────────────
 echo ""
-echo "[regen-patch] Computing diff..."
-{
-    cat <<HEADER
-From: Fox in the Box overlay <noreply@fox-in-the-box.local>
-Subject: [PATCH] $(basename "$PATCH_NAME" .patch)
+echo "[regen-patch] Computing diff against baseline..."
+# Stage everything (handles new files too) so `git diff --cached HEAD` sees
+# them. Then diff the staged tree against the baseline commit.
+git -C "$FORK_DIR" add -A
+DIFF_OUTPUT="$(git -C "$FORK_DIR" diff --cached HEAD 2>/dev/null || git -C "$FORK_DIR" diff HEAD 2>/dev/null || true)"
 
-(Edit this header to describe what the patch does and why.)
-
-HEADER
-
-    # Walk every tracked file under FORK_DIR, diff against the snapshot.
-    cd "$FORK_DIR"
-    git ls-files | while read -r f; do
-        if [ -f "../../$SNAPSHOT_DIR/$f" ]; then
-            if ! diff -q "../../$SNAPSHOT_DIR/$f" "$f" > /dev/null 2>&1; then
-                # Generate git-style diff for this file
-                diff -u "../../$SNAPSHOT_DIR/$f" "$f" \
-                    | sed "1s|.*|diff --git a/$f b/$f|; 2s|.*|--- a/$f|; 3s|.*|+++ b/$f|"
-                # Wait that's not right. Let me redo:
-            fi
-        fi
-    done
-} > "$TARGET_PATCH.tmp"
-
-# Simpler approach: use the snapshot as a temporary git baseline
-cd "$REPO_ROOT/$FORK_DIR"
-# Stage the snapshot state, then diff working tree against the stage
-git -C . stash --quiet --keep-index 2>/dev/null || true
-git -C . reset --hard --quiet
-# Restore the snapshot
-cp -r "$SNAPSHOT_DIR"/* .
-git -C . add -A
-git -C . diff --cached --reverse > /dev/null 2>&1 || true
-
-# Use git diff against snapshot directly
-DIFF_OUTPUT=$(cd "$REPO_ROOT" && diff -ruN "$SNAPSHOT_DIR" "$FORK_DIR" \
-    | sed "s|--- $SNAPSHOT_DIR/|--- a/|g; s|+++ $FORK_DIR/|+++ b/|g" \
-    | grep -v "^Only in" || true)
+# Always reset the fork before exiting, regardless of whether we wrote a patch.
+# Use a trap so even an error mid-write leaves the submodule pristine.
+cleanup_fork() {
+    git -C "$FORK_DIR" reset --hard --quiet "$PINNED_COMMIT" 2>/dev/null || true
+    git -C "$FORK_DIR" clean -fdx --quiet 2>/dev/null || true
+}
+trap cleanup_fork EXIT
 
 if [ -z "$DIFF_OUTPUT" ]; then
-    echo "[regen-patch] No changes detected — nothing to write."
-    echo "[regen-patch] Resetting fork to pristine state."
-    git -C "$REPO_ROOT/$FORK_DIR" reset --hard --quiet
-    git -C "$REPO_ROOT/$FORK_DIR" clean -fdx --quiet
-    rm -f "$TARGET_PATCH.tmp"
+    echo "[regen-patch] No changes detected. Nothing written to $TARGET_PATCH."
+    echo "[regen-patch] Fork reset to pristine state."
     exit 0
 fi
 
+# ── Write the patch file ───────────────────────────────────────────────────
+# Patch format: a short header (subject + author) followed by the unified diff.
+# Matches the format of the existing series patches (001/002/003) which were
+# generated by `git diff` then hand-edited.
+mkdir -p "$(dirname "$TARGET_PATCH_ABS")"
 {
-    cat <<HEADER
-From: Fox in the Box overlay <noreply@fox-in-the-box.local>
-Subject: [PATCH] $(basename "$PATCH_NAME" .patch)
+    printf 'From: Fox in the Box overlay <noreply@fox-in-the-box.local>\n'
+    printf 'Subject: [PATCH] %s\n' "$(basename "$PATCH_NAME" .patch)"
+    printf '\n'
+    printf '(Edit this header to describe what the patch does and why.\n'
+    printf 'Anchor context: this patch was generated against pinned commit %s\n' "${PINNED_COMMIT:0:12}"
+    printf 'with %d earlier patches stacked: %s)\n' "${#APPLIED[@]}" "${APPLIED[*]:-(none)}"
+    printf '\n'
+    printf '%s\n' "$DIFF_OUTPUT"
+} > "$TARGET_PATCH_ABS"
 
-(Edit this header to describe what the patch does and why.)
-
-HEADER
-    # Prepend git-style diff --git header to each file diff
-    echo "$DIFF_OUTPUT" | awk '
-        /^--- a\// {
-            file = substr($0, 7)
-            print "diff --git a/" file " b/" file
-        }
-        { print }
-    '
-} > "$TARGET_PATCH"
-rm -f "$TARGET_PATCH.tmp"
-
-# ── Reset fork to pristine state ──
-echo "[regen-patch] Resetting $FORK_DIR to pristine state..."
-git -C "$REPO_ROOT/$FORK_DIR" reset --hard --quiet
-git -C "$REPO_ROOT/$FORK_DIR" clean -fdx --quiet
-
-echo ""
-echo "✅ Patch written to: $TARGET_PATCH"
+echo "[regen-patch] Wrote $TARGET_PATCH ($(wc -l < "$TARGET_PATCH_ABS") lines)"
+echo "[regen-patch] Fork reset to pristine state."
 echo ""
 echo "Next steps:"
-echo "  1. Edit the patch header (Subject + description) to explain the change"
-echo "  2. Add to series file if new: echo '$PATCH_NAME' >> $SERIES_FILE"
-echo "  3. Verify: make validate-overlay"
-echo "  4. Commit: git add $TARGET_PATCH $SERIES_FILE"
+echo "  1. Edit the patch header (Subject + description) to explain the change."
+if [ "$TARGET_FOUND" -eq 0 ]; then
+    echo "  2. Add to series: echo '$PATCH_NAME' >> $SERIES_FILE"
+    echo "  3. Verify: bash packages/fox-overlay/scripts/check-overlay-basis.sh"
+    echo "  4. Commit: git add $TARGET_PATCH $SERIES_FILE"
+else
+    echo "  2. Verify: bash packages/fox-overlay/scripts/check-overlay-basis.sh"
+    echo "  3. Commit: git add $TARGET_PATCH"
+fi

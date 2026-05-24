@@ -7,6 +7,38 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.7.21] - 2026-05-24
+
+**Tooling cleanup + Playwright net + one onboarding-redirect whitelist tweak.** The patch-system hygiene work the v0.7.15 audit recommended finally lands. `check-overlay-basis.sh` stops silently destroying submodule work-in-progress; it now also catches the v0.7.13 #331 failure mode at commit-time (orphan patches sitting in directory but missing from series). `regen-patch.sh` (broken-on-arrival since v0.7.14 — had a `# Wait that's not right. Let me redo:` comment shipped to main) is rewritten to actually work. Plus folds in the Playwright model-picker coverage agent 1 wrote during the v0.7.20 session, and adds `/api/models` to the patch-003 whitelist so the new specs can reach it on fresh containers (same shape as v0.7.17's `/test/` whitelist).
+
+### Fixed
+
+- **`check-overlay-basis.sh` stash leak.** The script's `git stash --include-untracked` was never popped; subsequent `git reset --hard` + `git clean -fdx` destroyed the working tree, orphaning the stash forever. On CI runners (always fresh checkout) this was a no-op. For local dev runs, it silently destroyed submodule work-in-progress. Now: refuse-if-dirty preflight checks `git status --porcelain` on each submodule, bails with exit code 2 + a clear "fix your state explicitly" message if anything's modified.
+- **`regen-patch.sh` rewrite.** The v0.7.14 ship had two competing diff blocks fighting each other (the second one `cp -r snapshot/* .`'d the dev's edits with the snapshot BEFORE computing the diff → output always empty). New version uses git itself as the diff engine: commit baseline → drop into dev shell → `git diff HEAD` after shell exits → reset to pristine. Trap-based cleanup so even an error mid-write leaves the submodule clean.
+
+### Added
+
+- **Orphan-patch detection in `check-overlay-basis.sh`.** Every `.patch` file in `patches/{webui,agent}/` MUST appear in its `series` file. v0.7.13 #331 root cause: `003-server-py-onboarding-redirect.patch` existed in the directory from v0.7.13 onwards but wasn't added to series until v0.7.15 — for 2 releases the onboarding-redirect fix shipped broken because the Dockerfile only iterates the series file, not the directory. New check uses `comm -23` between sorted directory contents and series entries; any orphan fails with a clear "add to series or delete" message.
+- **`qa/playwright/tests/smoke/model-picker.spec.ts`** (5 specs from agent 1's `qa/playwright-model-picker-coverage` branch — folded in). 2 live (`#337` Ollama tile always present + install-hint copy) + 3 `describe.skip` for now (`#344` no-providers, `#344` with-provider, `#278` Ollama dedup — fixes shipped v0.7.20 but tests need `/test/seed-provider` + `/test/skip-onboarding` hooks documented in **#365**).
+
+### Changed
+
+- **`wizard-local-fallback.spec.ts` skip comments updated** to reflect v0.7.20 tactical-fix-shipped + failure-injection-hook-needed status. Same unskip target as the model-picker specs: when #365 lands the test harness.
+- **`/api/models` added to `_SETUP_PREFIXES` whitelist** in `packages/fox-overlay/fox_overlay/webui_modules/onboarding.py`. Same shape as v0.7.17's `/test/` whitelist fix — the public read endpoint should work regardless of onboarding state, so the model-picker spec can hit it on fresh containers. (The 2 currently-live model-picker tests are still `describe.skip` for this PR because `:stable` doesn't yet have the whitelist; they unskip in v0.7.22.)
+
+### Behind the scenes
+
+- 24 Playwright smoke specs total (was 18 before v0.7.21; +6 from the model-picker spec — 2 live + 3 skipped, plus 1 already-skipped section updated). Live count went up by 2.
+- No code change to runtime paths; no jest delta expected. CI green carries the same shape as v0.7.20.
+
+### What's next
+
+- **v0.7.22:** #364 wizard styling parity with Hermes WebUI + restore old-version onboarding feel (Stan's "wizard looks odd" + "old onboarding was prettier").
+- **v0.7.23:** #362 interactive install UX overhaul (Apple-polish step states + retry buttons) + #353 NVidia-style installer modes (Express / Clean Install / Uninstall-with-cleanup).
+- **v0.7.22+ also:** #365 test-infrastructure hooks (`/test/seed-provider` + `/test/skip-onboarding` + `/test/inject-failure`) unblocks 5 currently-skipped Playwright specs.
+
+---
+
 ## [0.7.20] - 2026-05-23
 
 **Windows install reliability + picker sanity + #336 diagnostics.** Stan @bsgdigital's Win11 smoke caught the load-bearing P0 race that made fresh-install Fox fail to detect Docker after reboot. v0.7.20 fixes that, fixes the Ollama-under-Custom mis-categorization in the picker, auto-preselects a usable chat model on first open, and surfaces real backend errors in the wizard's local-fallback failure path so future bug reports carry diagnostics instead of "unknown error."
