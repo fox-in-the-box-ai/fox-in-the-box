@@ -189,6 +189,51 @@ test('ensureContainerRunning reports started-existing reason', async () => {
   expect(result.reason).toBe('started-existing');
 });
 
+test('ensureContainerRunning recreates when container is dead (HTTP 409 on start)', async () => {
+  // Regression: container state "dead" means Docker marked it for removal.
+  // Calling container.start() returns 409 "marked for removal and cannot be started".
+  // Fox must remove + recreate rather than surfacing an unrecoverable error.
+  mockDockerInstance.listContainers.mockResolvedValueOnce([
+    { Id: 'dead-1', State: 'dead', Status: 'Dead', Names: ['/fox-in-the-box'], ImageID: 'sha256:any' },
+  ]);
+  mockDockerInstance.getImage = jest.fn().mockReturnValue({
+    inspect: jest.fn().mockRejectedValue(new Error('no image')),
+  });
+  const deadContainer = { remove: jest.fn().mockResolvedValue({}) };
+  const newContainer  = { start: jest.fn().mockResolvedValue({}) };
+  mockDockerInstance.getContainer.mockReturnValueOnce(deadContainer);
+  mockDockerInstance.createContainer.mockResolvedValue(newContainer);
+
+  const result = await docker.ensureContainerRunning();
+
+  expect(deadContainer.remove).toHaveBeenCalledWith({ force: true });
+  expect(mockDockerInstance.createContainer).toHaveBeenCalledTimes(1);
+  expect(result.reason).toBe('recreated-after-dead');
+});
+
+test('ensureContainerRunning recreates when container.start() throws 409 marked-for-removal', async () => {
+  // Same failure mode but detected via 409 on start() rather than state check.
+  mockDockerInstance.listContainers.mockResolvedValueOnce([
+    { Id: 'dying-1', State: 'exited', Status: 'Exited', Names: ['/fox-in-the-box'], ImageID: 'sha256:any' },
+  ]);
+  mockDockerInstance.getImage = jest.fn().mockReturnValue({
+    inspect: jest.fn().mockRejectedValue(new Error('no image')),
+  });
+  const err409 = Object.assign(new Error('container is marked for removal'), { statusCode: 409 });
+  const dyingContainer = {
+    start:  jest.fn().mockRejectedValue(err409),
+    remove: jest.fn().mockResolvedValue({}),
+  };
+  const newContainer = { start: jest.fn().mockResolvedValue({}) };
+  mockDockerInstance.getContainer.mockReturnValueOnce(dyingContainer);
+  mockDockerInstance.createContainer.mockResolvedValue(newContainer);
+
+  const result = await docker.ensureContainerRunning();
+
+  expect(dyingContainer.remove).toHaveBeenCalledWith({ force: true });
+  expect(result.reason).toBe('recreated-after-dead');
+});
+
 test('ensureContainerRunning reports created-new reason', async () => {
   mockDockerInstance.listContainers.mockResolvedValueOnce([]);
   const mockContainer = { start: jest.fn().mockResolvedValue({}) };
