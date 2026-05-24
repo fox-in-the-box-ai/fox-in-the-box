@@ -25,6 +25,23 @@ Skipped sections are OK as long as they're explicitly noted with reason. Empty e
 
 ---
 
+## v0.7.30 — 2026-05-24 (DV — Option B bump + Docker reliability; engineer-side verified pre-tag)
+
+- [x] (a) `check-overlay-basis.sh` clean against v0.51.124 — all 6 patches (001-006) apply
+- [x] (b) Jest: 90/90 green after `_sleep` mock added to startup.test.js `makeDeps`
+- [x] (c) `node --check startup.js` — syntax clean
+- [x] (d) 15s settle delay is injectable via `_sleep` dep — tests use no-op mock, production uses real setTimeout
+- [x] (e) WSL streak tolerance 5→10 and wait budget 240s→360s — both reviewed, no logic change to recovery path
+- [ ] (f) **POST-RELEASE — REQUIRED:** @bsgdigital to confirm Docker starts cleanly on Win11 reboot with v0.7.30
+
+Findings:
+- Stan's log confirmed: Docker process alive + all pipes present, but daemon pipe not answering yet when Fox first probed. The 15s settle + longer streak tolerance directly addresses this.
+
+Action items:
+- @bsgdigital: reboot Win11, let Fox start automatically via RunOnce, confirm no ENOENT error
+
+---
+
 ## v0.7.29 — 2026-05-24 (DV — test infra + feature + patch fix; engineer-side verified pre-tag)
 
 - [x] (a) Jest: 90/90 green

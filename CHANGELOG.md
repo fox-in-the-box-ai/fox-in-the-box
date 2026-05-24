@@ -7,6 +7,25 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.7.30] - 2026-05-24
+
+**Upstream bump + Docker reboot reliability fix for Stan.**
+
+### Fixed
+
+- **Docker daemon wait on Windows reboot (#361 follow-up).** After spawning Docker Desktop, Fox now waits 15s before the first daemon probe — so named pipes have time to register on the reboot/RunOnce path. WSL_BACKEND_MISSING streak tolerance raised from 5 → 10 iterations (60s → 120s patience). Total wait budget extended 240s → 360s. Diagnosed from @bsgdigital's electron log: Docker process was alive, all pipes existed, but the daemon pipe wasn't answering yet when Fox first probed.
+
+### Behind the scenes
+
+- **Upstream bump: webui v0.51.118 → v0.51.124** (6 patch versions). All 6 Fox overlay patches (001-006) verified clean against the new pin via `check-overlay-basis.sh`. Container `:stable` auto-advances on merge per Option B.
+- Closes auto-issues #368 (upstream watch) and #369 (nesquena absence — debounce, upstream active at v0.51.124).
+
+### What's next
+
+- **v0.7.31:** Continue issue backlog — #144 (custom provider UI), #293 (diagnostic report), #306 (release channels).
+
+---
+
 ## [0.7.29] - 2026-05-24
 
 **Test infrastructure hooks (#365) + model picker filter (#304) + patch fix + CI fix.**
