@@ -1,13 +1,13 @@
 diff --git a/static/ui.js b/static/ui.js
-index 76a44fae..97ead5be 100644
+index 3737fff8..2b9ec210 100644
 --- a/static/ui.js
 +++ b/static/ui.js
-@@ -4851,7 +4851,7 @@ function isTpsDisplayEnabled(){
+@@ -5083,7 +5083,7 @@ function isTpsDisplayEnabled(){
  function _assistantRoleHtml(tsTitle='', tpsText=''){
    const _bn=assistantDisplayName();
    const tps=(isTpsDisplayEnabled()&&tpsText)?`<span class="msg-tps-inline" title="Tokens per second">${esc(tpsText)}</span>`:'';
 -  return `<div class="msg-role assistant" ${tsTitle?`title="${esc(tsTitle)}"`:''}><div class="role-icon assistant">${esc(_bn.charAt(0).toUpperCase())}</div><span style="font-size:12px">${esc(_bn)}</span>${tps}</div>`;
-+  return `<div class="msg-role assistant" ${tsTitle?`title="${esc(tsTitle)}"`:''} ><img class="role-icon assistant app-avatar" src="/extensions/fox_avatar_cropped.jpg" alt="${esc(_bn)}" width="20" height="20" decoding="async"><span style="font-size:12px">${esc(_bn)}</span>${tps}</div>`;
++  return `<div class="msg-role assistant" ${tsTitle?`title="${esc(tsTitle)}"`:''} ><img class="role-icon assistant app-avatar" src="/extensions/images/fox_avatar_cropped.jpg" alt="${esc(_bn)}" width="20" height="20" decoding="async"><span style="font-size:12px">${esc(_bn)}</span>${tps}</div>`;
  }
  function _setAssistantTurnTps(turn, tpsText=''){
    if(!turn) return;
