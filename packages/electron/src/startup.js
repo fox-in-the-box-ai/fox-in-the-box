@@ -430,6 +430,15 @@ async function ensureDockerWindows(deps) {
 
   if (state.action === 'none') return { result: 'already-running' };
 
+  // Show Docker-ready confirmation + brief pause so user sees the green ✓ before
+  // the next phase begins. Message maps to step index 2 in the progress window,
+  // which renders "Setting up Docker ✓" automatically.
+  const _dockerReady = async (result) => {
+    showProgress('Docker is ready — pulling container image…');
+    await _sleep(1_500);
+    return { result };
+  };
+
   if (state.action === 'start' || state.action === 'start-service') {
     showProgress('Starting Docker Desktop… this can take up to 3 minutes on first launch.');
     setForegroundYield(true);
@@ -498,7 +507,7 @@ async function ensureDockerWindows(deps) {
       // Shorter slices re-run diagnosis sooner when the daemon is stuck (WSL / relaunch paths).
       const sliceMs = Math.min(12_000, remainingMs);
       const cameUpSlice = await _waitForDaemon(sliceMs, showProgress);
-      if (cameUpSlice) return { result: 'started' };
+      if (cameUpSlice) return _dockerReady('started');
       remainingMs -= sliceMs;
       diagnostics = await diagnoseDocker();
 
@@ -526,7 +535,7 @@ async function ensureDockerWindows(deps) {
       // "still booting" and keep polling. Track a streak so genuinely
       // broken WSL eventually breaks out instead of timing out.
       if (diagnostics.issueCode === 'WSL_NOT_INITIALIZED' || diagnostics.issueCode === 'WSL_BACKEND_MISSING') {
-        if (await isDaemonRunning()) return { result: 'started' };
+        if (await isDaemonRunning()) return _dockerReady('started');
         if (!diagnostics.desktopProcessRunning) {
           // Docker process is gone AND WSL is missing — really broken, escalate.
           break;
@@ -547,14 +556,14 @@ async function ensureDockerWindows(deps) {
 
     diagnostics = diagnostics || await diagnoseDocker();
     if (diagnostics.issueCode === 'WSL_NOT_INITIALIZED' || diagnostics.issueCode === 'WSL_BACKEND_MISSING') {
-      if (await isDaemonRunning()) return { result: 'started' };
+      if (await isDaemonRunning()) return _dockerReady('started');
       const recovery = await attemptRecover(showProgress);
       if (recovery.attempted && recovery.backendReady) {
         showProgress('WSL repaired — retrying Docker daemon startup…');
         const recovered = await _waitForDaemon(120_000, showProgress);
-        if (recovered) return { result: 'started-after-recovery' };
+        if (recovered) return _dockerReady('started-after-recovery');
       }
-      if (await isDaemonRunning()) return { result: 'started-after-recovery' };
+      if (await isDaemonRunning()) return _dockerReady('started-after-recovery');
       const wslErr = new Error(
         'Docker backend (WSL) is not initialized. Run WSL setup, reboot if prompted, then open Docker Desktop and retry.'
       );
