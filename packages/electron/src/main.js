@@ -89,77 +89,25 @@ app.setAppUserModelId('io.foxinthebox.desktop');
 let _progressWin = null;
 let _progressState = { title: '', detail: '' };
 
-// Step-based install UX (#362). Steps map to startup-orchestrator phases.
-// showProgress is called with "Step N/M - Phase label: message" strings;
-// we detect the active step by matching the Phase label segment.
 const INSTALL_STEPS = [
-  { label: 'Checking system',            match: 'Initialize app' },
-  { label: 'Setting up Docker',          match: 'Prepare Docker' },
-  { label: 'Pulling container image',    match: 'Ensure container image' },
-  { label: 'Starting container',         match: 'Prepare container' },
+  { label: 'Checking system',             match: 'Initialize app' },
+  { label: 'Setting up Docker',           match: 'Prepare Docker' },
+  { label: 'Pulling container image',     match: 'Ensure container image' },
+  { label: 'Starting container',          match: 'Prepare container' },
   { label: 'Waiting for Fox to be ready', match: 'Wait for services' },
-  { label: 'Opening Fox',               match: 'Open setup wizard' },
+  { label: 'Opening Fox',                 match: 'Open setup wizard' },
 ];
 
 function _activeStepIndex(title) {
   if (!title) return -1;
-  // title looks like "Step 2/6 - Prepare Docker daemon: Setting up Docker…"
-  // or a freeform string like "Starting Docker Desktop…"
   for (let i = INSTALL_STEPS.length - 1; i >= 0; i--) {
     if (title.includes(INSTALL_STEPS[i].match)) return i;
   }
-  // Freeform fallback: map common strings to steps
   if (title.includes('Docker')) return 1;
   if (title.includes('image') || title.includes('pull')) return 2;
   if (title.includes('container') || title.includes('Container')) return 3;
   if (title.includes('health') || title.includes('ready') || title.includes('healthy')) return 4;
   return 0;
-}
-
-function _buildStepsHtml(activeIdx, escapeForJs = false) {
-  const Q = escapeForJs ? '\\"' : '"';
-  return INSTALL_STEPS.map((s, i) => {
-    let icon, cls;
-    if (i < activeIdx)       { icon = '&#x2713;'; cls = 'done'; }
-    else if (i === activeIdx) { icon = `<span class=${Q}spin${Q}></span>`; cls = 'active'; }
-    else                     { icon = '&#x25cb;'; cls = 'pending'; }
-    return `<div class=${Q}step ${cls}${Q}><span class=${Q}icon${Q}>${icon}</span><span class=${Q}label${Q}>${s.label}</span></div>`;
-  }).join('');
-}
-
-function _buildProgressHtml(title, detail) {
-  const activeIdx = _activeStepIndex(title);
-  const stepsHtml = _buildStepsHtml(activeIdx);
-  return `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: "Segoe UI", system-ui, sans-serif;
-         background: #0D0D1A; color: #FFF8DC; height: 100vh;
-         display: flex; align-items: center; justify-content: center; padding: 32px; }
-  .wrap { width: 100%; max-width: 400px; }
-  .brand { font-size: 16px; font-weight: 600; letter-spacing: -0.01em;
-           margin-bottom: 6px; }
-  .gold-bar { height: 2px; background: #FFD700; border-radius: 1px; margin-bottom: 24px; }
-  .steps { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
-  .step { display: flex; align-items: center; gap: 10px; font-size: 13px; }
-  .step.done    { color: #4CAF50; }
-  .step.active  { color: #FFF8DC; font-weight: 600; }
-  .step.pending { color: rgba(255,248,220,0.3); }
-  .icon { width: 18px; text-align: center; flex-shrink: 0; font-size: 13px; }
-  .spin { display: inline-block; width: 12px; height: 12px;
-          border: 2px solid rgba(255,215,0,0.25); border-top-color: #FFD700;
-          border-radius: 50%; animation: s 0.7s linear infinite; vertical-align: middle; }
-  @keyframes s { to { transform: rotate(360deg); } }
-  .detail { font-size: 11px; color: rgba(255,248,220,0.4); min-height: 28px;
-            white-space: pre-wrap; word-break: break-all;
-            border-top: 1px solid rgba(255,255,255,0.06); padding-top: 10px; }
-</style></head>
-<body><div class="wrap">
-  <div class="brand">Fox in the Box</div>
-  <div class="gold-bar"></div>
-  <div class="steps" id="steps">${stepsHtml}</div>
-  <div class="detail" id="detail">${(detail || '').replace(/</g,'&lt;')}</div>
-</div></body></html>`;
 }
 
 function showProgress(message) {
@@ -173,19 +121,19 @@ function showProgress(message) {
     _progressState.detail = update.detail;
   }
 
+  const idx = _activeStepIndex(_progressState.title);
+
   if (_progressWin) {
-    const activeIdx = _activeStepIndex(_progressState.title);
-    const stepsHtml = _buildStepsHtml(activeIdx, true);
-    _progressWin.webContents.executeJavaScript(
-      `document.getElementById('steps').innerHTML = ${JSON.stringify(stepsHtml)};
-       document.getElementById('detail').textContent = ${JSON.stringify(_progressState.detail || '')};`
-    ).catch(() => {});
+    _progressWin.webContents.send('progress:step', idx, _progressState.detail || '');
+    if (_progressState.detail) {
+      _progressWin.webContents.send('progress:log', _progressState.detail);
+    }
     return;
   }
 
   _progressWin = new BrowserWindow({
-    width: 480,
-    height: 360,
+    width: 520,
+    height: 420,
     resizable: false,
     minimizable: false,
     maximizable: false,
@@ -194,7 +142,11 @@ function showProgress(message) {
     frame: true,
     title: 'Fox in the Box — Setting up',
     icon: APP_ICON,
-    webPreferences: { nodeIntegration: false, contextIsolation: true },
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, 'preload-progress.js'),
+    },
   });
 
   _progressWin.on('closed', () => {
@@ -202,11 +154,17 @@ function showProgress(message) {
     app.quit();
   });
 
-  _progressWin.loadURL(
-    'data:text/html;charset=utf-8,' +
-    encodeURIComponent(_buildProgressHtml(_progressState.title, _progressState.detail))
-  );
+  _progressWin.loadFile(path.join(__dirname, '..', 'assets', 'progress.html'));
   _progressWin.setMenu(null);
+
+  // Send initial state once the page is ready.
+  _progressWin.webContents.once('did-finish-load', () => {
+    if (!_progressWin || _progressWin.isDestroyed()) return;
+    _progressWin.webContents.send('progress:step', idx, _progressState.detail || '');
+    if (_progressState.detail) {
+      _progressWin.webContents.send('progress:log', _progressState.detail);
+    }
+  });
 }
 
 function closeProgress() {
