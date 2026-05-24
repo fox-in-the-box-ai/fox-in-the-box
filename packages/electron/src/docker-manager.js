@@ -375,9 +375,9 @@ async function ensureDockerAccessModeChosen(opts = {}) {
     detail:
       'On this PC only — access Fox in your browser at localhost:8787.\n\n'
       + 'On this PC + phone/tablet/laptop — Tailscale connects your devices together so you can open Fox from anywhere on your personal network. Free, no subscription. Recommended.\n\n'
-      + 'Both options — localhost AND Tailscale.\n\n'
+      + 'Both — localhost AND Tailscale.\n\n'
       + 'To change later: remove the fox-in-the-box container in Docker Desktop and relaunch.',
-    buttons: ['This PC only', 'This PC + other devices (Tailscale)', 'Both', 'Cancel'],
+    buttons: ['This PC only (port access)', 'This PC + other devices (Tailscale)', 'Both (port + Tailscale)', 'Cancel'],
     defaultId: 1,
     cancelId: 3,
   };
