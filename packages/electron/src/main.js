@@ -103,8 +103,8 @@ function _activeStepIndex(title) {
   for (let i = INSTALL_STEPS.length - 1; i >= 0; i--) {
     if (title.includes(INSTALL_STEPS[i].match)) return i;
   }
-  if (title.includes('Docker')) return 1;
   if (title.includes('image') || title.includes('pull')) return 2;
+  if (title.includes('Docker')) return 1;
   if (title.includes('container') || title.includes('Container')) return 3;
   if (title.includes('health') || title.includes('ready') || title.includes('healthy')) return 4;
   return 0;
