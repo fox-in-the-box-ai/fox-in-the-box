@@ -106,5 +106,29 @@ FunctionEnd
     DetailPrint "Uninstall: removing Fox data..."
     RMDir /r "${FITB_APPDATA_DIR}"
 
+    ; #153: offer Docker Desktop removal if Fox was its only consumer.
+    ; Check for non-Fox images via `docker images -q`. If the daemon is
+    ; running and the output is empty, Docker has nothing left to serve.
+    ; If the daemon is down or the check fails, we skip the prompt (fail safe).
+    Var /GLOBAL FitbDockerImages
+    nsExec::ExecToStack 'docker images -q'
+    Pop $0  ; exit code
+    Pop $1  ; stdout
+    StrCpy $FitbDockerImages $1
+    ${If} $0 == 0
+    ${AndIf} $FitbDockerImages == ""
+      MessageBox MB_YESNO|MB_ICONQUESTION|MB_DEFBUTTON2 \
+        "Fox was the only application using Docker on this PC.$\n$\nWould you like to remove Docker Desktop as well?" \
+        IDYES fitb_remove_docker IDNO fitb_skip_docker
+
+      fitb_remove_docker:
+        DetailPrint "Uninstall: removing Docker Desktop..."
+        ; Docker Desktop ships its own uninstaller at a known path
+        IfFileExists "$PROGRAMFILES\Docker\Docker\Docker Desktop Installer.exe" 0 fitb_skip_docker
+        nsExec::ExecToLog '"$PROGRAMFILES\Docker\Docker\Docker Desktop Installer.exe" uninstall --quiet'
+
+      fitb_skip_docker:
+    ${EndIf}
+
   fitb_uninstall_skip:
 !macroend
