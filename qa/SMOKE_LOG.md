@@ -25,6 +25,21 @@ Skipped sections are OK as long as they're explicitly noted with reason. Empty e
 
 ---
 
+## v0.7.27 — 2026-05-24 (DV — Electron + NSIS changes; engineer-side verified pre-tag)
+
+- [x] (a) `node --check packages/electron/src/main.js` — syntax clean
+- [x] (b) Jest: 83/83 green
+- [x] (c) `_activeStepIndex` fallback logic reviewed — freeform strings (e.g. "Starting Docker Desktop…") map to correct step via keyword match
+- [x] (d) #356 ToS flag: reads `~/AppData/Roaming/Docker/settings.json` for detection; flag file path is `userData/.docker-tos-shown`; only shown on Windows (`ensureDockerWindows` is Win32-only)
+- [x] (e) #153 NSIS: `docker images -q` exit-code check — `$0 == 0 && $1 == ""` means daemon running + no images; any other state skips prompt (fail safe)
+- [x] (f) `Var /GLOBAL FitbDockerImages` declared in the uninstall macro — valid NSIS scope
+- [ ] (g) **POST-RELEASE — REQUIRED:** Live Windows smoke: (1) progress steps illuminate correctly during fresh install, (2) ToS dialog appears before Docker install, not before relaunch, (3) uninstall with no other Docker images → Docker Desktop removal offer appears
+
+Action items:
+- @roadhero or @bsgdigital: run (g) on Windows post-merge
+
+---
+
 ## v0.7.26 — 2026-05-24 (DV — NSIS installer changes; Windows-only, engineer-side verified pre-tag)
 
 NSIS-only release: mode-selection dialog + branding BMPs + uninstall data-cleanup prompt. No Electron source, Python, or container changes.

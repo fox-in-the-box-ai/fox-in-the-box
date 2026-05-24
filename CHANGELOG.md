@@ -7,6 +7,25 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.7.27] - 2026-05-24
+
+**Interactive install UX + Docker ToS warning + Docker Desktop cleanup on uninstall.**
+
+### Changed
+
+- **#362 Interactive install progress window.** The startup progress window is now a step-by-step checklist (navy/gold, matching the app) instead of a bare spinner. Six named steps — Checking system, Setting up Docker, Pulling container image, Starting container, Waiting for Fox to be ready, Opening Fox — illuminate as the startup sequence advances. Completed steps show a green check, the active step shows a gold spinner, pending steps are dimmed.
+
+### Added
+
+- **#356 Docker ToS warning.** On Windows, when Fox is about to install Docker Desktop for the first time, it shows a plain-language heads-up: "Docker Desktop will ask you to accept their Terms of Service and sign up for a free Docker account. This is normal." Skipped if Docker is already configured (`~/AppData/Roaming/Docker/settings.json` exists). Shown at most once (flag file in userData).
+- **#153 Docker Desktop cleanup on uninstall.** When the user opts in to data removal during uninstall, the NSIS uninstaller now checks if any non-Fox Docker images remain. If Docker has nothing else to serve, it offers to uninstall Docker Desktop too (default No, safe). Skipped if the Docker daemon is not running.
+
+### What's next
+
+- **v0.7.28:** #336 local fallback root cause (unblocked once Stan provides docker logs) and any remaining open bugs.
+
+---
+
 ## [0.7.26] - 2026-05-24
 
 **Windows installer: mode selection + branding + uninstall cleanup (#353, #323, #346).**
