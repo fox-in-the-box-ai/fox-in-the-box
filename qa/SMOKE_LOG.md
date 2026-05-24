@@ -25,6 +25,22 @@ Skipped sections are OK as long as they're explicitly noted with reason. Empty e
 
 ---
 
+## v0.7.29 — 2026-05-24 (DV — test infra + feature + patch fix; engineer-side verified pre-tag)
+
+- [x] (a) Jest: 90/90 green
+- [x] (b) Playwright --list: 28 specs (was 24; +4 unskipped #336/#344, +2 static-overlay expansion; 2 remain skipped: #278 + fox-overlay class injection)
+- [x] (c) check-overlay-basis.sh clean: all 6 patches apply after patch 005 path fix
+- [x] (d) Patch 005 regenerated with correct context (stacked after 001-004; line 5083 not 4851)
+- [x] (e) model-picker-filter.js: sessionStorage fallback, ALWAYS_VISIBLE set, no-providers fallback reviewed
+- [x] (f) test_hooks.py: 7 new Python tests cover all three new hooks + reset clears injected failure
+- [x] (g) validate-overlay.yml: pip install pytest step added; validate-overlay.sh runs pytest when available
+- [ ] (h) **POST-RELEASE:** Live smoke on chat with/without configured providers — verify model picker filter hides unconfigured groups and "Show all" restores them
+
+Action items:
+- @roadhero: run (h) and confirm filter behavior
+
+---
+
 ## v0.7.28 — 2026-05-24 (DV — test-only release; no production code changes)
 
 - [x] (a) Jest: 90/90 green (up from 83; +7 new tests in docker-manager.test.js)

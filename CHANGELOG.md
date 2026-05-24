@@ -7,6 +7,32 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.7.29] - 2026-05-24
+
+**Test infrastructure hooks (#365) + model picker filter (#304) + patch fix + CI fix.**
+
+### Added
+
+- **#365 Test infrastructure: `/test/inject-failure` + `/test/skip-onboarding` + `/test/seed-provider`.** Three FITB_TEST_MODE-only hooks that let Playwright specs exercise states that previously required docker exec or wizard interaction. `inject-failure` arms a flag in `local_fallback.enable()` so the error path can be triggered on demand. `skip-onboarding` marks onboarding complete so `/` lands on chat. `seed-provider` writes an API key to settings + hot-reloads the gateway. These hooks unblock 4 previously-skipped specs (#336 × 2, #344 × 2). Python tests run in CI now via pytest step in `validate-overlay.yml`.
+
+- **#304 Model picker filter.** New extension `model-picker-filter.js` hides optgroups for providers the user hasn't configured. Only configured providers + Ollama (always visible, #337) appear in the picker. "Show all models" link restores full catalog. Falls back to showing everything when no providers are configured (discovery mode). No server changes — pure client-side post-populate filter.
+
+### Fixed
+
+- **Patch 005 avatar path.** `/extensions/fox_avatar_cropped.jpg` → `/extensions/images/fox_avatar_cropped.jpg` (the asset lives in `webui_static/images/`, not root). Patch regenerated with correct line-number context after 001-004 stacked.
+
+### Behind the scenes
+
+- Jest: 90/90 (7 new Python tests for the new hooks, in `test_test_hooks.py`)
+- Playwright: 28 live specs (was 24; +2 #337 unskip, +2 #336 unskip, +2 #344 unskip, +2 static-overlay expansion)
+- `validate-overlay.sh` now runs pytest when available; `validate-overlay.yml` installs pytest in CI
+
+### What's next
+
+- **v0.7.30:** #336 local fallback root cause once Stan provides docker logs.
+
+---
+
 ## [0.7.28] - 2026-05-24
 
 **Test coverage expansion — Jest 83→90, Playwright 24→27.**
