@@ -97,11 +97,9 @@ test.describe('Phase 1 — wizard local-fallback API surface', () => {
   });
 });
 
-// ── #336 error UX — LIVE (v0.7.29+, /test/inject-failure now available) ──────
-// /test/inject-failure arms local_fallback._INJECTED_FAILURE so enable() returns
-// an error dict without actually failing. Unskipped in v0.7.29 once the hook
-// ships (test_hooks.py Phase 1 landed in this same PR).
-test.describe('Phase 1 — #336 local-fallback error UX (inject-failure hook available v0.7.29+)', () => {
+// Hooks landed in v0.7.29 but CI :stable is pre-v0.7.29 — /test/inject-failure
+// returns 404 on current :stable. Unskip once :stable advances to v0.7.29+.
+test.describe.skip('Phase 1 — #336 local-fallback error UX (unskip when :stable >= v0.7.29)', () => {
   test('enable() failure response includes a non-empty `error` string', async ({ baseURL }) => {
     const api = await request.newContext({ baseURL });
     // Reset state first, then arm the failure injection.

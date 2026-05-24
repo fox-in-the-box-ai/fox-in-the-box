@@ -78,6 +78,12 @@ def handle_post_reset(handler) -> dict[str, Any]:
             onboarding_removed = True
         except OSError as e:
             logger.warning("[test-hooks] /test/reset: failed to remove %s: %s", onboarding, e)
+    # Clear any injected failures so a reset always leaves the system clean.
+    try:
+        from fox_overlay.webui_modules import local_fallback
+        local_fallback._INJECTED_FAILURE = None
+    except Exception:
+        pass
     return {"ok": True, "removed": removed, "onboarding_removed": onboarding_removed}
 
 
@@ -190,12 +196,6 @@ def _handle_post(handler, parsed) -> bool:
     from api.helpers import j, read_body
 
     if parsed.path == "/test/reset":
-        # Also clear any injected failures when state is reset.
-        try:
-            from fox_overlay.webui_modules import local_fallback
-            local_fallback._INJECTED_FAILURE = None
-        except Exception:
-            pass
         j(handler, handle_post_reset(handler))
         return True
 

@@ -254,9 +254,12 @@ def test_reset_clears_injected_failure(monkeypatch, tmp_path, fresh_dispatch):
     monkeypatch.setenv("FITB_TEST_MODE", "1")
     monkeypatch.setenv("HERMES_WEBUI_STATE_DIR", str(tmp_path / "state"))
     monkeypatch.setenv("ONBOARDING_PATH", str(tmp_path / "onboarding.json"))
+    # Reload both modules so they share the same local_fallback reference.
     sys.modules.pop("fox_overlay.webui_modules.test_hooks", None)
+    sys.modules.pop("fox_overlay.webui_modules.local_fallback", None)
     import fox_overlay.webui_modules.test_hooks as th
-    from fox_overlay.webui_modules import local_fallback
+    # Use the same local_fallback instance that test_hooks imported, not a stale one.
+    import fox_overlay.webui_modules.local_fallback as local_fallback
 
     local_fallback._INJECTED_FAILURE = "armed"
     th.handle_post_reset(handler=None)

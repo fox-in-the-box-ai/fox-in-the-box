@@ -117,9 +117,9 @@ test.describe('Phase 1 — #337 Ollama tile always present (v0.7.18+)', () => {
 // v0.7.21 STATUS: the #344 FIX shipped in v0.7.20 via the
 // chat-model-preselect.js extension (which uses exactly "Model not selected"
 // for empty state — matches the regex below). However these tests still
-// Infrastructure now available (v0.7.29): /test/skip-onboarding + /test/seed-provider
-// landed in test_hooks.py Phase 1 (this PR). Unskipped.
-test.describe('Phase 1 — #344 chat auto-preselect (v0.7.20+; hooks available v0.7.29)', () => {
+// Hooks landed in v0.7.29 but CI :stable is pre-v0.7.29 — returning 404.
+// Unskip once :stable advances to v0.7.29+.
+test.describe.skip('Phase 1 — #344 chat auto-preselect (unskip when :stable >= v0.7.29)', () => {
   test('with NO providers configured, picker chip shows explicit empty state', async ({
     page,
     baseURL,
