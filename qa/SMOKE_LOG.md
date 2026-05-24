@@ -25,6 +25,27 @@ Skipped sections are OK as long as they're explicitly noted with reason. Empty e
 
 ---
 
+## v0.7.26 — 2026-05-24 (DV — NSIS installer changes; Windows-only, engineer-side verified pre-tag)
+
+NSIS-only release: mode-selection dialog + branding BMPs + uninstall data-cleanup prompt. No Electron source, Python, or container changes.
+
+- [x] (a) `installer.nsh` syntax reviewed — NSIS macro and function structure correct; label names unique (fitb_* prefix avoids collisions with electron-builder internals)
+- [x] (b) `electron-builder.yml` diff reviewed: `oneClick: false` + two new BMP asset paths added; no other config changed
+- [x] (c) BMP assets generated at correct NSIS dimensions: header 150×57, sidebar 164×314
+- [x] (d) Uninstall default = No (MB_DEFBUTTON2) — safe default, won't accidentally wipe data on uninstall
+- [x] (e) Express upgrade path (default mode=0): `customInstallMode` macro is a no-op, identical to pre-v0.7.26 behavior
+- [x] (f) Jest: 83/83 green (no Electron JS source changes)
+- [ ] (g) **POST-RELEASE — REQUIRED:** Live Windows smoke: (1) fresh install shows no mode dialog, (2) reinstall shows Express/Clean dialog, (3) Clean install wipes container+data, (4) uninstall with data-cleanup checkbox works, (5) branding renders in installer wizard chrome
+
+Findings:
+- `customInstallMode` is an electron-builder hook called between the directory selection page and the install page — correct placement for pre-wipe.
+- NSIS `nsDialogs` plugin is bundled with electron-builder's NSIS distribution — no extra dependency.
+
+Action items:
+- @roadhero or @bsgdigital: run (g) on Windows post-merge
+
+---
+
 ## v0.7.25 — 2026-05-24 (DV — copy-only change; engineer-side verified pre-tag)
 
 Copy-only release: network access dialog strings rewritten in docker-manager.js. No logic changes.

@@ -7,6 +7,22 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.7.26] - 2026-05-24
+
+**Windows installer: mode selection + branding + uninstall cleanup (#353, #323, #346).**
+
+### Added
+
+- **#353 / #346 Install mode selection.** When Fox is already installed, the installer now shows a dialog with two options: "Express upgrade — keep my data, conversations, and AI models" (default) or "Clean install — remove everything and start fresh." Clean install stops and removes the container + image + `%APPDATA%\fox-in-the-box` before copying new files. No more manual PowerShell cleanup before a fresh reinstall.
+- **#353 / #346 Uninstall data cleanup.** The uninstaller now asks "Also remove Fox data, conversations, and AI models?" with a default of **No** — so a normal uninstall preserves data for reinstall, but users who want a complete clean-sheet can opt in.
+- **#323 Installer branding.** NSIS wizard chrome now shows a navy + gold header (150×57) and sidebar (164×314) matching the Fox dark palette instead of the generic Windows installer chrome. `oneClick: false` enables the wizard UI.
+
+### What's next
+
+- **v0.7.27:** #336 local fallback root cause (unblocked once Stan provides docker logs) + next issue batch.
+
+---
+
 ## [0.7.25] - 2026-05-24
 
 **Network access dialog rewritten for non-technical users (#357).**
