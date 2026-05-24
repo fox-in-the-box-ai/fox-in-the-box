@@ -7,6 +7,20 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.7.31] - 2026-05-24
+
+**Docker ready confirmation — green check before proceeding.**
+
+### Changed
+
+- **Progress window shows "Setting up Docker ✓" when Docker is detected.** Previously the progress window jumped silently from the Docker polling step to image pull. Now when the daemon is healthy, Fox shows "Docker is ready — pulling container image…" for 1.5s so the user sees the green check on "Setting up Docker" before the next step begins. Applies to all success paths: normal start, WSL recovery, and already-running. The 1.5s pause is intentional UX pacing — it makes the step-by-step checklist feel like progress, not a blur.
+
+### What's next
+
+- **v0.7.32:** #293 (diagnostic report button) + #306 (release channels) + #144 (custom provider UI).
+
+---
+
 ## [0.7.30] - 2026-05-24
 
 **Upstream bump + Docker reboot reliability fix for Stan.**

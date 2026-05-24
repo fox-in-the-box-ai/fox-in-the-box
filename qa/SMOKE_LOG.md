@@ -25,6 +25,23 @@ Skipped sections are OK as long as they're explicitly noted with reason. Empty e
 
 ---
 
+## v0.7.31 — 2026-05-24 (DV — UX-only change; engineer-side verified pre-tag)
+
+- [x] (a) Jest: 90/90 green (no new tests needed — _sleep mock already in place, existing tests cover the return paths)
+- [x] (b) `node --check startup.js` — syntax clean
+- [x] (c) `_dockerReady()` helper reviewed: used at all 5 started/started-after-recovery sites; already-running path correctly excluded (no pause needed when Docker was already up)
+- [x] (d) 1.5s pause uses injected `_sleep` — tests remain instant
+- [x] (e) Message 'Docker is ready — pulling container image…' maps to step index 2 via `title.includes('image')` freeform fallback in `_activeStepIndex` — renders step 1 (Setting up Docker) as ✓
+- [ ] (f) **POST-RELEASE:** Visual confirmation on Win11 — verify green check appears and holds for ~1.5s before image pull begins
+
+Findings:
+- Pure UX change — no behavioral logic changed, no new failure modes.
+
+Action items:
+- @bsgdigital: confirm green check visible on next Win11 test run
+
+---
+
 ## v0.7.30 — 2026-05-24 (DV — Option B bump + Docker reliability; engineer-side verified pre-tag)
 
 - [x] (a) `check-overlay-basis.sh` clean against v0.51.124 — all 6 patches (001-006) apply
