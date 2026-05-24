@@ -25,6 +25,24 @@ Skipped sections are OK as long as they're explicitly noted with reason. Empty e
 
 ---
 
+## v0.7.33 — 2026-05-24 (DV — installer + progress window + loop fix; engineer-side verified)
+
+- [x] (a) Jest: 101/101 green (7 suites)
+- [x] (b) All CI checks green on PR #374 (Playwright, validate, Build Container, Electron Smoke)
+- [x] (c) NSIS hooks: `customPageAfterChangeDir` + `customInstall` (correct electron-builder lifecycle, verified via app-builder-lib templates)
+- [x] (d) Reboot loop fix: `state.action === 'install'` guard reviewed, DAEMON_NOT_READY test added
+- [x] (e) `loadFile` path `path.join(__dirname, '..', 'assets', 'progress.html')` correct in packaged builds
+- [ ] (f) **POST-RELEASE:** Windows smoke — mode page on reinstall, Clean wipes data, progress window Sora+spinner+diagnostics
+
+---
+
+## v0.7.32 — 2026-05-24 (DV — dead container recovery)
+
+- [x] (a) Jest: 92/92 green
+- [x] (b) Dead container state=dead + 409 on start → remove + recreate, +2 regression tests
+
+---
+
 ## v0.7.31 — 2026-05-24 (DV — UX-only change; engineer-side verified pre-tag)
 
 - [x] (a) Jest: 90/90 green (no new tests needed — _sleep mock already in place, existing tests cover the return paths)

@@ -7,6 +7,27 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.7.33] - 2026-05-24
+
+**Polished installer + progress window + startup loop fix.**
+
+### Added
+- Windows installer mode-selection (#353): reinstall shows Express upgrade (keeps data) vs Clean install (wipes container + image + userData). Skipped on fresh installs.
+- Polished progress window (#362): Sora font, gold bar, spinning circle on active step, green check on done, dimmed pending. Collapsible diagnostics pane. Loaded via `loadFile` + IPC preload.
+- `requestedExecutionLevel: asInvoker` in NSIS config (reduces unnecessary UAC elevation).
+
+### Fixed
+- Startup reboot loop: RunOnce/reboot now only fires on fresh Docker install (`action=install`). Start-path timeout throws `DAEMON_NOT_READY` with actionable copy instead of re-registering RunOnce.
+- Network access dialog buttons: "This PC only (port access)", "This PC + other devices (Tailscale)", "Both (port + Tailscale)".
+
+---
+
+## [0.7.32] - 2026-05-24
+
+Dead container recovery (HTTP 409).
+
+---
+
 ## [0.7.31] - 2026-05-24
 
 **Docker ready confirmation — green check before proceeding.**
