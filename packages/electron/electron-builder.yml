@@ -34,7 +34,7 @@ win:
   signAndEditExecutable: false
 
 nsis:
-  oneClick: true
+  oneClick: false
   perMachine: false
   allowToChangeInstallationDirectory: false
   deleteAppDataOnUninstall: false
@@ -42,6 +42,8 @@ nsis:
   shortcutName: Fox in the Box
   installerIcon: assets/icon.ico
   uninstallerIcon: assets/icon.ico
+  installerHeaderImage: assets/installer/header.bmp
+  installerSidebarImage: assets/installer/sidebar.bmp
   include: build/installer.nsh
 
 mac:
