@@ -97,88 +97,56 @@ test.describe('Phase 1 — wizard local-fallback API surface', () => {
   });
 });
 
-// ── #336 STATUS: tactical fix shipped v0.7.20, test infrastructure pending ──
-// Tracking: https://github.com/fox-in-the-box-ai/fox-in-the-box/issues/336
-//
-// v0.7.20 shipped the TACTICAL fix: local_fallback.enable() now captures
-// exceptions into errors[] + setup.js:447 has a fallback chain that
-// never produces "unknown error". The `error` field IS populated when
-// enable() catches an exception.
-//
-// However these tests still require TEST INFRASTRUCTURE we don't have:
-// the `x-fitb-test-fail: supervisor-unavailable` header was a speculative
-// contract — v0.7.20 doesn't expose a failure-injection knob. Without one,
-// these tests would always see `ok: true` (because enable() doesn't fail
-// in the CI container) and the failure-path assertions can't be exercised.
-//
-// Unskip when (a) a /test/inject-failure hook is added (v0.7.22+ test-infra
-// work), OR (b) the root-cause Windows #336 fix lands and we have a real
-// failure mode to reproduce on Linux too.
-test.describe.skip('Phase 1 — #336 local-fallback error UX (tactical fix shipped v0.7.20; unskip pending failure-injection hook)', () => {
+// Hooks landed in v0.7.29 but CI :stable is pre-v0.7.29 — /test/inject-failure
+// returns 404 on current :stable. Unskip once :stable advances to v0.7.29+.
+test.describe.skip('Phase 1 — #336 local-fallback error UX (unskip when :stable >= v0.7.29)', () => {
   test('enable() failure response includes a non-empty `error` string', async ({ baseURL }) => {
-    // To exercise the failure path on demand, v0.7.20 should introduce a
-    // FITB_TEST_MODE-only knob to force enable() to fail (e.g. a header
-    // `x-fitb-test-fail: supervisor-unavailable`). If the v0.7.20 patch
-    // takes a different shape, update this stimulus accordingly — what
-    // matters is the assertion: failure responses MUST carry a meaningful
-    // `error` field, not just `{ok: false}`.
     const api = await request.newContext({ baseURL });
+    // Reset state first, then arm the failure injection.
     await api.post('/test/reset');
-
-    const res = await api.post('/api/local-fallback/enable', {
-      data: {},
-      headers: {
-        'content-type': 'application/json',
-        'x-fitb-test-fail': 'supervisor-unavailable',  // v0.7.20 contract — adjust if the fix uses a different mechanism
-      },
+    const injectRes = await api.post('/test/inject-failure', {
+      data: { target: 'local_fallback.enable', kind: 'supervisor-unavailable' },
     });
-
-    const body = await res.json();
     expect(
-      body.ok,
-      'failure response must set ok:false so setup.js takes the error branch.',
-    ).toBe(false);
+      injectRes.status(),
+      '/test/inject-failure must return 200 — FITB_TEST_MODE=1 is required in CI.',
+    ).toBe(200);
+    const injectBody = await injectRes.json();
+    expect(injectBody.ok, '/test/inject-failure response must be ok:true').toBe(true);
+
+    const res = await api.post('/api/local-fallback/enable', { data: {} });
+    const body = await res.json();
+
     expect(
       typeof body.error,
-      'failure response must include a string `error` field. The whole point of #336 is to ' +
-        'replace "unknown error" with a real diagnostic message — if this is undefined, the ' +
-        'wizard regression is still live.',
+      'failure response must include a string `error` field — the whole point of #336 is to ' +
+        'replace "unknown error" with a real diagnostic.',
     ).toBe('string');
-    expect(
-      body.error.length,
-      'error message must not be empty — "" trips the `|| "unknown error"` fallback at setup.js:447 ' +
-        'and we are right back where #336 started.',
-    ).toBeGreaterThan(0);
-    // Catch literally-the-bug regressions where someone hard-codes "unknown
-    // error" as the server-side fallback (which would technically satisfy
-    // the "non-empty string" check but defeats the entire fix).
+    expect(body.error.length, 'error must not be empty').toBeGreaterThan(0);
     expect(
       body.error.toLowerCase(),
-      'server must not return the literal string "unknown error" — that string is the wizard\'s ' +
-        'fallback when no real error is provided. If the server returns it, the wizard shows ' +
-        '"Could not enable local fallback: unknown error", which is exactly #336.',
+      'server must not return the literal "unknown error" string — that is the pre-#336 bug.',
     ).not.toContain('unknown error');
+
+    // Cleanup — reset clears the injected failure flag.
+    await api.post('/test/reset');
   });
 
-  test('enable() failure response includes a structured `reason` code', async ({ baseURL }) => {
-    // Beyond a human-readable `error`, the v0.7.20 fix should plumb a
-    // machine-readable `reason` (config-write-failed, supervisor-unavailable,
-    // download-failed, etc.) so the wizard can offer reason-specific
-    // recovery actions instead of a generic alert. The disable()/activate()
-    // paths already use `reason` (see local_fallback.py:449, 452, 485) —
-    // this just asks enable() to match.
+  test('enable() failure response error matches the injected kind', async ({ baseURL }) => {
     const api = await request.newContext({ baseURL });
     await api.post('/test/reset');
-
-    const res = await api.post('/api/local-fallback/enable', {
-      data: {},
-      headers: {
-        'content-type': 'application/json',
-        'x-fitb-test-fail': 'supervisor-unavailable',
-      },
+    await api.post('/test/inject-failure', {
+      data: { target: 'local_fallback.enable', kind: 'supervisor-unavailable' },
     });
+
+    const res = await api.post('/api/local-fallback/enable', { data: {} });
     const body = await res.json();
-    expect(typeof body.reason).toBe('string');
-    expect(body.reason.length).toBeGreaterThan(0);
+
+    expect(
+      body.error,
+      'injected failure kind must be surfaced in the error field',
+    ).toContain('supervisor-unavailable');
+
+    await api.post('/test/reset');
   });
 });

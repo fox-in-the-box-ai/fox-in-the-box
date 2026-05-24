@@ -89,6 +89,79 @@ app.setAppUserModelId('io.foxinthebox.desktop');
 let _progressWin = null;
 let _progressState = { title: '', detail: '' };
 
+// Step-based install UX (#362). Steps map to startup-orchestrator phases.
+// showProgress is called with "Step N/M - Phase label: message" strings;
+// we detect the active step by matching the Phase label segment.
+const INSTALL_STEPS = [
+  { label: 'Checking system',            match: 'Initialize app' },
+  { label: 'Setting up Docker',          match: 'Prepare Docker' },
+  { label: 'Pulling container image',    match: 'Ensure container image' },
+  { label: 'Starting container',         match: 'Prepare container' },
+  { label: 'Waiting for Fox to be ready', match: 'Wait for services' },
+  { label: 'Opening Fox',               match: 'Open setup wizard' },
+];
+
+function _activeStepIndex(title) {
+  if (!title) return -1;
+  // title looks like "Step 2/6 - Prepare Docker daemon: Setting up Docker…"
+  // or a freeform string like "Starting Docker Desktop…"
+  for (let i = INSTALL_STEPS.length - 1; i >= 0; i--) {
+    if (title.includes(INSTALL_STEPS[i].match)) return i;
+  }
+  // Freeform fallback: map common strings to steps
+  if (title.includes('Docker')) return 1;
+  if (title.includes('image') || title.includes('pull')) return 2;
+  if (title.includes('container') || title.includes('Container')) return 3;
+  if (title.includes('health') || title.includes('ready') || title.includes('healthy')) return 4;
+  return 0;
+}
+
+function _buildStepsHtml(activeIdx, escapeForJs = false) {
+  const Q = escapeForJs ? '\\"' : '"';
+  return INSTALL_STEPS.map((s, i) => {
+    let icon, cls;
+    if (i < activeIdx)       { icon = '&#x2713;'; cls = 'done'; }
+    else if (i === activeIdx) { icon = `<span class=${Q}spin${Q}></span>`; cls = 'active'; }
+    else                     { icon = '&#x25cb;'; cls = 'pending'; }
+    return `<div class=${Q}step ${cls}${Q}><span class=${Q}icon${Q}>${icon}</span><span class=${Q}label${Q}>${s.label}</span></div>`;
+  }).join('');
+}
+
+function _buildProgressHtml(title, detail) {
+  const activeIdx = _activeStepIndex(title);
+  const stepsHtml = _buildStepsHtml(activeIdx);
+  return `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: "Segoe UI", system-ui, sans-serif;
+         background: #0D0D1A; color: #FFF8DC; height: 100vh;
+         display: flex; align-items: center; justify-content: center; padding: 32px; }
+  .wrap { width: 100%; max-width: 400px; }
+  .brand { font-size: 16px; font-weight: 600; letter-spacing: -0.01em;
+           margin-bottom: 6px; }
+  .gold-bar { height: 2px; background: #FFD700; border-radius: 1px; margin-bottom: 24px; }
+  .steps { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
+  .step { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+  .step.done    { color: #4CAF50; }
+  .step.active  { color: #FFF8DC; font-weight: 600; }
+  .step.pending { color: rgba(255,248,220,0.3); }
+  .icon { width: 18px; text-align: center; flex-shrink: 0; font-size: 13px; }
+  .spin { display: inline-block; width: 12px; height: 12px;
+          border: 2px solid rgba(255,215,0,0.25); border-top-color: #FFD700;
+          border-radius: 50%; animation: s 0.7s linear infinite; vertical-align: middle; }
+  @keyframes s { to { transform: rotate(360deg); } }
+  .detail { font-size: 11px; color: rgba(255,248,220,0.4); min-height: 28px;
+            white-space: pre-wrap; word-break: break-all;
+            border-top: 1px solid rgba(255,255,255,0.06); padding-top: 10px; }
+</style></head>
+<body><div class="wrap">
+  <div class="brand">Fox in the Box</div>
+  <div class="gold-bar"></div>
+  <div class="steps" id="steps">${stepsHtml}</div>
+  <div class="detail" id="detail">${(detail || '').replace(/</g,'&lt;')}</div>
+</div></body></html>`;
+}
+
 function showProgress(message) {
   const update = (typeof message === 'object' && message !== null)
     ? message
@@ -101,23 +174,25 @@ function showProgress(message) {
   }
 
   if (_progressWin) {
+    const activeIdx = _activeStepIndex(_progressState.title);
+    const stepsHtml = _buildStepsHtml(activeIdx, true);
     _progressWin.webContents.executeJavaScript(
-      `document.getElementById('msg-title').textContent = ${JSON.stringify(_progressState.title)};
-       document.getElementById('msg-detail').textContent = ${JSON.stringify(_progressState.detail || '')};`
-    );
+      `document.getElementById('steps').innerHTML = ${JSON.stringify(stepsHtml)};
+       document.getElementById('detail').textContent = ${JSON.stringify(_progressState.detail || '')};`
+    ).catch(() => {});
     return;
   }
 
   _progressWin = new BrowserWindow({
-    width: 500,
-    height: 500,
+    width: 480,
+    height: 360,
     resizable: false,
     minimizable: false,
     maximizable: false,
     closable: true,
     alwaysOnTop: true,
     frame: true,
-    title: 'Fox in the box — Setting up',
+    title: 'Fox in the Box — Setting up',
     icon: APP_ICON,
     webPreferences: { nodeIntegration: false, contextIsolation: true },
   });
@@ -127,29 +202,10 @@ function showProgress(message) {
     app.quit();
   });
 
-  const html = `<!DOCTYPE html>
-<html><head><meta charset="utf-8">
-<style>
-  body { font-family: "Segoe UI", sans-serif; margin: 0; display: flex;
-         align-items: center; justify-content: center; height: 100vh;
-         background: #fff; }
-  .wrap { text-align: center; padding: 24px; width: 100%; }
-  .logo { font-size: 28px; margin-bottom: 8px; }
-  #msg-title  { font-size: 15px; color: #222; margin-top: 8px; font-weight: 600; }
-  #msg-detail { font-size: 12px; color: #666; margin-top: 8px; min-height: 42px; white-space: pre-wrap; }
-  .spinner { width: 32px; height: 32px; border: 3px solid #eee;
-             border-top-color: #0078d4; border-radius: 50%;
-             animation: spin 0.8s linear infinite; margin: 12px auto 0; }
-  @keyframes spin { to { transform: rotate(360deg); } }
-</style></head>
-<body><div class="wrap">
-  <div class="logo">🦊</div>
-  <div id="msg-title">${_progressState.title}</div>
-  <div id="msg-detail">${_progressState.detail}</div>
-  <div class="spinner"></div>
-</div></body></html>`;
-
-  _progressWin.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
+  _progressWin.loadURL(
+    'data:text/html;charset=utf-8,' +
+    encodeURIComponent(_buildProgressHtml(_progressState.title, _progressState.detail))
+  );
   _progressWin.setMenu(null);
 }
 
@@ -306,6 +362,29 @@ function spawnDetached(exe) {
 }
 
 async function ensureDockerWindows(progressCb = showProgress) {
+  // #356: Show a one-time heads-up before Docker Desktop's first launch.
+  // Docker requires ToS acceptance + free account sign-up on first run,
+  // which pops up unexpectedly and confuses users into thinking Fox broke.
+  const dockerTosFlag = path.join(app.getPath('userData'), '.docker-tos-shown');
+  if (!fs.existsSync(dockerTosFlag)) {
+    const dockerConfigPath = path.join(os.homedir(), 'AppData', 'Roaming', 'Docker', 'settings.json');
+    const dockerAlreadyConfigured = fs.existsSync(dockerConfigPath);
+    if (!dockerAlreadyConfigured) {
+      await dialog.showMessageBox({
+        type: 'info',
+        title: 'Fox in the Box — Docker setup',
+        message: 'Docker Desktop is about to start.',
+        detail:
+          'Docker Desktop will ask you to accept their Terms of Service and sign up for a free Docker account.\n\n'
+          + 'This is normal — just follow the Docker window that appears. '
+          + 'Once you\'re done, Fox will continue automatically.',
+        buttons: ['Got it'],
+        defaultId: 0,
+      });
+      try { fs.writeFileSync(dockerTosFlag, '1'); } catch (_) {}
+    }
+  }
+
   return _ensureDockerWindows({
     isDaemonRunning: () => docker.isDaemonRunning(),
     waitForDaemon: (ms, sp) => _waitForDaemon(
@@ -468,6 +547,49 @@ function getRemediationForCode(code, platform) {
   return 'Check diagnostics and logs, then retry.';
 }
 
+// Poll /api/tailscale/status until it returns a tailnet_url or we time out.
+// Returns the HTTPS tailnet URL string, or null if not available in time.
+async function pollTailscaleUrl(timeoutMs = 30_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      const res = await fetch('http://127.0.0.1:8787/api/tailscale/status');
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.tailnet_url) return data.tailnet_url;
+      }
+    } catch (_) { /* not yet */ }
+    await new Promise((r) => setTimeout(r, 2_000));
+  }
+  return null;
+}
+
+// Opens Fox after container is healthy. If Tailscale mode is active (mode 2 or 3),
+// polls for the tailnet URL and shows a dialog surfacing it (#358).
+async function openFox() {
+  const mode = docker.getEffectiveAccessMode();
+  if (mode === '2' || mode === '3') {
+    showProgress('Waiting for Tailscale to connect…');
+    const tailnetUrl = await pollTailscaleUrl(30_000);
+    closeProgress();
+    if (tailnetUrl) {
+      const lines = mode === '3'
+        ? `Local access: http://localhost:8787\nFrom other devices: ${tailnetUrl}`
+        : `From other devices: ${tailnetUrl}`;
+      const { response } = await dialog.showMessageBox({
+        type: 'info',
+        title: 'Fox in the box — Ready',
+        message: 'Fox in the box is ready!',
+        detail: lines + '\n\nClick OK to open Fox.',
+        buttons: ['OK', 'Copy Tailscale URL'],
+        defaultId: 0,
+      });
+      if (response === 1) clipboard.writeText(tailnetUrl);
+    }
+  }
+  shell.openExternal(APP_HOME_URL);
+}
+
 async function startFromTray() {
   showProgress('Starting Fox in the box…');
   try {
@@ -478,7 +600,7 @@ async function startFromTray() {
       docker,
       waitUntilHealthy,
       showProgress,
-      openOnboarding: () => shell.openExternal(APP_HOME_URL),
+      openOnboarding: openFox,
     });
   } finally {
     closeProgress();
@@ -536,7 +658,7 @@ async function main() {
       ),
       showProgress,
       closeProgress,
-      openOnboarding: () => shell.openExternal(APP_HOME_URL),
+      openOnboarding: openFox,
       onDaemonNotReady: ({ platform }) => showDaemonRecoveryRequired(platform),
       getDialogParent,
       platform: process.platform,

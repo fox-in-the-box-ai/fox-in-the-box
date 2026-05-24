@@ -1080,3 +1080,26 @@ pre[class*=language-] {
   align-items: center;
 }
 
+/* ── Provider card button alignment with Fox design tokens (#279) ───────── */
+/* Upstream's provider-card-btn already keys off --accent / --hover-bg /     */
+/* --surface tokens, which fox-in-the-box.css remaps to the Fox palette.     */
+/* Ensure font-family inherits so Manrope renders consistently, and tighten  */
+/* the border-radius to match the rest of Fox's 6px radius rhythm.           */
+.provider-card-btn {
+  font-family: var(--font-ui);
+  border-radius: var(--radius-md);
+}
+
+.provider-card-input {
+  font-family: var(--font-ui);
+  border-radius: var(--radius-md);
+  background: var(--input-bg);
+  border-color: var(--border);
+  color: var(--text);
+}
+
+.provider-card-input:focus {
+  outline-color: var(--accent);
+  border-color: var(--accent);
+}
+

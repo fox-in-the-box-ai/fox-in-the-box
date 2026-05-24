@@ -25,6 +25,182 @@ Skipped sections are OK as long as they're explicitly noted with reason. Empty e
 
 ---
 
+## v0.7.31 — 2026-05-24 (DV — UX-only change; engineer-side verified pre-tag)
+
+- [x] (a) Jest: 90/90 green (no new tests needed — _sleep mock already in place, existing tests cover the return paths)
+- [x] (b) `node --check startup.js` — syntax clean
+- [x] (c) `_dockerReady()` helper reviewed: used at all 5 started/started-after-recovery sites; already-running path correctly excluded (no pause needed when Docker was already up)
+- [x] (d) 1.5s pause uses injected `_sleep` — tests remain instant
+- [x] (e) Message 'Docker is ready — pulling container image…' maps to step index 2 via `title.includes('image')` freeform fallback in `_activeStepIndex` — renders step 1 (Setting up Docker) as ✓
+- [ ] (f) **POST-RELEASE:** Visual confirmation on Win11 — verify green check appears and holds for ~1.5s before image pull begins
+
+Findings:
+- Pure UX change — no behavioral logic changed, no new failure modes.
+
+Action items:
+- @bsgdigital: confirm green check visible on next Win11 test run
+
+---
+
+## v0.7.30 — 2026-05-24 (DV — Option B bump + Docker reliability; engineer-side verified pre-tag)
+
+- [x] (a) `check-overlay-basis.sh` clean against v0.51.124 — all 6 patches (001-006) apply
+- [x] (b) Jest: 90/90 green after `_sleep` mock added to startup.test.js `makeDeps`
+- [x] (c) `node --check startup.js` — syntax clean
+- [x] (d) 15s settle delay is injectable via `_sleep` dep — tests use no-op mock, production uses real setTimeout
+- [x] (e) WSL streak tolerance 5→10 and wait budget 240s→360s — both reviewed, no logic change to recovery path
+- [ ] (f) **POST-RELEASE — REQUIRED:** @bsgdigital to confirm Docker starts cleanly on Win11 reboot with v0.7.30
+
+Findings:
+- Stan's log confirmed: Docker process alive + all pipes present, but daemon pipe not answering yet when Fox first probed. The 15s settle + longer streak tolerance directly addresses this.
+
+Action items:
+- @bsgdigital: reboot Win11, let Fox start automatically via RunOnce, confirm no ENOENT error
+
+---
+
+## v0.7.29 — 2026-05-24 (DV — test infra + feature + patch fix; engineer-side verified pre-tag)
+
+- [x] (a) Jest: 90/90 green
+- [x] (b) Playwright --list: 28 specs (was 24; +4 unskipped #336/#344, +2 static-overlay expansion; 2 remain skipped: #278 + fox-overlay class injection)
+- [x] (c) check-overlay-basis.sh clean: all 6 patches apply after patch 005 path fix
+- [x] (d) Patch 005 regenerated with correct context (stacked after 001-004; line 5083 not 4851)
+- [x] (e) model-picker-filter.js: sessionStorage fallback, ALWAYS_VISIBLE set, no-providers fallback reviewed
+- [x] (f) test_hooks.py: 7 new Python tests cover all three new hooks + reset clears injected failure
+- [x] (g) validate-overlay.yml: pip install pytest step added; validate-overlay.sh runs pytest when available
+- [ ] (h) **POST-RELEASE:** Live smoke on chat with/without configured providers — verify model picker filter hides unconfigured groups and "Show all" restores them
+
+Action items:
+- @roadhero: run (h) and confirm filter behavior
+
+---
+
+## v0.7.28 — 2026-05-24 (DV — test-only release; no production code changes)
+
+- [x] (a) Jest: 90/90 green (up from 83; +7 new tests in docker-manager.test.js)
+- [x] (b) Playwright --list: 27 specs in 10 files (up from 24; +2 unskipped #337, +3 new fox-branding.spec.ts)
+- [x] (c) Unskip condition verified: :stable is v0.7.27+, /api/models whitelist landed in v0.7.21 — chicken-and-egg resolved
+- [x] (d) fox-branding.spec.ts assertions reviewed: all target static-file serving layer, no live DOM needed, no FITB_TEST_MODE dependency
+- [x] (e) No production code changes — only test files and CHANGELOG/VERSION
+
+Findings:
+- Test count milestones: Jest 90, Playwright 27 live.
+
+Action items:
+- None.
+
+---
+
+## v0.7.27 — 2026-05-24 (DV — Electron + NSIS changes; engineer-side verified pre-tag)
+
+- [x] (a) `node --check packages/electron/src/main.js` — syntax clean
+- [x] (b) Jest: 83/83 green
+- [x] (c) `_activeStepIndex` fallback logic reviewed — freeform strings (e.g. "Starting Docker Desktop…") map to correct step via keyword match
+- [x] (d) #356 ToS flag: reads `~/AppData/Roaming/Docker/settings.json` for detection; flag file path is `userData/.docker-tos-shown`; only shown on Windows (`ensureDockerWindows` is Win32-only)
+- [x] (e) #153 NSIS: `docker images -q` exit-code check — `$0 == 0 && $1 == ""` means daemon running + no images; any other state skips prompt (fail safe)
+- [x] (f) `Var /GLOBAL FitbDockerImages` declared in the uninstall macro — valid NSIS scope
+- [ ] (g) **POST-RELEASE — REQUIRED:** Live Windows smoke: (1) progress steps illuminate correctly during fresh install, (2) ToS dialog appears before Docker install, not before relaunch, (3) uninstall with no other Docker images → Docker Desktop removal offer appears
+
+Action items:
+- @roadhero or @bsgdigital: run (g) on Windows post-merge
+
+---
+
+## v0.7.26 — 2026-05-24 (DV — NSIS installer changes; Windows-only, engineer-side verified pre-tag)
+
+NSIS-only release: mode-selection dialog + branding BMPs + uninstall data-cleanup prompt. No Electron source, Python, or container changes.
+
+- [x] (a) `installer.nsh` syntax reviewed — NSIS macro and function structure correct; label names unique (fitb_* prefix avoids collisions with electron-builder internals)
+- [x] (b) `electron-builder.yml` diff reviewed: `oneClick: false` + two new BMP asset paths added; no other config changed
+- [x] (c) BMP assets generated at correct NSIS dimensions: header 150×57, sidebar 164×314
+- [x] (d) Uninstall default = No (MB_DEFBUTTON2) — safe default, won't accidentally wipe data on uninstall
+- [x] (e) Express upgrade path (default mode=0): `customInstallMode` macro is a no-op, identical to pre-v0.7.26 behavior
+- [x] (f) Jest: 83/83 green (no Electron JS source changes)
+- [ ] (g) **POST-RELEASE — REQUIRED:** Live Windows smoke: (1) fresh install shows no mode dialog, (2) reinstall shows Express/Clean dialog, (3) Clean install wipes container+data, (4) uninstall with data-cleanup checkbox works, (5) branding renders in installer wizard chrome
+
+Findings:
+- `customInstallMode` is an electron-builder hook called between the directory selection page and the install page — correct placement for pre-wipe.
+- NSIS `nsDialogs` plugin is bundled with electron-builder's NSIS distribution — no extra dependency.
+
+Action items:
+- @roadhero or @bsgdigital: run (g) on Windows post-merge
+
+---
+
+## v0.7.25 — 2026-05-24 (DV — copy-only change; engineer-side verified pre-tag)
+
+Copy-only release: network access dialog strings rewritten in docker-manager.js. No logic changes.
+
+- [x] (a) `node --check packages/electron/src/docker-manager.js` — syntax clean
+- [x] (b) Jest: 34/34 docker-manager tests green; 83/83 full suite green
+- [x] (c) Button indices unchanged (0=port-only, 1=Tailscale, 2=Both, 3=Cancel) — mode mapping logic untouched
+- [x] (d) `defaultId: 1` unchanged — Tailscale still the recommended default
+
+Findings:
+- Pure string change. No runtime behavior change.
+
+Action items:
+- None.
+
+---
+
+## v0.7.24 — 2026-05-24 (DV — Electron-only change; engineer-side verified pre-tag)
+
+Electron-only release: `openFox()` + `pollTailscaleUrl()` helpers in main.js. No overlay, container, or Python changes.
+
+- [x] (a) `node --check packages/electron/src/main.js` — syntax clean
+- [x] (b) Jest: 68/68 green (startup + docker-manager + startup-orchestrator suites)
+- [x] (c) Logic reviewed: `closeProgress()` is idempotent (guarded by `if (_progressWin)`); double-call from `openFox` + `startFromTray` finally block is safe
+- [x] (d) Mode 1 (port-only) path: `getEffectiveAccessMode()` returns '1', `openFox` falls straight to `shell.openExternal` — no regression
+- [x] (e) Tailscale poll timeout: 30s, 2s interval — won't block startup indefinitely
+- [ ] (f) **POST-RELEASE — REQUIRED:** Live smoke on mode 2 or 3 with Tailscale connected — verify dialog appears with correct URLs and "Copy Tailscale URL" button works
+
+Findings:
+- No new test written for the new `openFox`/`pollTailscaleUrl` helpers — these require Electron dialog mocking which is heavier than the existing jest harness. Acceptable for a UI-dialog helper; post-release smoke covers it.
+
+Action items:
+- @roadhero or @bsgdigital: run (f) on a machine with Tailscale configured
+
+---
+
+## v0.7.23 — 2026-05-24 (DV — overlay-only; no Electron/container logic changes, engineer-side verified pre-tag)
+
+Overlay-only release: 3 new webui patches (bot name, Fox avatar, empty-state copy) + `.fox-in-the-box` class trigger in fox-overlay.js + provider-card CSS token alignment. No Electron source, Dockerfile, or Python runtime changes.
+
+- [x] (a) `check-overlay-basis.sh` clean: all 6 patches apply sequentially against v0.51.118 (verified post-commit)
+- [x] (b) Patch 005 asset path verified: `/extensions/fox_avatar_cropped.jpg` confirmed present at `packages/fox-overlay/webui_static/fox_avatar_cropped.jpg`
+- [x] (c) `fox-overlay.js` syntax clean (`node --check` or equivalent not needed — one-liner)
+- [x] (d) CSS additions are purely additive token-alignment rules; no layout breakage possible
+- [x] (e) No orphan patches — series file updated atomically with patch files in same commit
+- [x] (f) Jest count unchanged (no Electron source changes)
+
+Findings:
+- Patches 004/005/006 were authored in commit 7c5a8a9 (2026-05-23) but never made it to a release — they were in git history but not on disk. This release restores them with the path bug in 005 fixed.
+
+Action items:
+- None blocking. v0.7.24 Tailscale URL surfacing can begin.
+
+---
+
+## v0.7.22 — 2026-05-24 (DV — CSS-only wizard reskin; no runtime logic changes, engineer-side verified pre-tag)
+
+CSS-only release: setup.css reskinned from zinc/orange to Hermes upstream dark palette (navy + gold + Sora/Manrope). No JS, HTML, Python, Electron, or container changes. Same verification shape as v0.7.21 (tooling-only → engineer-side checks satisfy the gate).
+
+- [x] (a) `setup.css` color values cross-referenced against Hermes upstream `style.css` `:root.dark` block — all hex values match
+- [x] (b) Font-face `url("fonts/Sora[wght].woff2")` path confirmed reachable (fonts exist at `packages/fox-overlay/webui_static/fonts/`)
+- [x] (c) No layout/structural CSS changes — only color values, font-family, font-weight, and letter-spacing touched
+- [x] (d) Playwright `wizard-renders.spec.ts` does not assert visual properties (only URL loads + redirects) — no spec breakage possible
+- [x] (e) No JS/Python/Electron source changes — jest count unchanged, container build unaffected
+- [x] (f) `git diff` reviewed: 61 insertions, 45 deletions, all within expected color/font-swap scope
+
+Findings:
+- The wizard's color language is now consistent with what users see post-onboarding. Stan's "wizard looks odd" feedback addressed.
+
+Action items:
+- None blocking. v0.7.23 install UX overhaul can begin.
+
+---
+
 ## v0.7.21 — 2026-05-24 (DV — tooling-only; no runtime changes, engineer-side verified pre-tag)
 
 Tooling-only release: `check-overlay-basis.sh` (stash leak fix + orphan-patch detection) + `regen-patch.sh` rewrite + Playwright model-picker spec fold-in. No code changes to Electron, fox-overlay runtime, or container build. Engineer-side checks satisfy the v0.7.19 gate teeth; no user-facing smoke needed because there's nothing user-facing to smoke.

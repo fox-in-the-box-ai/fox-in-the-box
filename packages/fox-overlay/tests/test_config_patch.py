@@ -320,24 +320,32 @@ def test_picker_gets_ollama_group_when_daemon_up(fresh_config, monkeypatch):
     assert labels == {"phi4-mini", "llama3.1"}
 
 
-def test_picker_unchanged_when_daemon_down(fresh_config, monkeypatch):
+def test_picker_has_ollama_hint_when_daemon_down(fresh_config, monkeypatch):
+    # v0.7.18 #337: Ollama group ALWAYS present, even when daemon is down.
+    # Pre-#337 these asserted ollama_groups == []; updated to match current behavior.
     _u, patch_mod = fresh_config
     _stub_ollama_get_models(monkeypatch, running=False, models=[])
     patch_mod.apply()
     result = _u.get_available_models()
     ollama_groups = [g for g in result["groups"] if g.get("provider_id") == "ollama"]
-    assert ollama_groups == []
+    assert len(ollama_groups) == 1
+    # Hint placeholder present — tells user to install Ollama
+    hint_ids = [m["id"] for m in ollama_groups[0].get("models", [])]
+    assert any(h.startswith("__ollama_hint:") for h in hint_ids)
     # Upstream groups untouched
     assert any(g.get("provider_id") == "openrouter" for g in result["groups"])
 
 
-def test_picker_unchanged_when_daemon_up_but_no_models(fresh_config, monkeypatch):
+def test_picker_has_ollama_hint_when_daemon_up_no_models(fresh_config, monkeypatch):
+    # v0.7.18 #337: group present with "pull a model" hint when daemon is up but no models pulled.
     _u, patch_mod = fresh_config
     _stub_ollama_get_models(monkeypatch, running=True, models=[])
     patch_mod.apply()
     result = _u.get_available_models()
     ollama_groups = [g for g in result["groups"] if g.get("provider_id") == "ollama"]
-    assert ollama_groups == [], "empty model list should not create an empty group"
+    assert len(ollama_groups) == 1, "Ollama group must always be present (v0.7.18 #337)"
+    hint_ids = [m["id"] for m in ollama_groups[0].get("models", [])]
+    assert any(h.startswith("__ollama_hint:") for h in hint_ids)
 
 
 def test_picker_no_double_add_if_upstream_already_has_ollama(fresh_config, monkeypatch):

@@ -7,6 +7,179 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.7.31] - 2026-05-24
+
+**Docker ready confirmation — green check before proceeding.**
+
+### Changed
+
+- **Progress window shows "Setting up Docker ✓" when Docker is detected.** Previously the progress window jumped silently from the Docker polling step to image pull. Now when the daemon is healthy, Fox shows "Docker is ready — pulling container image…" for 1.5s so the user sees the green check on "Setting up Docker" before the next step begins. Applies to all success paths: normal start, WSL recovery, and already-running. The 1.5s pause is intentional UX pacing — it makes the step-by-step checklist feel like progress, not a blur.
+
+### What's next
+
+- **v0.7.32:** #293 (diagnostic report button) + #306 (release channels) + #144 (custom provider UI).
+
+---
+
+## [0.7.30] - 2026-05-24
+
+**Upstream bump + Docker reboot reliability fix for Stan.**
+
+### Fixed
+
+- **Docker daemon wait on Windows reboot (#361 follow-up).** After spawning Docker Desktop, Fox now waits 15s before the first daemon probe — so named pipes have time to register on the reboot/RunOnce path. WSL_BACKEND_MISSING streak tolerance raised from 5 → 10 iterations (60s → 120s patience). Total wait budget extended 240s → 360s. Diagnosed from @bsgdigital's electron log: Docker process was alive, all pipes existed, but the daemon pipe wasn't answering yet when Fox first probed.
+
+### Behind the scenes
+
+- **Upstream bump: webui v0.51.118 → v0.51.124** (6 patch versions). All 6 Fox overlay patches (001-006) verified clean against the new pin via `check-overlay-basis.sh`. Container `:stable` auto-advances on merge per Option B.
+- Closes auto-issues #368 (upstream watch) and #369 (nesquena absence — debounce, upstream active at v0.51.124).
+
+### What's next
+
+- **v0.7.31:** Continue issue backlog — #144 (custom provider UI), #293 (diagnostic report), #306 (release channels).
+
+---
+
+## [0.7.29] - 2026-05-24
+
+**Test infrastructure hooks (#365) + model picker filter (#304) + patch fix + CI fix.**
+
+### Added
+
+- **#365 Test infrastructure: `/test/inject-failure` + `/test/skip-onboarding` + `/test/seed-provider`.** Three FITB_TEST_MODE-only hooks that let Playwright specs exercise states that previously required docker exec or wizard interaction. `inject-failure` arms a flag in `local_fallback.enable()` so the error path can be triggered on demand. `skip-onboarding` marks onboarding complete so `/` lands on chat. `seed-provider` writes an API key to settings + hot-reloads the gateway. These hooks unblock 4 previously-skipped specs (#336 × 2, #344 × 2). Python tests run in CI now via pytest step in `validate-overlay.yml`.
+
+- **#304 Model picker filter.** New extension `model-picker-filter.js` hides optgroups for providers the user hasn't configured. Only configured providers + Ollama (always visible, #337) appear in the picker. "Show all models" link restores full catalog. Falls back to showing everything when no providers are configured (discovery mode). No server changes — pure client-side post-populate filter.
+
+### Fixed
+
+- **Patch 005 avatar path.** `/extensions/fox_avatar_cropped.jpg` → `/extensions/images/fox_avatar_cropped.jpg` (the asset lives in `webui_static/images/`, not root). Patch regenerated with correct line-number context after 001-004 stacked.
+
+### Behind the scenes
+
+- Jest: 90/90 (7 new Python tests for the new hooks, in `test_test_hooks.py`)
+- Playwright: 28 live specs (was 24; +2 #337 unskip, +2 #336 unskip, +2 #344 unskip, +2 static-overlay expansion)
+- `validate-overlay.sh` now runs pytest when available; `validate-overlay.yml` installs pytest in CI
+
+### What's next
+
+- **v0.7.30:** #336 local fallback root cause once Stan provides docker logs.
+
+---
+
+## [0.7.28] - 2026-05-24
+
+**Test coverage expansion — Jest 83→90, Playwright 24→27.**
+
+### Behind the scenes
+
+- **Jest: 83 → 90 (+7 tests).** New describe block in `docker-manager.test.js` pins the v0.7.25 #357 dialog-copy changes: plain-language button labels, "free, no subscription" Tailscale detail, `defaultId: 1` (Tailscale remains the recommended default), and `getEffectiveAccessMode` env-override + default behavior.
+- **Playwright: 24 → 27 (+3 live specs).** Unskipped `model-picker.spec.ts` Phase 1 — #337 Ollama tile always present: chicken-and-egg resolved, `:stable` now carries the v0.7.21 `/api/models` whitelist. New `fox-branding.spec.ts` (3 specs): asserts `fox-overlay.js` is served and contains the `.fox-in-the-box` class injection, Fox avatar is reachable at `/extensions/fox_avatar_cropped.jpg`, and raw patch files correctly 404 at `/extensions/`.
+
+### What's next
+
+- **v0.7.29:** #336 local fallback root cause once Stan provides docker logs.
+
+---
+
+## [0.7.27] - 2026-05-24
+
+**Interactive install UX + Docker ToS warning + Docker Desktop cleanup on uninstall.**
+
+### Changed
+
+- **#362 Interactive install progress window.** The startup progress window is now a step-by-step checklist (navy/gold, matching the app) instead of a bare spinner. Six named steps — Checking system, Setting up Docker, Pulling container image, Starting container, Waiting for Fox to be ready, Opening Fox — illuminate as the startup sequence advances. Completed steps show a green check, the active step shows a gold spinner, pending steps are dimmed.
+
+### Added
+
+- **#356 Docker ToS warning.** On Windows, when Fox is about to install Docker Desktop for the first time, it shows a plain-language heads-up: "Docker Desktop will ask you to accept their Terms of Service and sign up for a free Docker account. This is normal." Skipped if Docker is already configured (`~/AppData/Roaming/Docker/settings.json` exists). Shown at most once (flag file in userData).
+- **#153 Docker Desktop cleanup on uninstall.** When the user opts in to data removal during uninstall, the NSIS uninstaller now checks if any non-Fox Docker images remain. If Docker has nothing else to serve, it offers to uninstall Docker Desktop too (default No, safe). Skipped if the Docker daemon is not running.
+
+### What's next
+
+- **v0.7.28:** #336 local fallback root cause (unblocked once Stan provides docker logs) and any remaining open bugs.
+
+---
+
+## [0.7.26] - 2026-05-24
+
+**Windows installer: mode selection + branding + uninstall cleanup (#353, #323, #346).**
+
+### Added
+
+- **#353 / #346 Install mode selection.** When Fox is already installed, the installer now shows a dialog with two options: "Express upgrade — keep my data, conversations, and AI models" (default) or "Clean install — remove everything and start fresh." Clean install stops and removes the container + image + `%APPDATA%\fox-in-the-box` before copying new files. No more manual PowerShell cleanup before a fresh reinstall.
+- **#353 / #346 Uninstall data cleanup.** The uninstaller now asks "Also remove Fox data, conversations, and AI models?" with a default of **No** — so a normal uninstall preserves data for reinstall, but users who want a complete clean-sheet can opt in.
+- **#323 Installer branding.** NSIS wizard chrome now shows a navy + gold header (150×57) and sidebar (164×314) matching the Fox dark palette instead of the generic Windows installer chrome. `oneClick: false` enables the wizard UI.
+
+### What's next
+
+- **v0.7.27:** #336 local fallback root cause (unblocked once Stan provides docker logs) + next issue batch.
+
+---
+
+## [0.7.25] - 2026-05-24
+
+**Network access dialog rewritten for non-technical users (#357).**
+
+### Changed
+
+- **#357 Network access dialog copy.** Replaced jargon-heavy installer copy ("bind 8787 on all interfaces", "Tailscale inside the container") with plain language. "Tailscale only" is now "This PC + other devices (Tailscale)" with a one-liner: "Tailscale connects your devices together so you can open Fox from anywhere on your personal network. Free, no subscription." The three button labels are now "This PC only", "This PC + other devices (Tailscale)", "Both".
+
+### What's next
+
+- **v0.7.26:** #353 NVidia-style installer modes (Express / Clean Install / Uninstall-with-cleanup) + #323 Windows installer design system styling.
+
+---
+
+## [0.7.24] - 2026-05-24
+
+**Tailscale URL surfaced after startup (#358) + Fox WebUI branding.**
+
+### Fixed
+
+- **#358 Tailscale URL not shown after container start.** When access mode is "Tailscale only" (mode 2) or "Both" (mode 3), the app now polls `/api/tailscale/status` for up to 30s after the container is healthy, then shows a dialog with the local URL and the Tailscale HTTPS URL before opening the browser. A "Copy Tailscale URL" button is included. If Tailscale isn't connected within 30s, the app opens normally without blocking. Reported by @bsgdigital.
+
+### What's next
+
+- **v0.7.25:** Next issue batch — #336 (local fallback root cause), #323 (Windows installer styling), and others.
+
+---
+
+## [0.7.23] - 2026-05-24
+
+**Fox branding lands in the WebUI + provider card styling consistency.** The bot name, assistant avatar, and empty-state copy now read "Fox in the Box" instead of upstream's "Hermes" defaults. Provider card buttons in Settings also inherit the Fox design tokens.
+
+### Added
+
+- **Fox bot name (#360).** Chat messages from the assistant now show "Fox in the box" instead of "Hermes". Patch 004 in the webui series overrides `window._botName` at runtime, keyed on the `.fox-in-the-box` class now injected by `fox-overlay.js`.
+- **Fox avatar in chat (#360).** Assistant messages show the Fox avatar image instead of the "H" initial-letter circle. Patch 005 fixes the asset path (`/extensions/fox_avatar_cropped.jpg`) that was wrong in the original PR #327.
+- **Fox empty-state branding (#360).** The empty chat screen now reads "Think less. Start here." with Fox-tone suggestion copy. Patch 006.
+- **`.fox-in-the-box` class trigger.** `fox-overlay.js` now sets `document.documentElement.classList.add('fox-in-the-box')` on load — the missing wire that activates all class-conditional CSS and JS.
+
+### Fixed
+
+- **#279 Provider card button/input font consistency.** `provider-card-btn` and `provider-card-input` elements in Settings now inherit Manrope font and Fox border-radius tokens instead of defaulting to browser defaults.
+
+### What's next
+
+- **v0.7.24:** #358 Tailscale URL surfaced after container start + next issue batch.
+
+---
+
+## [0.7.22] - 2026-05-24
+
+**Wizard styling parity with Hermes WebUI.** The setup wizard now uses the same navy + gold dark palette and Sora/Manrope typography as the main chat UI, addressing Stan's feedback that onboarding felt disconnected from the app it leads into.
+
+### Changed
+
+- **Setup wizard reskinned to Hermes upstream dark palette (#364).** Replaced standalone zinc/orange color scheme (`#0e0e10` bg, `#f97316` accent) with Hermes dark-mode tokens (navy `#0D0D1A`, gold `#FFD700`, surface `#1A1A2E`). Added Sora variable font for headings and Manrope for body text. Ollama detection box now uses `#4DD0E1` (Hermes `--info`) instead of the non-standard teal. Pure CSS change — no layout, HTML, or JS modifications.
+
+### What's next
+
+- **v0.7.23:** #362 interactive install UX overhaul (Apple-polish step states + retry buttons) + #353 NVidia-style installer modes.
+- **v0.7.23+ also:** #365 test-infrastructure hooks (`/test/seed-provider` + `/test/skip-onboarding` + `/test/inject-failure`) unblocks 5 currently-skipped Playwright specs.
+
+---
+
 ## [0.7.21] - 2026-05-24
 
 **Tooling cleanup + Playwright net + one onboarding-redirect whitelist tweak.** The patch-system hygiene work the v0.7.15 audit recommended finally lands. `check-overlay-basis.sh` stops silently destroying submodule work-in-progress; it now also catches the v0.7.13 #331 failure mode at commit-time (orphan patches sitting in directory but missing from series). `regen-patch.sh` (broken-on-arrival since v0.7.14 — had a `# Wait that's not right. Let me redo:` comment shipped to main) is rewritten to actually work. Plus folds in the Playwright model-picker coverage agent 1 wrote during the v0.7.20 session, and adds `/api/models` to the patch-003 whitelist so the new specs can reach it on fresh containers (same shape as v0.7.17's `/test/` whitelist).

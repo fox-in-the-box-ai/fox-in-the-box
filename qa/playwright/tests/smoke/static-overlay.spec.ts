@@ -18,8 +18,14 @@ import { test, expect, request } from '@playwright/test';
 const OVERLAY_ASSETS = [
   // CSS — proves stylesheet serving works
   '/extensions/fox-in-the-box.css',
-  // JS — proves script serving works (4 Fox JS files exist)
+  // JS — proves script serving works
   '/extensions/fox-overlay.js',
+  '/extensions/chat-model-preselect.js',
+];
+
+// New in v0.7.29 — chicken-and-egg until :stable advances.
+const OVERLAY_ASSETS_V0729 = [
+  '/extensions/model-picker-filter.js',
 ];
 
 test.describe('Phase 1 — static-overlay assets', () => {
@@ -35,6 +41,19 @@ test.describe('Phase 1 — static-overlay assets', () => {
           `HERMES_WEBUI_EXTENSION_DIR isn't set on supervisord's hermes-webui block.`,
       ).toBe(200);
 
+      const body = await res.text();
+      expect(body.length, `${path} body is empty`).toBeGreaterThan(0);
+    });
+  }
+});
+
+// Unskip once :stable >= v0.7.29 (these files added in this PR).
+test.describe.skip('Phase 1 — static-overlay assets v0.7.29+ (unskip when :stable advances)', () => {
+  for (const path of OVERLAY_ASSETS_V0729) {
+    test(`${path} served at /extensions/`, async ({ baseURL }) => {
+      const api = await request.newContext({ baseURL });
+      const res = await api.get(path);
+      expect(res.status(), `${path} must return 200`).toBe(200);
       const body = await res.text();
       expect(body.length, `${path} body is empty`).toBeGreaterThan(0);
     });

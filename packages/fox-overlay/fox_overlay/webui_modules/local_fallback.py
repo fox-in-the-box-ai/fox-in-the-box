@@ -73,6 +73,11 @@ LLAMA_SERVER_HEALTH = f"http://{LLAMA_SERVER_HOST}:{LLAMA_SERVER_PORT}/health"
 # supervisord program name — must match supervisord.conf [program:...].
 SUPERVISOR_PROGRAM = "llama-server"
 
+# Test-mode failure injection (#365). Set to a non-empty string by
+# /test/inject-failure; enable() raises with that string as the message.
+# Only consulted when FITB_TEST_MODE=1. Cleared by /test/reset.
+_INJECTED_FAILURE: str | None = None
+
 # Failover classifier — the set of error signatures the upstream
 # `streaming.py` hands to us as "this looks like a transient provider
 # blip". Used in `should_failover()`.
@@ -395,6 +400,15 @@ def enable() -> dict[str, Any]:
     not a generic 'unknown'). The root cause fix per-platform still
     requires the Win11 docker-logs Stan @bsgdigital is capturing.
     """
+    # Test-mode failure injection — /test/inject-failure sets this.
+    import os as _os
+    if _os.environ.get("FITB_TEST_MODE") == "1" and _INJECTED_FAILURE:
+        return {
+            **get_status(),
+            "error": _INJECTED_FAILURE,
+            "errors": [_INJECTED_FAILURE],
+        }
+
     errors: list[str] = []
     try:
         set_enabled(True)

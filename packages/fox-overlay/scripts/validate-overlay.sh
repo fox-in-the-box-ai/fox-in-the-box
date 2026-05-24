@@ -47,6 +47,31 @@ ok() {
     echo "✅ $1"
 }
 
+# ── 0. Python unit tests ──────────────────────────────────────────────────────
+echo "[0/3] Running Python unit tests (packages/fox-overlay/tests/)..."
+
+PYTHON_BIN_EARLY=""
+for candidate in python3.13 python3.12 python3.11 python3 python; do
+    if command -v "$candidate" >/dev/null 2>&1; then
+        PYTHON_BIN_EARLY="$candidate"
+        break
+    fi
+done
+
+if [ -n "$PYTHON_BIN_EARLY" ]; then
+    if "$PYTHON_BIN_EARLY" -m pytest --version >/dev/null 2>&1; then
+        PYTHONPATH="packages/fox-overlay:forks/hermes-webui" \
+        "$PYTHON_BIN_EARLY" -m pytest packages/fox-overlay/tests/ -q --tb=short 2>&1 \
+            || fail "Python unit tests failed — see output above"
+        ok "Python unit tests passed"
+    else
+        echo "   ⚠️  pytest not available — skipping Python unit tests."
+        echo "   (pip install pytest to enable; tests will run in CI via setup-python.)"
+    fi
+else
+    echo "   ⚠️  No Python interpreter found — skipping Python unit tests."
+fi
+
 # ── 1. Submodule cleanliness ───────────────────────────────────────────────────
 echo "[1/3] Checking submodule cleanliness..."
 for fork in forks/hermes-agent forks/hermes-webui; do

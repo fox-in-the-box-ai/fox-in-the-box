@@ -1,0 +1,14 @@
+diff --git a/static/boot.js b/static/boot.js
+index 3cc6445d..fc07dc69 100644
+--- a/static/boot.js
++++ b/static/boot.js
+@@ -1469,6 +1469,9 @@ function applyBotName(){
+     window._busyInputMode=(s.busy_input_mode||'queue');
+     window._sessionEndlessScrollEnabled=!!s.session_endless_scroll;
+     window._botName=s.bot_name||'Hermes';
++    if(typeof document!=='undefined'&&document.documentElement&&document.documentElement.classList.contains('fox-in-the-box')){
++      window._botName='Fox in the box';
++    }
+     if(s.default_model_provider) window._activeProvider=s.default_model_provider;
+     if(s.default_model){
+       window._defaultModel=s.default_model;

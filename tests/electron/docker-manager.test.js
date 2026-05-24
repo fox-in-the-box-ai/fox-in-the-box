@@ -587,3 +587,71 @@ test('ensureContainerRunning skips digest check when image not pulled locally (#
   expect(container.remove).not.toHaveBeenCalled();
   expect(result.reason).toBe('already-running');
 });
+
+// ── Access-mode dialog copy (#357) ────────────────────────────────────────────
+
+jest.mock('electron', () => ({
+  dialog: { showMessageBox: jest.fn() },
+  app: { getPath: jest.fn().mockReturnValue('/tmp/fox-test-userdata') },
+}), { virtual: true });
+
+const { dialog } = require('electron');
+
+describe('ensureDockerAccessModeChosen — dialog copy (#357)', () => {
+  const { getSavedAccessMode, getEffectiveAccessMode } = require('../../packages/electron/src/docker-manager');
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    // Reset saved-mode file state
+    jest.spyOn(fs, 'existsSync').mockReturnValue(false);
+    jest.spyOn(fs, 'readFileSync').mockImplementation(() => { throw new Error('no file'); });
+    // Dialog returns "Tailscale only" (button index 1) by default
+    dialog.showMessageBox.mockResolvedValue({ response: 1 });
+    delete process.env.FOX_ACCESS_MODE;
+  });
+
+  test('dialog title uses plain-language copy (#357)', async () => {
+    await docker.ensureDockerAccessModeChosen({});
+    const opts = dialog.showMessageBox.mock.calls[0][0];
+    expect(opts.title).toContain('Where do you want to use Fox');
+  });
+
+  test('dialog message asks "Where do you want to use Fox?" (#357)', async () => {
+    await docker.ensureDockerAccessModeChosen({});
+    const opts = dialog.showMessageBox.mock.calls[0][0];
+    expect(opts.message).toMatch(/where do you want to use fox/i);
+  });
+
+  test('dialog buttons use plain-language labels (#357)', async () => {
+    await docker.ensureDockerAccessModeChosen({});
+    const opts = dialog.showMessageBox.mock.calls[0][0];
+    expect(opts.buttons[0]).toBe('This PC only');
+    expect(opts.buttons[1]).toMatch(/Tailscale/);
+    expect(opts.buttons[2]).toBe('Both');
+  });
+
+  test('dialog detail mentions "free, no subscription" for Tailscale (#357)', async () => {
+    await docker.ensureDockerAccessModeChosen({});
+    const opts = dialog.showMessageBox.mock.calls[0][0];
+    expect(opts.detail).toMatch(/free.*no subscription|no subscription.*free/i);
+  });
+
+  test('dialog defaultId is 1 (Tailscale remains the recommended default)', async () => {
+    await docker.ensureDockerAccessModeChosen({});
+    const opts = dialog.showMessageBox.mock.calls[0][0];
+    expect(opts.defaultId).toBe(1);
+  });
+
+  test('getEffectiveAccessMode defaults to Tailscale (mode 2) when nothing saved', () => {
+    delete process.env.FOX_ACCESS_MODE;
+    // getSavedAccessMode returns null (no file) — default should be '2'
+    const mode = getEffectiveAccessMode();
+    expect(mode).toBe('2');
+  });
+
+  test('getEffectiveAccessMode respects FOX_ACCESS_MODE env override', () => {
+    process.env.FOX_ACCESS_MODE = '1';
+    expect(getEffectiveAccessMode()).toBe('1');
+    delete process.env.FOX_ACCESS_MODE;
+  });
+});

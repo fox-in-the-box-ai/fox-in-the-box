@@ -1,3 +1,19 @@
+@font-face {
+  font-family: "Sora";
+  src: url("fonts/Sora[wght].woff2") format("woff2-variations");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Manrope";
+  src: url("fonts/Manrope[wght].woff2") format("woff2-variations");
+  font-weight: 200 800;
+  font-style: normal;
+  font-display: swap;
+}
+
 *,
 *::before,
 *::after {
@@ -7,9 +23,9 @@
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  background: #0e0e10;
-  color: #e4e4e7;
+  font-family: "Manrope", "Segoe UI", system-ui, sans-serif;
+  background: #0D0D1A;
+  color: #FFF8DC;
   min-height: 100vh;
   display: flex;
   align-items: center;
@@ -36,59 +52,61 @@ body {
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  background: #3f3f46;
+  background: #2A2A45;
   flex-shrink: 0;
   transition: background 0.2s;
 }
 
 .step-dot.active,
 .step-dot.done {
-  background: #f97316;
+  background: #FFD700;
 }
 
 .step-line {
   height: 2px;
   width: 40px;
-  background: #3f3f46;
+  background: #2A2A45;
   flex-shrink: 0;
   transition: background 0.2s;
 }
 
 .step-line.done {
-  background: #f97316;
+  background: #FFD700;
 }
 
 .progress-label {
   display: block;
   text-align: center;
   font-size: 0.8rem;
-  color: #a1a1aa;
+  color: #C0C0C0;
   margin-top: 8px;
 }
 
 /* ── Steps ──────────────────────────────────────────────────────────────── */
 
 .step {
-  background: #18181b;
-  border: 1px solid #27272a;
+  background: #1A1A2E;
+  border: 1px solid #2A2A45;
   border-radius: 12px;
   padding: 32px 24px;
 }
 
 .step h1 {
+  font-family: "Sora", "Segoe UI", system-ui, sans-serif;
   font-size: 1.5rem;
-  font-weight: 600;
+  font-weight: 400;
+  letter-spacing: -0.015em;
   margin-bottom: 8px;
 }
 
 .step p {
-  color: #a1a1aa;
+  color: #C0C0C0;
   line-height: 1.5;
   margin-bottom: 20px;
 }
 
 .step a {
-  color: #f97316;
+  color: #FFD700;
   text-decoration: none;
 }
 
@@ -103,7 +121,7 @@ label {
   font-size: 0.875rem;
   font-weight: 500;
   margin-bottom: 6px;
-  color: #d4d4d8;
+  color: #E0D8C8;
 }
 
 .input-wrapper {
@@ -114,10 +132,10 @@ label {
 .input-wrapper input {
   width: 100%;
   padding: 10px 44px 10px 12px;
-  background: #09090b;
-  border: 1px solid #3f3f46;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid #2A2A45;
   border-radius: 8px;
-  color: #e4e4e7;
+  color: #FFF8DC;
   font-size: 0.95rem;
   font-family: inherit;
   outline: none;
@@ -125,12 +143,12 @@ label {
 }
 
 .input-wrapper input:focus {
-  border-color: #f97316;
-  box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.15);
+  border-color: #FFD700;
+  box-shadow: 0 0 0 2px rgba(255, 215, 0, 0.15);
 }
 
 .input-wrapper input.has-error {
-  border-color: #ef4444;
+  border-color: #EF5350;
 }
 
 .toggle-vis {
@@ -140,25 +158,25 @@ label {
   transform: translateY(-50%);
   background: none;
   border: none;
-  color: #71717a;
+  color: #808080;
   cursor: pointer;
   font-size: 0.8rem;
   padding: 4px 6px;
 }
 
 .toggle-vis:hover {
-  color: #a1a1aa;
+  color: #C0C0C0;
 }
 
 .hint {
   font-size: 0.8rem;
-  color: #71717a;
+  color: #808080;
   margin-top: 6px;
   margin-bottom: 20px;
 }
 
 .error-msg {
-  color: #ef4444;
+  color: #EF5350;
   font-size: 0.875rem;
   margin-top: 4px;
   margin-bottom: 16px;
@@ -166,7 +184,7 @@ label {
 }
 
 .success-msg {
-  color: #22c55e;
+  color: #4CAF50;
   font-size: 0.875rem;
   margin-top: 4px;
   margin-bottom: 16px;
@@ -191,18 +209,18 @@ label {
 }
 
 .btn:focus-visible {
-  outline: 2px solid #f97316;
+  outline: 2px solid #FFD700;
   outline-offset: 2px;
 }
 
 .btn-primary {
-  background: #f97316;
-  color: #fff;
+  background: #FFD700;
+  color: #0D0D1A;
   width: 100%;
 }
 
 .btn-primary:hover {
-  background: #ea580c;
+  background: #FFBF00;
 }
 
 .btn-primary:disabled {
@@ -211,19 +229,19 @@ label {
 }
 
 .btn-secondary {
-  background: rgba(249, 115, 22, 0.12);
-  color: #f97316;
+  background: rgba(255, 215, 0, 0.12);
+  color: #FFD700;
   width: 100%;
-  border: 1px solid rgba(249, 115, 22, 0.4);
+  border: 1px solid rgba(255, 215, 0, 0.4);
 }
 
 .btn-secondary:hover {
-  background: rgba(249, 115, 22, 0.2);
+  background: rgba(255, 215, 0, 0.2);
 }
 
 .btn-link {
   background: transparent;
-  color: rgba(255, 255, 255, 0.55);
+  color: rgba(255, 248, 220, 0.55);
   font-size: 12px;
   padding: 6px 12px;
   border: none;
@@ -232,7 +250,7 @@ label {
 }
 
 .btn-link:hover {
-  color: rgba(255, 255, 255, 0.85);
+  color: rgba(255, 248, 220, 0.85);
 }
 
 .skip-row {
@@ -243,15 +261,15 @@ label {
 .ollama-detected {
   margin-top: 18px;
   padding: 14px;
-  border: 1px solid rgba(45, 212, 191, 0.4);
+  border: 1px solid rgba(77, 208, 225, 0.4);
   border-radius: 8px;
-  background: rgba(45, 212, 191, 0.08);
+  background: rgba(77, 208, 225, 0.08);
 }
 
 .ollama-detected-title {
   font-weight: 600;
   font-size: 13px;
-  color: #2dd4bf;
+  color: #4DD0E1;
   margin-bottom: 6px;
 }
 
@@ -288,12 +306,10 @@ label {
 
 .dl-bar-fill {
   height: 100%;
-  background: #2dd4bf;
+  background: #4DD0E1;
   transition: width 0.4s ease;
 }
 
-/* Indeterminate variant when bytes_total is unknown — animated stripe
-   so the user knows something is happening (QA fix). */
 .dl-bar-indeterminate {
   position: relative;
   overflow: hidden;
@@ -302,7 +318,7 @@ label {
   position: absolute;
   width: 30%;
   left: -30%;
-  background: #2dd4bf;
+  background: #4DD0E1;
   animation: dl-bar-slide 1.4s linear infinite;
 }
 @keyframes dl-bar-slide {
@@ -316,8 +332,8 @@ label {
   display: inline-block;
   width: 16px;
   height: 16px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-top-color: #fff;
+  border: 2px solid rgba(255, 248, 220, 0.3);
+  border-top-color: #FFF8DC;
   border-radius: 50%;
   animation: spin 0.6s linear infinite;
 }
@@ -338,7 +354,7 @@ label {
 }
 
 .url-list code {
-  background: #09090b;
+  background: rgba(255, 255, 255, 0.04);
   padding: 4px 8px;
   border-radius: 4px;
   font-size: 0.9rem;

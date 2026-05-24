@@ -370,14 +370,14 @@ async function ensureDockerAccessModeChosen(opts = {}) {
   const { dialog } = require('electron');
   const boxOpts = {
     type: 'question',
-    title: 'Fox in the box — Network access',
-    message: 'How should this PC reach the container?',
+    title: 'Fox in the box — Where do you want to use Fox?',
+    message: 'Where do you want to use Fox?',
     detail:
-      'Port only: bind 8787 on all interfaces (localhost + LAN if firewall allows).\n'
-      + 'Tailscale only: localhost 8787 on this PC + Tailscale inside the container (recommended).\n'
-      + 'Both: LAN port 8787 and Tailscale.\n\n'
-      + 'To change later, remove the fox-in-the-box container in Docker Desktop and relaunch the app.',
-    buttons: ['Port only', 'Tailscale only', 'Both', 'Cancel'],
+      'On this PC only — access Fox in your browser at localhost:8787.\n\n'
+      + 'On this PC + phone/tablet/laptop — Tailscale connects your devices together so you can open Fox from anywhere on your personal network. Free, no subscription. Recommended.\n\n'
+      + 'Both options — localhost AND Tailscale.\n\n'
+      + 'To change later: remove the fox-in-the-box container in Docker Desktop and relaunch.',
+    buttons: ['This PC only', 'This PC + other devices (Tailscale)', 'Both', 'Cancel'],
     defaultId: 1,
     cancelId: 3,
   };
