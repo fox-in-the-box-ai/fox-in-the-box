@@ -25,6 +25,22 @@ Skipped sections are OK as long as they're explicitly noted with reason. Empty e
 
 ---
 
+## v0.7.28 — 2026-05-24 (DV — test-only release; no production code changes)
+
+- [x] (a) Jest: 90/90 green (up from 83; +7 new tests in docker-manager.test.js)
+- [x] (b) Playwright --list: 27 specs in 10 files (up from 24; +2 unskipped #337, +3 new fox-branding.spec.ts)
+- [x] (c) Unskip condition verified: :stable is v0.7.27+, /api/models whitelist landed in v0.7.21 — chicken-and-egg resolved
+- [x] (d) fox-branding.spec.ts assertions reviewed: all target static-file serving layer, no live DOM needed, no FITB_TEST_MODE dependency
+- [x] (e) No production code changes — only test files and CHANGELOG/VERSION
+
+Findings:
+- Test count milestones: Jest 90, Playwright 27 live.
+
+Action items:
+- None.
+
+---
+
 ## v0.7.27 — 2026-05-24 (DV — Electron + NSIS changes; engineer-side verified pre-tag)
 
 - [x] (a) `node --check packages/electron/src/main.js` — syntax clean

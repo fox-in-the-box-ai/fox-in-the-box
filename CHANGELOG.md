@@ -7,6 +7,21 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.7.28] - 2026-05-24
+
+**Test coverage expansion — Jest 83→90, Playwright 24→27.**
+
+### Behind the scenes
+
+- **Jest: 83 → 90 (+7 tests).** New describe block in `docker-manager.test.js` pins the v0.7.25 #357 dialog-copy changes: plain-language button labels, "free, no subscription" Tailscale detail, `defaultId: 1` (Tailscale remains the recommended default), and `getEffectiveAccessMode` env-override + default behavior.
+- **Playwright: 24 → 27 (+3 live specs).** Unskipped `model-picker.spec.ts` Phase 1 — #337 Ollama tile always present: chicken-and-egg resolved, `:stable` now carries the v0.7.21 `/api/models` whitelist. New `fox-branding.spec.ts` (3 specs): asserts `fox-overlay.js` is served and contains the `.fox-in-the-box` class injection, Fox avatar is reachable at `/extensions/fox_avatar_cropped.jpg`, and raw patch files correctly 404 at `/extensions/`.
+
+### What's next
+
+- **v0.7.29:** #336 local fallback root cause once Stan provides docker logs.
+
+---
+
 ## [0.7.27] - 2026-05-24
 
 **Interactive install UX + Docker ToS warning + Docker Desktop cleanup on uninstall.**
