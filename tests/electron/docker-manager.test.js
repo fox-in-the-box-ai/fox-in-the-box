@@ -670,9 +670,9 @@ describe('ensureDockerAccessModeChosen — dialog copy (#357)', () => {
   test('dialog buttons use plain-language labels (#357)', async () => {
     await docker.ensureDockerAccessModeChosen({});
     const opts = dialog.showMessageBox.mock.calls[0][0];
-    expect(opts.buttons[0]).toBe('This PC only');
+    expect(opts.buttons[0]).toBe('This PC only (port access)');
     expect(opts.buttons[1]).toMatch(/Tailscale/);
-    expect(opts.buttons[2]).toBe('Both');
+    expect(opts.buttons[2]).toBe('Both (port + Tailscale)');
   });
 
   test('dialog detail mentions "free, no subscription" for Tailscale (#357)', async () => {

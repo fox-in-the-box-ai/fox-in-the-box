@@ -236,14 +236,16 @@ describe('ensureDockerWindows', () => {
     expect(deps.showRebootRequired).not.toHaveBeenCalled();
   });
 
-  test('shows reboot screen when Desktop found but daemon never comes up', async () => {
+  test('throws DAEMON_NOT_READY when Desktop found but daemon never comes up', async () => {
+    // When Docker is already installed (action='start') but the daemon times out,
+    // offering a RunOnce reboot-loop was the root cause of stuck-startup cycles.
+    // Correct behavior: throw so the error screen surfaces actionable guidance.
     const deps = makeDeps({
       _findExe:     jest.fn().mockResolvedValue('C:\\Docker\\Docker Desktop.exe'),
       waitForDaemon: jest.fn().mockResolvedValue(false),
     });
-    const result = await ensureDockerWindows(deps);
-    expect(deps.showRebootRequired).toHaveBeenCalledTimes(1);
-    expect(result).toEqual({ result: 'reboot-required' });
+    await expect(ensureDockerWindows(deps)).rejects.toMatchObject({ code: 'DAEMON_NOT_READY' });
+    expect(deps.showRebootRequired).not.toHaveBeenCalled();
   });
 
   test('runs winget install and immediately shows reboot screen', async () => {
