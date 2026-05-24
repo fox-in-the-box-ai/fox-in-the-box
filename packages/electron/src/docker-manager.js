@@ -514,11 +514,30 @@ async function ensureContainerRunning() {
       log.info('Container already running:', CNAME);
       return { container, reused: true, reason: 'already-running' };
     }
+
+    // Dead containers are pending removal — Docker won't start them (HTTP 409).
+    // Remove and recreate rather than erroring out.
+    if (existing.State === 'dead' || existing.Status === 'Dead') {
+      log.warn('Container is dead (pending removal) — removing and recreating:', CNAME);
+      try { await container.remove({ force: true }); } catch (e) {
+        log.warn('Failed to remove dead container:', e.message);
+      }
+      const created = await createAndStartContainer();
+      return { ...created, reason: 'recreated-after-dead' };
+    }
+
     try {
       await container.start();
       log.info('Started existing container:', CNAME);
       return { container, reused: true, reason: 'started-existing' };
     } catch (err) {
+      // 409 means the container is being removed concurrently — recreate.
+      if (err.statusCode === 409 || (err.message && err.message.includes('marked for removal'))) {
+        log.warn('Container 409 on start (marked for removal) — recreating:', CNAME);
+        try { await container.remove({ force: true }); } catch (_) {}
+        const created = await createAndStartContainer();
+        return { ...created, reason: 'recreated-after-dead' };
+      }
       throw dockerError('CONTAINER_START_FAILED', `Failed to start existing container "${CNAME}"`, err);
     }
   }
