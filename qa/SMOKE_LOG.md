@@ -25,6 +25,25 @@ Skipped sections are OK as long as they're explicitly noted with reason. Empty e
 
 ---
 
+## v0.7.24 — 2026-05-24 (DV — Electron-only change; engineer-side verified pre-tag)
+
+Electron-only release: `openFox()` + `pollTailscaleUrl()` helpers in main.js. No overlay, container, or Python changes.
+
+- [x] (a) `node --check packages/electron/src/main.js` — syntax clean
+- [x] (b) Jest: 68/68 green (startup + docker-manager + startup-orchestrator suites)
+- [x] (c) Logic reviewed: `closeProgress()` is idempotent (guarded by `if (_progressWin)`); double-call from `openFox` + `startFromTray` finally block is safe
+- [x] (d) Mode 1 (port-only) path: `getEffectiveAccessMode()` returns '1', `openFox` falls straight to `shell.openExternal` — no regression
+- [x] (e) Tailscale poll timeout: 30s, 2s interval — won't block startup indefinitely
+- [ ] (f) **POST-RELEASE — REQUIRED:** Live smoke on mode 2 or 3 with Tailscale connected — verify dialog appears with correct URLs and "Copy Tailscale URL" button works
+
+Findings:
+- No new test written for the new `openFox`/`pollTailscaleUrl` helpers — these require Electron dialog mocking which is heavier than the existing jest harness. Acceptable for a UI-dialog helper; post-release smoke covers it.
+
+Action items:
+- @roadhero or @bsgdigital: run (f) on a machine with Tailscale configured
+
+---
+
 ## v0.7.23 — 2026-05-24 (DV — overlay-only; no Electron/container logic changes, engineer-side verified pre-tag)
 
 Overlay-only release: 3 new webui patches (bot name, Fox avatar, empty-state copy) + `.fox-in-the-box` class trigger in fox-overlay.js + provider-card CSS token alignment. No Electron source, Dockerfile, or Python runtime changes.

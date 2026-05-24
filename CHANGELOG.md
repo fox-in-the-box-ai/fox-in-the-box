@@ -7,6 +7,20 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.7.24] - 2026-05-24
+
+**Tailscale URL surfaced after startup (#358) + Fox WebUI branding.**
+
+### Fixed
+
+- **#358 Tailscale URL not shown after container start.** When access mode is "Tailscale only" (mode 2) or "Both" (mode 3), the app now polls `/api/tailscale/status` for up to 30s after the container is healthy, then shows a dialog with the local URL and the Tailscale HTTPS URL before opening the browser. A "Copy Tailscale URL" button is included. If Tailscale isn't connected within 30s, the app opens normally without blocking. Reported by @bsgdigital.
+
+### What's next
+
+- **v0.7.25:** Next issue batch — #336 (local fallback root cause), #323 (Windows installer styling), and others.
+
+---
+
 ## [0.7.23] - 2026-05-24
 
 **Fox branding lands in the WebUI + provider card styling consistency.** The bot name, assistant avatar, and empty-state copy now read "Fox in the Box" instead of upstream's "Hermes" defaults. Provider card buttons in Settings also inherit the Fox design tokens.
