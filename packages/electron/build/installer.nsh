@@ -16,13 +16,18 @@
 
 !include "build\mode-page.nsh"
 
-; Register the mode-selection page BEFORE the instfiles page.
-!macro customPages
+; Register the mode-selection page after the directory selection page.
+; electron-builder calls !insertmacro customPageAfterChangeDir in its
+; installSection.nsh template — this is the recognised hook for custom pages.
+!macro customPageAfterChangeDir
   Page custom FitbModePageCreate FitbModePageLeave
 !macroend
 
-; ── Pre-install: clean wipe if Clean install selected ────────────────────────
-!macro customInstallMode
+; ── Install: clean wipe if Clean install selected ─────────────────────────────
+; customInstall runs inside the install Section (after all pages are navigated),
+; so $FitbInstallMode is set by FitbModePageLeave before this macro fires.
+; electron-builder calls !insertmacro customInstall in installSection.nsh.
+!macro customInstall
   ${If} $FitbInstallMode == "1"
     DetailPrint "Clean install: stopping Fox container..."
     nsExec::ExecToLog 'docker stop ${FITB_CONTAINER}'
