@@ -577,8 +577,22 @@ async function ensureDockerWindows(deps) {
       desktopErr.meta = { diagnostics };
       throw desktopErr;
     }
-    await Promise.resolve(showRebootRequired());
-    return { result: 'reboot-required' };
+    // Only register RunOnce + suggest reboot when Docker was freshly installed
+    // (action === 'install'). The 'start' action means Docker was already installed
+    // but the daemon timed out — a reboot won't help if Docker itself is the issue.
+    // Offering a reboot loop here was the root cause of the stuck-startup cycle.
+    if (state.action === 'install') {
+      await Promise.resolve(showRebootRequired());
+      return { result: 'reboot-required' };
+    }
+    // Docker installed but daemon persistently unreachable — surface as error.
+    const daemonErr = new Error(
+      'Docker Desktop is installed but its daemon did not start within the wait window. '
+      + 'Open Docker Desktop manually, wait until it shows "Docker is running", then relaunch Fox in the box.'
+    );
+    daemonErr.code = 'DAEMON_NOT_READY';
+    daemonErr.meta = { diagnostics };
+    throw daemonErr;
   }
 
   // action === 'install'
