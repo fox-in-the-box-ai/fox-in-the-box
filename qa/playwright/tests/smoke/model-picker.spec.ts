@@ -117,85 +117,65 @@ test.describe('Phase 1 — #337 Ollama tile always present (v0.7.18+)', () => {
 // v0.7.21 STATUS: the #344 FIX shipped in v0.7.20 via the
 // chat-model-preselect.js extension (which uses exactly "Model not selected"
 // for empty state — matches the regex below). However these tests still
-// require TEST INFRASTRUCTURE we don't have yet:
-//   1. The empty-state branch loads `/` but a fresh container redirects to
-//      `/setup` (v0.7.13 patch 003 onboarding redirect). No #composerModelLabel
-//      element exists on /setup. Need a `/test/skip-onboarding` or
-//      `/test/seed-onboarding-complete` hook.
-//   2. The with-provider branch needs a `/test/seed-provider` hook to
-//      configure exactly one provider with a known key so the assertion
-//      runs deterministically.
-// Filed as v0.7.22+ work (separate issue for the seed-provider/skip-onboarding
-// hooks). Unskip THEN — not until the infrastructure exists.
-test.describe.skip('Phase 1 — #344 chat auto-preselect (fix shipped v0.7.20; unskip pending test infrastructure)', () => {
+// Infrastructure now available (v0.7.29): /test/skip-onboarding + /test/seed-provider
+// landed in test_hooks.py Phase 1 (this PR). Unskipped.
+test.describe('Phase 1 — #344 chat auto-preselect (v0.7.20+; hooks available v0.7.29)', () => {
   test('with NO providers configured, picker chip shows explicit empty state', async ({
     page,
     baseURL,
   }) => {
-    // Failure mode: pre-v0.7.20, opening / on a fresh container without any
-    // configured provider leaves the model chip label empty — users see a
-    // bare chevron and don't know why nothing happens when they hit send.
-    // The v0.7.20 fix must surface explicit copy so users know to go to
-    // Settings → Providers.
     const api = await request.newContext({ baseURL });
     await api.post('/test/reset');
 
-    // Skip onboarding-redirect by visiting / and letting the wizard
-    // auto-dismiss. (Implementation detail of v0.7.20 — this spec needs
-    // a way to land on the chat view with zero providers configured.
-    // The v0.7.20 PR will need to either expose a /test/skip-onboarding
-    // hook or change the redirect to allow chat-with-empty-providers.)
+    // Use /test/skip-onboarding so / lands on chat, not /setup.
+    const skipRes = await api.post('/test/skip-onboarding');
+    expect(
+      skipRes.status(),
+      '/test/skip-onboarding must return 200 — FITB_TEST_MODE=1 required in CI',
+    ).toBe(200);
+
     await page.goto('/');
-    // Composer model chip is the user-visible model picker label.
     const chip = page.locator('#composerModelLabel');
     await expect(
       chip,
-      'composerModelLabel must contain explicit empty-state copy (e.g. ' +
-        '"Model not selected") when no providers are configured. A blank label ' +
-        'is the v0.7.19 bug #344 is filed against.',
-    ).toContainText(/model not selected|no model|select.*model/i, { timeout: 5000 });
+      'composerModelLabel must contain explicit empty-state copy when no providers configured. ' +
+        'A blank label is the v0.7.19 bug #344 is filed against.',
+    ).toContainText(/model not selected|no model|select.*model/i, { timeout: 8000 });
   });
 
   test('with at least one provider configured, picker auto-selects a usable model', async ({
     page,
     baseURL,
   }) => {
-    // Failure mode: pre-v0.7.20, even after the user finishes onboarding
-    // and configures a provider, the picker can show blank until they
-    // manually click and pick a model. #344 is the bug where the chip
-    // is empty on first chat render despite an active_provider being set.
-    //
-    // PRECONDITION: this spec needs a way to seed a configured provider
-    // from the test side. The v0.7.20 fix will likely include a
-    // /test/seed-provider hook (or equivalent) — verify the seeding
-    // approach against the v0.7.20 PR before unskipping. Without that
-    // hook this assertion can't run deterministically.
     const api = await request.newContext({ baseURL });
     await api.post('/test/reset');
-    // TODO(v0.7.20): POST to a /test/seed-provider hook (or equivalent)
-    // to configure exactly one provider with a known API key, so the
-    // assertion below is deterministic.
+
+    // Seed a provider so the picker has something to auto-select.
+    const seedRes = await api.post('/test/seed-provider', {
+      data: { provider: 'openrouter', api_key: 'sk-or-test-placeholder' },
+    });
+    expect(seedRes.status(), '/test/seed-provider must return 200').toBe(200);
+
+    // Skip onboarding redirect so / lands on chat.
+    await api.post('/test/skip-onboarding');
 
     await page.goto('/');
     const chip = page.locator('#composerModelLabel');
     await expect(
       chip,
-      'composerModelLabel must be non-empty after page load when a provider ' +
-        'is configured. Empty chip = #344 regressed.',
-    ).not.toHaveText('', { timeout: 5000 });
+      'composerModelLabel must be non-empty after page load when a provider is configured. ' +
+        'Empty chip = #344 regressed.',
+    ).not.toHaveText('', { timeout: 8000 });
   });
 });
 
-// ── Phase 1 — #278 Ollama dedup across groups (fix shipped v0.7.20; infra pending) ──
-// v0.7.21 STATUS: the #278 fix shipped in v0.7.20 via
-// fox_overlay/webui_modules/ollama.py:459,492 (provider: "ollama" instead
-// of "custom"). However this test still requires either:
-//   (a) /test/seed-provider hook with a known dup model id, OR
-//   (b) a mock Ollama daemon process the CI smoke job spins up alongside
-//       the container.
-// Without one of those, the assertion passes trivially (no real models →
-// no dup possible). Unskip when the test harness exists — v0.7.22+ work.
-test.describe.skip('Phase 1 — #278 Ollama dedup across groups (fix shipped v0.7.20; unskip pending test infrastructure)', () => {
+// ── Phase 1 — #278 Ollama dedup across groups ────────────────────────────────
+// /test/seed-provider is now available (v0.7.29) but seeding a Custom provider
+// that ALSO exposes an Ollama model id requires a mock Ollama daemon or a custom
+// endpoint — more than /test/seed-provider alone can provide. Kept skipped
+// until a mock-daemon approach is decided. The dedup code at ollama.py:459,492
+// shipped in v0.7.20 and is correct; this spec exercises the regression path.
+test.describe.skip('Phase 1 — #278 Ollama dedup (unskip pending mock-Ollama-daemon in CI)', () => {
   test('each Ollama model id appears at most once across all groups', async ({ baseURL }) => {
     // Failure mode: when the user adds a Custom provider (Settings →
     // Providers → Add Custom) pointing at their local Ollama daemon, the
