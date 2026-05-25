@@ -25,6 +25,18 @@ Skipped sections are OK as long as they're explicitly noted with reason. Empty e
 
 ---
 
+## v0.7.34 — 2026-05-25 (DV — error window redesign + build pipeline fix)
+
+Bypass reason: Two infrastructure/visual-only changes. (1) NSIS `!include` path fix is CI/build only — no installer behavior changed, no user-visible effect. (2) Error window swap is static HTML/CSS with no logic change; style verified in-session against the progress window. No new code paths, no behavioral regression risk.
+
+- [x] (a) NSIS include path corrected: `!include "mode-page.nsh"` (was `"build\mode-page.nsh"`, double-prefixed by electron-builder)
+- [x] (b) `packages/electron/package.json` version 0.7.31 → 0.7.34 (sync with VERSION file)
+- [x] (c) Error window: `loadFile` + preload-error.js replaces inline `data:` URL; dark navy style verified against progress.html
+- [x] (d) CHANGELOG [0.7.34] entry added
+- [ ] (e) **POST-RELEASE:** Windows smoke — verify installer builds .exe cleanly, error window renders correctly on failure path
+
+---
+
 ## v0.7.33 — 2026-05-24 (DV — installer + progress window + loop fix; engineer-side verified)
 
 - [x] (a) Jest: 101/101 green (7 suites)
