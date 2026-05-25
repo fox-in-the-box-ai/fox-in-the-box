@@ -12,13 +12,34 @@ const log = require('electron-log');
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
+const SHELL_TIMEOUTS = {
+  tasklist: 5_000,
+  scQuery: 10_000,
+  wsl: 30_000,
+  regQuery: 10_000,
+  whereDocker: 10_000,
+  ifExist: 10_000,
+  startCmd: 15_000,
+  dockerContext: 10_000,
+};
+
 function runCommand(cmd, opts = {}) {
   return new Promise((resolve, reject) => {
-    exec(cmd, opts, (error, stdout, stderr) => {
-      if (error) reject(new Error(stderr || error.message));
-      else resolve(stdout);
+    exec(cmd, { windowsHide: true, ...opts }, (error, stdout, stderr) => {
+      if (error) {
+        const err = new Error(stderr || error.message);
+        if (error.killed && error.signal === 'SIGTERM') err.code = 'ETIMEDOUT';
+        reject(err);
+      } else resolve(stdout);
     });
   });
+}
+
+function formatElapsedSeconds(totalSec) {
+  if (totalSec < 60) return `${totalSec}s`;
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  return s > 0 ? `${m}m ${s}s` : `${m}m`;
 }
 
 /**
@@ -69,14 +90,24 @@ async function waitForDaemon(
   intervalMs = 1_000,
   _now   = () => Date.now(),
   _sleep = (ms) => new Promise((r) => setTimeout(r, ms)),
-  showProgress = null
+  showProgress = null,
+  phaseStartedAt = null
 ) {
   const deadline = _now() + timeoutMs;
-  const start = _now();
+  const phaseStart = phaseStartedAt != null ? phaseStartedAt : _now();
+  let lastHeartbeatSec = -1;
   while (_now() < deadline) {
     if (await isDaemonRunning()) return true;
-    const elapsed = Math.round((_now() - start) / 1000);
-    if (showProgress) showProgress(`Starting Docker Desktop… ${elapsed}s`);
+    const totalSec = Math.round((_now() - phaseStart) / 1000);
+    if (showProgress) {
+      showProgress(
+        `Waiting for Docker engine… ${formatElapsedSeconds(totalSec)} — finish Docker Desktop setup if its window is open`
+      );
+    }
+    if (totalSec >= 15 && totalSec - lastHeartbeatSec >= 15) {
+      log.info('[docker-wait] elapsed=%ds engine=not-ready', totalSec);
+      lastHeartbeatSec = totalSec;
+    }
     await _sleep(intervalMs);
   }
   return false;
@@ -88,10 +119,17 @@ async function waitForDaemon(
  */
 async function isDockerDesktopProcessRunning(_run = runCommand) {
   try {
-    const out = await _run('tasklist /FI "IMAGENAME eq Docker Desktop.exe" /NH', { shell: true });
+    const out = await _run('tasklist /FI "IMAGENAME eq Docker Desktop.exe" /NH', {
+      shell: true,
+      timeout: SHELL_TIMEOUTS.tasklist,
+    });
     return out.includes('Docker Desktop.exe');
   } catch (err) {
-    log.debug('Docker Desktop process check failed:', err.message);
+    if (err.code === 'ETIMEDOUT') {
+      log.warn('Docker Desktop process check timed out (tasklist)');
+    } else {
+      log.debug('Docker Desktop process check failed:', err.message);
+    }
     return false;
   }
 }
@@ -115,7 +153,7 @@ async function waitForDesktopProcessStart(
   return false;
 }
 
-async function diagnoseWindowsDocker(_run = runCommand) {
+async function diagnoseWindowsDockerInner(_run = runCommand) {
   const diagnostics = {
     issueCode: 'UNKNOWN',
     message: 'Docker daemon did not become available.',
@@ -135,7 +173,7 @@ async function diagnoseWindowsDocker(_run = runCommand) {
   }
 
   try {
-    const out = await _run('sc query com.docker.service', { shell: true });
+    const out = await _run('sc query com.docker.service', { shell: true, timeout: SHELL_TIMEOUTS.scQuery });
     diagnostics.serviceExists = true;
     diagnostics.serviceRunning = /STATE\s*:\s*\d+\s+RUNNING/i.test(out);
   } catch (_) {
@@ -143,20 +181,23 @@ async function diagnoseWindowsDocker(_run = runCommand) {
   }
 
   try {
-    diagnostics.wslStatus = await _run('wsl --status', { shell: true });
+    diagnostics.wslStatus = await _run('wsl --status', { shell: true, timeout: SHELL_TIMEOUTS.wsl });
   } catch (err) {
     diagnostics.errors.push(`wsl-status: ${err.message}`);
   }
 
   let wslListRaw = null;
   try {
-    wslListRaw = await _run('wsl -l -v', { shell: true });
+    wslListRaw = await _run('wsl -l -v', { shell: true, timeout: SHELL_TIMEOUTS.wsl });
   } catch (err) {
     diagnostics.errors.push(`wsl-list: ${err.message}`);
   }
 
   try {
-    diagnostics.dockerContext = (await _run('docker context show', { shell: true })).trim();
+    diagnostics.dockerContext = (await _run('docker context show', {
+      shell: true,
+      timeout: SHELL_TIMEOUTS.dockerContext,
+    })).trim();
   } catch (err) {
     diagnostics.errors.push(`docker-context: ${err.message}`);
   }
@@ -167,11 +208,11 @@ async function diagnoseWindowsDocker(_run = runCommand) {
   let wslList = (wslListRaw || '').trim();
   if (diagnostics.desktopProcessRunning && wslList && !/no installed distributions/i.test(wslList)) {
     let retries = 0;
-    while (retries < 6 && !/docker-desktop/i.test(wslList)) {
+    while (retries < 3 && !/docker-desktop/i.test(wslList)) {
       await new Promise((r) => setTimeout(r, 1_000));
       retries++;
       try {
-        wslListRaw = await _run('wsl -l -v', { shell: true });
+        wslListRaw = await _run('wsl -l -v', { shell: true, timeout: SHELL_TIMEOUTS.wsl });
         wslList = (wslListRaw || '').trim();
       } catch (err) {
         diagnostics.errors.push(`wsl-list-retry-${retries}: ${err.message}`);
@@ -200,6 +241,36 @@ async function diagnoseWindowsDocker(_run = runCommand) {
   diagnostics.issueCode = 'DAEMON_NOT_READY';
   diagnostics.message = 'Docker Desktop is running but daemon pipe is unavailable.';
   return diagnostics;
+}
+
+const DIAGNOSE_WINDOWS_DOCKER_CEILING_MS = 15_000;
+
+async function diagnoseWindowsDocker(_run = runCommand) {
+  const fallback = {
+    issueCode: 'DAEMON_NOT_READY',
+    message: 'Diagnostic probe timed out; still waiting for Docker engine.',
+    desktopProcessRunning: false,
+    serviceExists: false,
+    serviceRunning: false,
+    wslStatus: null,
+    wslList: null,
+    dockerContext: null,
+    errors: ['diagnose-ceiling-timeout'],
+  };
+  try {
+    return await Promise.race([
+      diagnoseWindowsDockerInner(_run),
+      new Promise((resolve) => {
+        setTimeout(() => {
+          log.warn('[docker-diagnose] timed out after %ds', DIAGNOSE_WINDOWS_DOCKER_CEILING_MS / 1000);
+          resolve({ ...fallback });
+        }, DIAGNOSE_WINDOWS_DOCKER_CEILING_MS);
+      }),
+    ]);
+  } catch (err) {
+    fallback.errors.push(err.message);
+    return fallback;
+  }
 }
 
 async function attemptRecoverWindowsDocker(_run = runCommand, showProgress = null) {
@@ -323,7 +394,7 @@ async function findDockerDesktopExe(_run = runCommand) {
   try {
     const out = await _run(
       'reg query "HKLM\\SOFTWARE\\Docker Inc.\\Docker Desktop" /v "InstallPath"',
-      { shell: true }
+      { shell: true, timeout: SHELL_TIMEOUTS.regQuery }
     );
     const match = out.match(/InstallPath\s+REG_SZ\s+(.+)/);
     if (match) {
@@ -341,7 +412,7 @@ async function findDockerDesktopExe(_run = runCommand) {
   ];
   for (const c of candidates) {
     try {
-      await _run(`if exist "${c}" (exit 0) else (exit 1)`, { shell: true });
+      await _run(`if exist "${c}" (exit 0) else (exit 1)`, { shell: true, timeout: SHELL_TIMEOUTS.ifExist });
       return c;
     } catch (err) {
       log.debug(`Docker candidate path not found: ${c}`, err.message);
@@ -350,7 +421,8 @@ async function findDockerDesktopExe(_run = runCommand) {
 
   // Check if docker CLI is in PATH — means Desktop is installed somewhere
   try {
-    const dockerPath = (await _run('where docker', { shell: true })).trim().split('\n')[0];
+    const dockerPath = (await _run('where docker', { shell: true, timeout: SHELL_TIMEOUTS.whereDocker }))
+      .trim().split('\n')[0];
     // Derive Desktop exe: docker.exe is usually in <install>\resources\bin\docker.exe
     const derived = dockerPath.replace(/\\resources\\bin\\docker\.exe$/i, '\\Docker Desktop.exe');
     if (derived !== dockerPath) return derived;
@@ -361,13 +433,39 @@ async function findDockerDesktopExe(_run = runCommand) {
 
   // Check for Mirantis Docker Engine (Windows service)
   try {
-    await _run('sc query com.docker.service', { shell: true });
+    await _run('sc query com.docker.service', { shell: true, timeout: SHELL_TIMEOUTS.scQuery });
     return 'service';
   } catch (err) {
     log.debug('Mirantis service probe failed:', err.message);
   }
 
   return null;
+}
+
+/** Spawn or shell-start Docker Desktop (shared by normal and post-reboot resume paths). */
+async function launchDockerDesktop(state, deps) {
+  const { spawnDetached, runCommand: _run, showProgress } = deps;
+  if (state.action === 'start-service') {
+    try {
+      await _run('net start com.docker.service', { shell: true, timeout: SHELL_TIMEOUTS.startCmd });
+    } catch (err) {
+      log.warn('Failed to start com.docker.service:', err.message);
+    }
+    return;
+  }
+  if (state.exe) {
+    try {
+      spawnDetached(state.exe);
+    } catch (err) {
+      log.warn('Failed to spawn Docker Desktop executable:', err.message);
+    }
+  } else {
+    try {
+      await _run('start "" "Docker Desktop"', { shell: true, timeout: SHELL_TIMEOUTS.startCmd });
+    } catch (err) {
+      log.warn('Failed to start Docker Desktop via shell fallback:', err.message);
+    }
+  }
 }
 /**
  * Determine what Windows Docker setup action is needed.
@@ -424,6 +522,7 @@ async function ensureDockerWindows(deps) {
     // covered by the FITB spinner. No-op when omitted (tests).
     setForegroundYield = () => {},
     _sleep = (ms) => new Promise((r) => setTimeout(r, ms)),
+    resumeAfterReboot = false,
   } = deps;
 
   const state = await detectWindowsDockerState(isDaemonRunning, _findExe);
@@ -440,74 +539,58 @@ async function ensureDockerWindows(deps) {
   };
 
   if (state.action === 'start' || state.action === 'start-service') {
-    showProgress('Starting Docker Desktop… this can take up to 3 minutes on first launch.');
-    setForegroundYield(true);
-    if (state.action === 'start-service') {
-      try {
-        await _run('net start com.docker.service', { shell: true });
-      } catch (err) {
-        log.warn('Failed to start com.docker.service:', err.message);
-      }
-    } else if (state.exe) {
-      try {
-        spawnDetached(state.exe);
-      } catch (err) {
-        log.warn('Failed to spawn Docker Desktop executable:', err.message);
-      }
+    const phaseStartedAt = Date.now();
+    const engineWaitMs = 360_000;
+    const launchDeps = { spawnDetached, runCommand: _run, showProgress };
+
+    if (resumeAfterReboot) {
+      log.info('[docker-wait] Post-reboot resume — skipping tasklist, polling engine API');
+      showProgress(
+        'Resuming after reboot — starting Docker Desktop. Complete its setup window (terms/sign-in) if shown.'
+      );
     } else {
-      try {
-        await _run('start "" "Docker Desktop"', { shell: true });
-      } catch (err) {
-        log.warn('Failed to start Docker Desktop via shell fallback:', err.message);
+      showProgress('Starting Docker Desktop… this can take several minutes on first launch.');
+    }
+
+    setForegroundYield(true);
+    await launchDockerDesktop(state, launchDeps);
+
+    if (!resumeAfterReboot) {
+      // tasklist can hang on Win11 during boot; each probe is timeboxed (see isDockerDesktopProcessRunning).
+      let desktopRunning = await waitForDesktopStart(
+        isDesktopProcessRunning, 25_000, 1_000, _sleep, showProgress
+      );
+      if (!desktopRunning && state.action === 'start') {
+        try {
+          if (state.exe) {
+            await _run(`start "" /min "${state.exe}"`, { shell: true, timeout: SHELL_TIMEOUTS.startCmd });
+          } else {
+            await _run('start "" /min "Docker Desktop"', { shell: true, timeout: SHELL_TIMEOUTS.startCmd });
+          }
+        } catch (err) {
+          log.warn('Fallback Docker Desktop launch command failed:', err.message);
+        }
+        desktopRunning = await waitForDesktopStart(
+          isDesktopProcessRunning, 15_000, 1_000, _sleep, showProgress
+        );
+        if (!desktopRunning) {
+          log.warn('Docker Desktop process not detected via tasklist — falling through to engine wait');
+          showProgress('Docker Desktop process not confirmed — waiting for Docker engine…');
+        }
       }
     }
 
-    // Allow a grace window for delayed process spawn before declaring launch failure.
-    let desktopRunning = await waitForDesktopStart(isDesktopProcessRunning, 25_000, 1_000, undefined, showProgress);
-    if (!desktopRunning && state.action === 'start') {
-      try {
-        if (state.exe) {
-          await _run(`start "" /min "${state.exe}"`, { shell: true });
-        } else {
-          await _run('start "" /min "Docker Desktop"', { shell: true });
-        }
-      } catch (err) {
-        log.warn('Fallback Docker Desktop launch command failed:', err.message);
-      }
-      desktopRunning = await waitForDesktopStart(isDesktopProcessRunning, 15_000, 1_000, undefined, showProgress);
-      if (!desktopRunning) {
-        // Process name check (tasklist) failed, but Docker may still be running
-        // under a different name or with a permission mismatch. Fall through to
-        // the daemon wait loop — if Docker is genuinely up, the ping succeeds
-        // within seconds. If it's not, the 360s daemon wait surfaces the real error.
-        log.warn('Docker Desktop process not detected via tasklist — falling through to daemon wait');
-        showProgress('Docker Desktop process not confirmed — waiting for daemon…');
-      }
-    }
-    // Docker Desktop process is up; its setup dialog (if any) has had its
-    // shot at the foreground. Reclaim alwaysOnTop on the FITB spinner so
-    // the user can see daemon-ready progress.
     setForegroundYield(false);
 
-    // v0.7.20 #361: extended from 180s → 240s. Fresh-Docker-install on reboot
-    // (RunOnce path) can take longer than 3 min on slower hardware as Docker
-    // Desktop initializes its WSL2 distros for the first time. @bsgdigital
-    // hit this on Win11 — Fox was bailing before Docker finished starting.
-    //
-    // v0.7.30 @bsgdigital (Stan): Docker process is alive and all named pipes
-    // exist, but the daemon pipe isn't answering yet on reboot. The RunOnce
-    // path fires Fox immediately after login while Docker Desktop is still
-    // initializing its WSL distros. Give Docker a 15s head start before the
-    // first probe so we don't waste the first polling slice on a guaranteed miss.
-    showProgress('Docker Desktop is starting up — waiting for it to initialize…');
-    await _sleep(15_000);
-    let remainingMs = 360_000;  // 240s → 360s: covers slower hardware on reboot
+    showProgress('Docker Desktop is starting up — waiting for the engine (API) to respond…');
+    await _sleep(resumeAfterReboot ? 10_000 : 15_000);
+
+    let remainingMs = engineWaitMs;
     let diagnostics = null;
     let wslBackendMissingStreak = 0;
     while (remainingMs > 0) {
-      // Shorter slices re-run diagnosis sooner when the daemon is stuck (WSL / relaunch paths).
       const sliceMs = Math.min(12_000, remainingMs);
-      const cameUpSlice = await _waitForDaemon(sliceMs, showProgress);
+      const cameUpSlice = await _waitForDaemon(sliceMs, showProgress, phaseStartedAt);
       if (cameUpSlice) return _dockerReady('started');
       remainingMs -= sliceMs;
       diagnostics = await diagnoseDocker();
@@ -516,8 +599,11 @@ async function ensureDockerWindows(deps) {
       if (diagnostics.issueCode === 'DOCKER_DESKTOP_NOT_RUNNING' && state.action === 'start') {
         showProgress('Docker Desktop not detected yet — relaunching quietly…');
         try {
-          if (state.exe) await _run(`start "" /min "${state.exe}"`, { shell: true });
-          else await _run('start "" /min "Docker Desktop"', { shell: true });
+          if (state.exe) {
+            await _run(`start "" /min "${state.exe}"`, { shell: true, timeout: SHELL_TIMEOUTS.startCmd });
+          } else {
+            await _run('start "" /min "Docker Desktop"', { shell: true, timeout: SHELL_TIMEOUTS.startCmd });
+          }
         } catch (err) {
           log.warn('Proactive Docker Desktop relaunch failed:', err.message);
         }
@@ -561,7 +647,7 @@ async function ensureDockerWindows(deps) {
       const recovery = await attemptRecover(showProgress);
       if (recovery.attempted && recovery.backendReady) {
         showProgress('WSL repaired — retrying Docker daemon startup…');
-        const recovered = await _waitForDaemon(120_000, showProgress);
+        const recovered = await _waitForDaemon(120_000, showProgress, phaseStartedAt);
         if (recovered) return _dockerReady('started-after-recovery');
       }
       if (await isDaemonRunning()) return _dockerReady('started-after-recovery');
@@ -637,8 +723,13 @@ module.exports = {
   waitForDaemon,
   waitForDesktopProcessStart,
   diagnoseWindowsDocker,
+  diagnoseWindowsDockerInner,
   attemptRecoverWindowsDocker,
   findDockerDesktopExe,
   detectWindowsDockerState,
   ensureDockerWindows,
+  launchDockerDesktop,
+  SHELL_TIMEOUTS,
+  DIAGNOSE_WINDOWS_DOCKER_CEILING_MS,
+  formatElapsedSeconds,
 };

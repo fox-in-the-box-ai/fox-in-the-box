@@ -11,6 +11,7 @@ const {
   detectWindowsDockerState,
   ensureDockerWindows,
   diagnoseWindowsDocker,
+  DIAGNOSE_WINDOWS_DOCKER_CEILING_MS,
 } = require('../../packages/electron/src/startup');
 
 // ─── waitForDaemon ────────────────────────────────────────────────────────────
@@ -375,5 +376,43 @@ describe('ensureDockerWindows', () => {
     });
     // Should bail FAST when process is gone — no patient retry, no streak built up
     expect(deps.diagnoseDocker).toHaveBeenCalledTimes(1);
+  });
+
+  test('resumeAfterReboot skips tasklist wait and still polls daemon', async () => {
+    const deps = makeDeps({
+      _findExe: jest.fn().mockResolvedValue('C:\\Docker\\Docker Desktop.exe'),
+      resumeAfterReboot: true,
+    });
+    const result = await ensureDockerWindows(deps);
+    expect(result).toEqual({ result: 'started' });
+    // tasklist-based Desktop process check should NOT have been called
+    expect(deps.waitForDesktopStart).not.toHaveBeenCalled();
+    // Daemon wait should still have been called
+    expect(deps.waitForDaemon).toHaveBeenCalled();
+  });
+});
+
+// ─── diagnoseWindowsDocker timeout ceiling ──────────────────────────────────
+
+describe('diagnoseWindowsDocker timeout ceiling', () => {
+  test('DIAGNOSE_WINDOWS_DOCKER_CEILING_MS is 15 seconds', () => {
+    expect(DIAGNOSE_WINDOWS_DOCKER_CEILING_MS).toBe(15_000);
+  });
+});
+
+// ─── waitForDaemon progress copy ────────────────────────────────────────────
+
+describe('waitForDaemon progress copy', () => {
+  test('progress callback receives elapsed-time message', async () => {
+    const isDaemonRunning = jest.fn()
+      .mockResolvedValueOnce(false)
+      .mockResolvedValue(true);
+    const sleep = jest.fn().mockResolvedValue(undefined);
+    const progress = jest.fn();
+    const result = await waitForDaemon(isDaemonRunning, 10_000, 100, Date.now, sleep, progress);
+    expect(result).toBe(true);
+    expect(progress).toHaveBeenCalledWith(
+      expect.stringContaining('Waiting for Docker engine'),
+    );
   });
 });

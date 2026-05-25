@@ -21,6 +21,10 @@ function render(idx) {
     else                { iconHtml = '<span style="opacity:0.35;font-size:11px;">○</span>'; cls = 'pending'; }
     return `<div class="step ${cls}"><div class="icon">${iconHtml}</div><span>${label}</span></div>`;
   }).join('');
+  const diag = document.getElementById('diag');
+  if (diag && (idx === 1 || idx === 2)) {
+    diag.open = true;
+  }
 }
 
 function appendLog(line) {

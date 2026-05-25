@@ -7,6 +7,25 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.7.40] - 2026-05-25
+
+**7-step progress alignment + post-reboot Docker fix.**
+
+### Changed
+- Launcher now shows 7 steps that map 1:1 to actual startup operations: Checking system → Installing Docker → Starting Docker → Downloading Fox image → Starting container → Waiting for services → Connecting to network.
+- Steps that don't apply (Docker already running, local-only mode) get an instant checkmark.
+- Tailscale connection polling moved into the orchestrator as a dedicated phase.
+
+### Fixed
+- Windows post-reboot install (`--resume-setup`): skip the `tasklist` loop that could block indefinitely while Docker Desktop shows terms/sign-in. Fox now polls the engine API for up to 6 minutes.
+- All startup shell probes (`tasklist`, `wsl`, `reg query`, etc.) use exec timeouts.
+- `diagnoseWindowsDocker` capped at 15s so WSL probes cannot block the poll loop.
+- Closing the setup window during install prompts before quitting.
+- Diagnostics pane strips orchestrator step prefix for cleaner log output.
+- Docker steps auto-expand the diagnostics panel.
+
+---
+
 ## [0.7.39] - 2026-05-25
 
 **Progress UI aligned to 7 consecutive backend phases.**

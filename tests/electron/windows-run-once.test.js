@@ -34,7 +34,7 @@ describe('registerWindowsRunOnceResume', () => {
       '/t',
       'REG_SZ',
       '/d',
-      '"C:\\Program Files\\Fox\\app.exe"',
+      '"C:\\Program Files\\Fox\\app.exe" --resume-setup',
       '/f',
     ]);
     expect(run.mock.calls[0][2]).toMatchObject({ windowsHide: true });

@@ -28,7 +28,7 @@ async function registerWindowsRunOnceResume(exePath, opts = {}) {
   }
 
   const inner = normalized.replace(/"/g, '');
-  const regData = `"${inner}"`;
+  const regData = `"${inner}" --resume-setup`;
 
   try {
     await run(

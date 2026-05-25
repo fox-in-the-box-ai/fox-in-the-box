@@ -25,6 +25,19 @@ Skipped sections are OK as long as they're explicitly noted with reason. Empty e
 
 ---
 
+## v0.7.40 — 2026-05-25 (DV — 7-step progress + post-reboot Docker fix; engineer-side verified)
+
+- [x] (a) Jest: startup-orchestrator, startup, progress-window all green
+- [x] (b) 7-step STEPS array matches orchestrator STEP_ORDER
+- [x] (c) startup.js: SHELL_TIMEOUTS applied to all exec calls
+- [x] (d) diagnoseWindowsDocker ceiling (15s) wraps inner probe
+- [x] (e) resumeAfterReboot skips tasklist, polls engine API directly
+- [x] (f) progressDiagnosticsLine strips Step N/7 prefix from diagnostics
+- [x] (g) Close-guard shows "Quit setup?" when window closed mid-install
+- [ ] (h) **POST-RELEASE:** On-device Windows smoke — verify post-reboot resume shows 7 steps correctly
+
+---
+
 ## v0.7.39 — 2026-05-25 (DV — 7-step progress alignment; engineer-side verified)
 
 - [x] (a) Jest: startup-orchestrator, startup, progress-window, health-check all green
