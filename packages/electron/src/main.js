@@ -215,6 +215,9 @@ function buildDiagnosticsText({
   ].join('\n');
 }
 
+// Error data stored here so the preload's ipcMain.handle can return it synchronously.
+let _errorData = null;
+
 function showError(details) {
   if (typeof details === 'string') {
     details = {
@@ -233,81 +236,46 @@ function showError(details) {
   } = details;
   closeProgress();
 
+  _errorData = {
+    sessionId, phase, code, message, remediation, diagnosticsText,
+    logPath: path.join(app.getPath('logs'), 'main.log'),
+  };
+
   const win = new BrowserWindow({
     width: 560,
-    height: 340,
+    height: 400,
     resizable: false,
     minimizable: false,
     maximizable: false,
     closable: true,
     alwaysOnTop: true,
     frame: true,
-    title: 'Fox in the box — Error',
+    title: 'Fox in the Box — Error',
     icon: APP_ICON,
-    webPreferences: { nodeIntegration: true, contextIsolation: false },
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, 'preload-error.js'),
+    },
   });
 
-  const escaped = String(message)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/\n/g, '<br>');
-  const escapedRemediation = String(remediation)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/\n/g, '<br>');
-  const escapedDiag = String(diagnosticsText)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/\n/g, '<br>');
-  const copyChannel = `copy-diagnostics-${Date.now()}`;
-
-  const html = `<!DOCTYPE html>
-<html><head><meta charset="utf-8">
-<style>
-  body { font-family: "Segoe UI", sans-serif; margin: 0; display: flex;
-         align-items: center; justify-content: center; height: 100vh;
-         background: #fff; }
-  .wrap { text-align: left; padding: 24px; max-width: 520px; }
-  .logo { font-size: 32px; margin-bottom: 12px; }
-  h2 { font-size: 15px; margin: 0 0 10px; color: #c0392b; }
-  p  { font-size: 12px; color: #555; margin: 0 0 12px; line-height: 1.5; text-align: left; }
-  .meta { background:#f7f7f7; border:1px solid #ddd; border-radius:8px; padding:8px; margin-bottom:12px; font-size:12px; }
-  .diag { font-size:11px; max-height:95px; overflow:auto; background:#fafafa; border:1px solid #eee; padding:8px; border-radius:6px; }
-  .actions { display:flex; gap:8px; justify-content:flex-end; margin-top:12px; }
-  button { background: #444; color: #fff; border: none; padding: 8px 14px;
-           font-size: 13px; border-radius: 6px; cursor: pointer; }
-  button:hover { background: #222; }
-</style></head>
-<body><div class="wrap">
-  <div class="logo">🦊</div>
-  <h2>Startup failed</h2>
-  <div class="meta">
-    <div><b>Session:</b> ${sessionId}</div>
-    <div><b>Phase:</b> ${phase}</div>
-    <div><b>Error code:</b> ${code}</div>
-  </div>
-  <p>${escaped}</p>
-  <p><b>Try:</b> ${escapedRemediation}</p>
-  <p><b>Log file:</b> ${path.join(app.getPath('logs'), 'main.log')}</p>
-  <div class="diag">${escapedDiag}</div>
-  <div class="actions">
-    <button onclick="require('electron').ipcRenderer.send('${copyChannel}')">Copy diagnostics</button>
-    <button onclick="window.close()">Close</button>
-  </div>
-</div></body></html>`;
-
-  win.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
-  win.setMenu(null);
-  ipcMain.once(copyChannel, () => {
+  ipcMain.handleOnce('error:get-data', () => _errorData);
+  ipcMain.once('error:copy', () => {
     clipboard.writeText(diagnosticsText);
-    dialog.showMessageBox({
+    dialog.showMessageBox(win, {
       type: 'info',
       message: 'Diagnostics copied to clipboard.',
       buttons: ['OK'],
     });
   });
+  ipcMain.once('error:close', () => win.close());
+
+  win.loadFile(path.join(__dirname, '..', 'assets', 'error.html'));
+  win.setMenu(null);
 
   win.on('closed', () => {
-    if (_fatalStartup) {
-      app.exit(1);
-    }
+    _errorData = null;
+    if (_fatalStartup) app.exit(1);
   });
 }
 
