@@ -23,6 +23,11 @@ const APP_ICON = process.platform === 'win32'
   ? path.join(__dirname, '..', 'assets', 'icon.ico')
   : path.join(__dirname, '..', 'assets', 'icon.png');
 let _fatalStartup = false;
+let _setupInProgress = false;
+
+/** Set when Fox is launched via HKCU RunOnce after a Docker-install reboot. */
+const resumeAfterReboot = process.platform === 'win32'
+  && process.argv.some((arg) => arg === '--resume-setup' || arg === '--resume-setup=true');
 
 // Prevent multiple instances
 if (!app.requestSingleInstanceLock()) {
@@ -110,6 +115,15 @@ function _activeStepIndex(title) {
   return 0;
 }
 
+/** Human-readable line for the diagnostics pane (strip orchestrator step prefix). */
+function progressDiagnosticsLine(title, explicitDetail) {
+  if (typeof explicitDetail === 'string' && explicitDetail.trim().length > 0) {
+    return explicitDetail.trim();
+  }
+  const m = String(title || '').match(/^Step \d+\/\d+ - [^:]+: (.+)$/);
+  return m ? m[1].trim() : String(title || '').trim();
+}
+
 function showProgress(message) {
   const update = (typeof message === 'object' && message !== null)
     ? message
@@ -122,12 +136,12 @@ function showProgress(message) {
   }
 
   const idx = _activeStepIndex(_progressState.title);
+  const logLine = progressDiagnosticsLine(_progressState.title, update.detail);
 
   if (_progressWin) {
-    _progressWin.webContents.send('progress:step', idx, _progressState.detail || '');
-    _progressWin.webContents.send('progress:log', _progressState.title);
-    if (_progressState.detail) {
-      _progressWin.webContents.send('progress:log', _progressState.detail);
+    _progressWin.webContents.send('progress:step', idx);
+    if (logLine) {
+      _progressWin.webContents.send('progress:log', logLine);
     }
     return;
   }
@@ -150,8 +164,26 @@ function showProgress(message) {
     },
   });
 
-  _progressWin.on('closed', () => {
+  _progressWin.on('closed', async () => {
     _progressWin = null;
+    if (_setupInProgress && !_fatalStartup) {
+      log.info('[startup] Setup progress window closed during installation');
+      const parent = getDialogParent();
+      const { response } = await dialog.showMessageBox(parent, {
+        type: 'warning',
+        title: 'Quit setup?',
+        message: 'Fox in the box setup is still in progress.',
+        detail:
+          'Docker may still be starting in the background. If you quit now, reopen Fox from the Start menu to continue.',
+        buttons: ['Quit setup', 'Keep waiting'],
+        defaultId: 1,
+        cancelId: 1,
+      });
+      if (response !== 0) {
+        showProgress(_progressState.title || 'Setting up…');
+        return;
+      }
+    }
     app.quit();
   });
 
@@ -163,10 +195,10 @@ function showProgress(message) {
   _progressWin.webContents.once('did-finish-load', () => {
     if (!_progressWin || _progressWin.isDestroyed()) return;
     const currentIdx = _activeStepIndex(_progressState.title);
-    _progressWin.webContents.send('progress:step', currentIdx, _progressState.detail || '');
-    _progressWin.webContents.send('progress:log', _progressState.title);
-    if (_progressState.detail) {
-      _progressWin.webContents.send('progress:log', _progressState.detail);
+    _progressWin.webContents.send('progress:step', currentIdx);
+    const logLine = progressDiagnosticsLine(_progressState.title, _progressState.detail);
+    if (logLine) {
+      _progressWin.webContents.send('progress:log', logLine);
     }
   });
 }
@@ -317,20 +349,24 @@ async function ensureDockerWindows(progressCb = showProgress) {
 
   return _ensureDockerWindows({
     isDaemonRunning: () => docker.isDaemonRunning(),
-    waitForDaemon: (ms, sp) => _waitForDaemon(
+    waitForDaemon: (ms, sp, phaseStartedAt) => _waitForDaemon(
       () => docker.isDaemonRunning(),
       ms || 90_000,
       1_000,
       Date.now,
       (t) => new Promise((r) => setTimeout(r, t)),
-      sp || progressCb
+      sp || progressCb,
+      phaseStartedAt
     ),
-    runCommand: (cmd, opts) => _runCommandVerbose(cmd, opts, (line) => showProgress({ detail: line })),
+    runCommand: (cmd, opts) => _runCommandVerbose(cmd, { windowsHide: true, ...opts }, (line) => {
+      showProgress({ detail: line });
+    }),
     spawnDetached,
     showProgress: progressCb,
     showRebootRequired: () => showDaemonRecoveryRequired('win32'),
     showError,
     setForegroundYield,
+    resumeAfterReboot,
   });
 }
 
@@ -580,7 +616,11 @@ async function handleStartupError(err) {
 
 async function main() {
   log.info('Fox in the box starting up');
+  if (resumeAfterReboot) {
+    log.info('[startup] Post-reboot resume (--resume-setup)');
+  }
 
+  _setupInProgress = true;
   try {
     const startupOutcome = await runStartup({
       docker,
@@ -603,13 +643,16 @@ async function main() {
       platform: process.platform,
     });
     if (startupOutcome && startupOutcome.outcome === 'reboot-required') {
+      _setupInProgress = false;
       app.quit();
       return;
     }
   } catch (err) {
+    _setupInProgress = false;
     await handleStartupError(err);
     return;
   }
+  _setupInProgress = false;
 
   createTray(true, {
     startFlow: startFromTray,

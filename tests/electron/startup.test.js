@@ -11,6 +11,7 @@ const {
   detectWindowsDockerState,
   ensureDockerWindows,
   diagnoseWindowsDocker,
+  DIAGNOSE_WINDOWS_DOCKER_CEILING_MS,
 } = require('../../packages/electron/src/startup');
 
 // ─── waitForDaemon ────────────────────────────────────────────────────────────
@@ -375,5 +376,56 @@ describe('ensureDockerWindows', () => {
     });
     // Should bail FAST when process is gone — no patient retry, no streak built up
     expect(deps.diagnoseDocker).toHaveBeenCalledTimes(1);
+  });
+
+  test('resumeAfterReboot skips tasklist wait and still polls daemon', async () => {
+    const waitForDesktopStart = jest.fn().mockResolvedValue(true);
+    const waitForDaemon = jest.fn().mockResolvedValue(true);
+    const deps = makeDeps({
+      resumeAfterReboot: true,
+      _findExe: jest.fn().mockResolvedValue('C:\\Docker\\Docker Desktop.exe'),
+      waitForDesktopStart,
+      waitForDaemon,
+    });
+    const result = await ensureDockerWindows(deps);
+    expect(result).toEqual({ result: 'started' });
+    expect(waitForDesktopStart).not.toHaveBeenCalled();
+    expect(waitForDaemon).toHaveBeenCalled();
+    expect(deps.spawnDetached).toHaveBeenCalled();
+  });
+});
+
+describe('diagnoseWindowsDocker timeout ceiling', () => {
+  test('returns DAEMON_NOT_READY when inner diagnose exceeds ceiling', async () => {
+    jest.useFakeTimers();
+    try {
+      const hang = () => new Promise(() => {});
+      const pending = diagnoseWindowsDocker(hang);
+      await jest.advanceTimersByTimeAsync(DIAGNOSE_WINDOWS_DOCKER_CEILING_MS);
+      const diagnostics = await pending;
+      expect(diagnostics.issueCode).toBe('DAEMON_NOT_READY');
+      expect(diagnostics.errors).toContain('diagnose-ceiling-timeout');
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+});
+
+describe('waitForDaemon progress copy', () => {
+  test('reports total elapsed from phaseStartedAt', async () => {
+    const isDaemonRunning = jest.fn().mockResolvedValue(false);
+    const showProgress = jest.fn();
+    let calls = 0;
+    const now = () => {
+      calls += 1;
+      if (calls === 1) return 0;
+      if (calls === 2) return 45_000;
+      if (calls === 3) return 46_000;
+      return 121_000;
+    };
+    const sleep = jest.fn().mockResolvedValue(undefined);
+    await waitForDaemon(isDaemonRunning, 120_000, 1000, now, sleep, showProgress, 0);
+    const messages = showProgress.mock.calls.map((c) => c[0]);
+    expect(messages.some((m) => /Waiting for Docker engine… (45s|46s)/.test(m))).toBe(true);
   });
 });

@@ -7,6 +7,18 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.7.39] - 2026-05-25
+
+**Post-reboot Docker setup no longer hangs at “Launching… 24s”.**
+
+### Fixed
+- Windows post-reboot install (`RunOnce` + `--resume-setup`): skip the 25s `tasklist` loop that could block indefinitely and freeze the UI at “Launching Docker Desktop… 24s” while Docker’s terms/sign-in wizard ran. Fox now spawns Docker once and polls the engine API for up to 6 minutes with a monotonic “Waiting for Docker engine…” status line.
+- All startup shell probes (`tasklist`, `wsl`, `reg query`, etc.) use exec timeouts so a stuck command cannot silence daemon polling for tens of minutes.
+- `diagnoseWindowsDocker` is capped at 15s so WSL probes cannot block the poll loop during first-run Docker boot.
+- Progress window shows live status text under the active step; Docker step auto-expands diagnostics. Closing the setup window during install prompts before quitting.
+
+---
+
 ## [0.7.38] - 2026-05-25
 
 **Larger launcher window, selectable diagnostics, Docker detection fallback.**
