@@ -7,6 +7,16 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.7.37] - 2026-05-25
+
+**Launcher progress window now actually works.**
+
+### Fixed
+- The progress window's step list and diagnostics log were always empty. Root cause: both `progress.html` and `error.html` have a `default-src 'self'` CSP meta tag, which Chromium (used by Electron) enforces by blocking inline `<script>` blocks. All rendering and IPC listener setup lived in that blocked script — so `render()` never ran and no IPC messages were ever received. Extracted both inline scripts to same-directory `.js` files; `'self'` allows same-origin external scripts without any CSP change.
+- The error window's content (session ID, error code, message, remediation, diagnostics text) and its Copy and Close buttons were all wired up in the same blocked inline script. Both are now functional.
+
+---
+
 ## [0.7.36] - 2026-05-25
 
 **Progress window now shows steps and live diagnostics.**

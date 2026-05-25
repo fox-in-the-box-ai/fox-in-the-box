@@ -25,6 +25,17 @@ Skipped sections are OK as long as they're explicitly noted with reason. Empty e
 
 ---
 
+## v0.7.37 — 2026-05-25 (DV — CSP inline-script block fix; engineer-side verified)
+
+- [x] (a) Jest: 101/101 green
+- [x] (b) All CI checks green on PR #385 (smoke, validate, Electron win/mac, container)
+- [x] (c) Confirmed CSP `default-src 'self'` blocks inline scripts in Chromium/Electron
+- [x] (d) `progress.js` and `error.js` created in `assets/` — same-origin, allowed by `'self'`
+- [x] (e) `electron-builder.yml` `assets/**/*` glob confirmed — both .js files will be packaged
+- [ ] (f) **POST-RELEASE:** On-device smoke — confirm progress steps render, diagnostics log appears, error window shows content and buttons work
+
+---
+
 ## v0.7.36 — 2026-05-25 (DV — progress window log fix; engineer-side verified)
 
 - [x] (a) Jest: 101/101 green
