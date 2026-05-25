@@ -25,6 +25,17 @@ Skipped sections are OK as long as they're explicitly noted with reason. Empty e
 
 ---
 
+## v0.7.36 — 2026-05-25 (DV — progress window log fix; engineer-side verified)
+
+- [x] (a) Jest: 101/101 green
+- [x] (b) All CI checks green on PR #383 (smoke, validate, Electron win/mac, container)
+- [x] (c) `showProgress()` confirmed to send `progress:log` with `_progressState.title` on every call
+- [x] (d) `did-finish-load` handler confirmed to recompute `currentIdx` at fire time (not stale closure)
+- [x] (e) `.step.pending` opacity raised to 38% — verified in progress.html
+- [ ] (f) **POST-RELEASE:** On-device smoke — confirm steps appear with spinner, diagnostics pane shows log lines, pending steps legible
+
+---
+
 ## v0.7.35 — 2026-05-25 (DV — launcher UX fixes; engineer-side verified)
 
 - [x] (a) Jest: 101/101 green
