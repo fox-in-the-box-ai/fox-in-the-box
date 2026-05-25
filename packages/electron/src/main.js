@@ -90,12 +90,13 @@ let _progressWin = null;
 let _progressState = { title: '', detail: '' };
 
 const INSTALL_STEPS = [
-  { label: 'Checking system',             match: 'Initialize app' },
-  { label: 'Setting up Docker',           match: 'Prepare Docker' },
-  { label: 'Pulling container image',     match: 'Ensure container image' },
-  { label: 'Starting container',          match: 'Prepare container' },
-  { label: 'Waiting for Fox to be ready', match: 'Wait for services' },
-  { label: 'Opening Fox',                 match: 'Open setup wizard' },
+  { label: 'Checking system',        match: 'Check system' },
+  { label: 'Installing Docker',      match: 'Install Docker' },
+  { label: 'Starting Docker',        match: 'Start Docker' },
+  { label: 'Downloading Fox image',  match: 'Download image' },
+  { label: 'Starting container',     match: 'Start container' },
+  { label: 'Waiting for services',   match: 'Wait for services' },
+  { label: 'Connecting to network',  match: 'Connect network' },
 ];
 
 function _activeStepIndex(title) {
@@ -103,10 +104,12 @@ function _activeStepIndex(title) {
   for (let i = INSTALL_STEPS.length - 1; i >= 0; i--) {
     if (title.includes(INSTALL_STEPS[i].match)) return i;
   }
-  if (title.includes('image') || title.includes('pull')) return 2;
-  if (title.includes('Docker')) return 1;
-  if (title.includes('container') || title.includes('Container')) return 3;
-  if (title.includes('health') || title.includes('ready') || title.includes('healthy')) return 4;
+  if (title.includes('Installing') || title.includes('install')) return 1;
+  if (title.includes('Starting Docker') || title.includes('Launching Docker') || title.includes('daemon')) return 2;
+  if (title.includes('image') || title.includes('pull') || title.includes('Pull')) return 3;
+  if (title.includes('container') || title.includes('Container')) return 4;
+  if (title.includes('health') || title.includes('ready') || title.includes('healthy')) return 5;
+  if (title.includes('Tailscale') || title.includes('network') || title.includes('Opening')) return 6;
   return 0;
 }
 
@@ -494,39 +497,39 @@ async function pollTailscaleUrl(timeoutMs = 30_000) {
   return null;
 }
 
-// Opens Fox after container is healthy. If Tailscale mode is active (mode 2 or 3),
-// polls for the tailnet URL and shows a dialog surfacing it (#358).
-async function openFox() {
+async function openFox(tailnetUrl) {
   const mode = docker.getEffectiveAccessMode();
-  if (mode === '2' || mode === '3') {
-    showProgress('Waiting for Tailscale to connect…');
-    const tailnetUrl = await pollTailscaleUrl(30_000);
-    closeProgress();
-    if (tailnetUrl) {
-      const lines = mode === '3'
-        ? `Local access: http://localhost:8787\nFrom other devices: ${tailnetUrl}`
-        : `From other devices: ${tailnetUrl}`;
-      const { response } = await dialog.showMessageBox(getDialogParent(), {
-        type: 'info',
-        title: 'Fox in the box — Ready',
-        message: 'Fox in the box is ready!',
-        detail: lines + '\n\nClick OK to open Fox.',
-        buttons: ['OK', 'Copy Tailscale URL'],
-        defaultId: 0,
-      });
-      if (response === 1) clipboard.writeText(tailnetUrl);
-    } else {
-      await dialog.showMessageBox(getDialogParent(), {
-        type: 'info',
-        title: 'Fox in the box — Tailscale not connected yet',
-        message: 'Tailscale hasn\'t connected yet.',
-        detail: 'Open the Tailscale app, sign in if prompted, and wait until it shows "Connected".\n\nFox is opening locally in the meantime. Once Tailscale connects, your tailnet URL will be available from the Tailscale menu.',
-        buttons: ['OK'],
-        defaultId: 0,
-      });
-    }
+  if ((mode === '2' || mode === '3') && tailnetUrl) {
+    const lines = mode === '3'
+      ? `Local access: http://localhost:8787\nFrom other devices: ${tailnetUrl}`
+      : `From other devices: ${tailnetUrl}`;
+    const { response } = await dialog.showMessageBox(getDialogParent(), {
+      type: 'info',
+      title: 'Fox in the box — Ready',
+      message: 'Fox in the box is ready!',
+      detail: lines + '\n\nClick OK to open Fox.',
+      buttons: ['OK', 'Copy Tailscale URL'],
+      defaultId: 0,
+    });
+    if (response === 1) clipboard.writeText(tailnetUrl);
+  } else if ((mode === '2' || mode === '3') && !tailnetUrl) {
+    await dialog.showMessageBox(getDialogParent(), {
+      type: 'info',
+      title: 'Fox in the box — Tailscale not connected yet',
+      message: 'Tailscale hasn\'t connected yet.',
+      detail: 'Open the Tailscale app, sign in if prompted, and wait until it shows "Connected".\n\nFox is opening locally in the meantime. Once Tailscale connects, your tailnet URL will be available from the Tailscale menu.',
+      buttons: ['OK'],
+      defaultId: 0,
+    });
   }
   shell.openExternal(APP_HOME_URL);
+}
+
+async function waitForTailscale(progressCb) {
+  const mode = docker.getEffectiveAccessMode();
+  if (mode !== '2' && mode !== '3') return null;
+  if (progressCb) progressCb('Waiting for Tailscale to connect…');
+  return pollTailscaleUrl(30_000);
 }
 
 async function startFromTray() {
@@ -581,6 +584,7 @@ async function handleStartupError(err) {
 async function main() {
   log.info('Fox in the box starting up');
 
+  let _tailnetUrl = null;
   try {
     const startupOutcome = await runStartup({
       docker,
@@ -597,8 +601,11 @@ async function main() {
       ),
       showProgress,
       closeProgress,
-      openOnboarding: openFox,
+      openOnboarding: () => openFox(_tailnetUrl),
       onDaemonNotReady: ({ platform }) => showDaemonRecoveryRequired(platform),
+      pollTailscaleUrl: async (progressCb) => {
+        _tailnetUrl = await waitForTailscale(progressCb);
+      },
       getDialogParent,
       platform: process.platform,
     });

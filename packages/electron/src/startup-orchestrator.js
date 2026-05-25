@@ -3,20 +3,22 @@
 const crypto = require('crypto');
 const log = require('electron-log');
 const STEP_ORDER = [
-  'preflight',
-  'docker_daemon_ready',
-  'image_ready',
-  'container_ready',
-  'http_healthy',
-  'onboarding_opened',
+  'check_system',
+  'docker_install',
+  'docker_start',
+  'download_image',
+  'start_container',
+  'wait_services',
+  'connect_network',
 ];
 const STEP_LABELS = {
-  preflight: 'Initialize app',
-  docker_daemon_ready: 'Prepare Docker daemon',
-  image_ready: 'Ensure container image',
-  container_ready: 'Prepare container',
-  http_healthy: 'Wait for services',
-  onboarding_opened: 'Open setup wizard',
+  check_system: 'Check system',
+  docker_install: 'Install Docker',
+  docker_start: 'Start Docker',
+  download_image: 'Download image',
+  start_container: 'Start container',
+  wait_services: 'Wait for services',
+  connect_network: 'Connect network',
 };
 
 class StartupPhaseError extends Error {
@@ -98,62 +100,68 @@ async function runStartup({
   closeProgress,
   openOnboarding,
   onDaemonNotReady,
-  // v0.7.16 #330: callback that returns the BrowserWindow native dialogs
-  // should parent to (typically the FITB progress window). Without a
-  // parent, `dialog.showMessageBox` on Windows can render behind any
-  // alwaysOnTop window we already opened.
+  pollTailscaleUrl = null,
   getDialogParent = () => null,
   platform = process.platform,
 }) {
   const sessionId = crypto.randomUUID();
-  const preflightProgress = createPhaseProgress(showProgress, 'preflight');
-  const daemonProgress = createPhaseProgress(showProgress, 'docker_daemon_ready');
-  const imageProgress = createPhaseProgress(showProgress, 'image_ready');
-  const containerProgress = createPhaseProgress(showProgress, 'container_ready');
-  const healthProgress = createPhaseProgress(showProgress, 'http_healthy');
+  const checkProgress = createPhaseProgress(showProgress, 'check_system');
+  const installProgress = createPhaseProgress(showProgress, 'docker_install');
+  const startProgress = createPhaseProgress(showProgress, 'docker_start');
+  const imageProgress = createPhaseProgress(showProgress, 'download_image');
+  const containerProgress = createPhaseProgress(showProgress, 'start_container');
+  const healthProgress = createPhaseProgress(showProgress, 'wait_services');
+  const networkProgress = createPhaseProgress(showProgress, 'connect_network');
 
-  await runPhase(sessionId, 'preflight', async () => {
-    preflightProgress('Preparing desktop runtime…');
+  let daemonWasRunning = false;
+
+  await runPhase(sessionId, 'check_system', async () => {
+    checkProgress('Preparing desktop runtime…');
     docker.init();
+    daemonWasRunning = await docker.isDaemonRunning();
+
+    if (!daemonWasRunning) {
+      const daemonErrCode = docker.getLastDaemonErrorCode && docker.getLastDaemonErrorCode();
+      if (daemonErrCode === 'DOCKER_WINDOWS_CONTAINERS_MODE') {
+        throw Object.assign(
+          new Error(
+            'Docker Desktop is running in Windows-containers mode. Fox needs Linux containers.',
+          ),
+          { code: 'DOCKER_WINDOWS_CONTAINERS_MODE', nonRecoverable: true },
+        );
+      }
+    }
   });
 
-  const daemonPhaseResult = await runPhase(sessionId, 'docker_daemon_ready', async () => {
-    let dockerRunning = await docker.isDaemonRunning();
-    if (dockerRunning) return;
-
-    // v0.7.11 #291: short-circuit when isDaemonRunning detected Docker
-    // Desktop in Windows-containers mode. Running the WSL repair / Docker
-    // install flow is actively harmful here (Docker IS installed and
-    // running — it's just in the wrong mode). Throw a non-recoverable
-    // error so main.js surfaces the actionable hint immediately instead
-    // of cycling through the recovery path.
-    const daemonErrCode = docker.getLastDaemonErrorCode && docker.getLastDaemonErrorCode();
-    if (daemonErrCode === 'DOCKER_WINDOWS_CONTAINERS_MODE') {
-      throw Object.assign(
-        new Error(
-          'Docker Desktop is running in Windows-containers mode. Fox needs Linux containers.',
-        ),
-        { code: 'DOCKER_WINDOWS_CONTAINERS_MODE', nonRecoverable: true },
-      );
-    }
+  const installResult = await runPhase(sessionId, 'docker_install', async () => {
+    if (daemonWasRunning) return;
 
     if (platform === 'win32') {
-      daemonProgress('Setting up Docker…');
-      const winDocker = await ensureDockerWindows(daemonProgress);
+      installProgress('Installing Docker Desktop…');
+      const winDocker = await ensureDockerWindows(installProgress);
       if (winDocker && winDocker.result === 'reboot-required') {
         if (closeProgress) closeProgress();
         return { outcome: 'reboot-required' };
       }
-      dockerRunning = await docker.isDaemonRunning();
     } else if (platform === 'darwin') {
-      daemonProgress('Setting up Docker…');
-      await installDockerMac(daemonProgress);
-      dockerRunning = await waitForDaemon(180_000, daemonProgress);
+      installProgress('Installing Docker Desktop…');
+      await installDockerMac(installProgress);
     } else {
       throw Object.assign(new Error('Unsupported desktop platform for one-click setup'), {
         code: 'UNSUPPORTED_PLATFORM',
       });
     }
+  });
+
+  if (installResult && installResult.outcome === 'reboot-required') {
+    return { sessionId, outcome: 'reboot-required' };
+  }
+
+  await runPhase(sessionId, 'docker_start', async () => {
+    if (daemonWasRunning) return;
+
+    startProgress('Waiting for Docker daemon…');
+    const dockerRunning = await waitForDaemon(180_000, startProgress);
 
     if (!dockerRunning) {
       if (onDaemonNotReady) await onDaemonNotReady({ platform });
@@ -163,14 +171,7 @@ async function runStartup({
     }
   });
 
-  if (daemonPhaseResult && daemonPhaseResult.outcome === 'reboot-required') {
-    return { sessionId, outcome: 'reboot-required' };
-  }
-
-  await runPhase(sessionId, 'image_ready', async () => {
-    // Always pull the image to bypass Docker's client-side cache.
-    // This ensures hotfixes and updates to :stable tag are picked up immediately,
-    // even if an older version of the image is already cached locally.
+  await runPhase(sessionId, 'download_image', async () => {
     imageProgress('Checking for updates and preparing container image…');
     await withTimeout(
       docker.pullImage((pct) => {
@@ -181,7 +182,7 @@ async function runStartup({
     );
   });
 
-  await runPhase(sessionId, 'container_ready', async () => {
+  await runPhase(sessionId, 'start_container', async () => {
     containerProgress('Preparing Fox in the box container…');
     if (typeof docker.ensureDockerAccessModeChosen === 'function') {
       await docker.ensureDockerAccessModeChosen({ parent: getDialogParent() });
@@ -203,7 +204,7 @@ async function runStartup({
     containerProgress('Created and started a new container instance…');
   });
 
-  await runPhase(sessionId, 'http_healthy', async () => {
+  await runPhase(sessionId, 'wait_services', async () => {
     const stopLogMonitor = typeof docker.monitorContainerSetupLogs === 'function'
       ? docker.monitorContainerSetupLogs(healthProgress)
       : null;
@@ -241,11 +242,15 @@ async function runStartup({
     }
   });
 
-  if (closeProgress) closeProgress();
-
-  await runPhase(sessionId, 'onboarding_opened', async () => {
-    await openOnboarding();
+  await runPhase(sessionId, 'connect_network', async () => {
+    if (pollTailscaleUrl) {
+      networkProgress('Connecting to network…');
+      await pollTailscaleUrl(networkProgress);
+    }
   });
+
+  if (closeProgress) closeProgress();
+  await openOnboarding();
 
   return { sessionId };
 }
