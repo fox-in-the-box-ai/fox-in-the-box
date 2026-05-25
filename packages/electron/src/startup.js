@@ -476,12 +476,12 @@ async function ensureDockerWindows(deps) {
       }
       desktopRunning = await waitForDesktopStart(isDesktopProcessRunning, 15_000, 1_000, undefined, showProgress);
       if (!desktopRunning) {
-        setForegroundYield(false);
-        const launchErr = new Error(
-          'Docker Desktop did not start. Please open Docker Desktop manually, wait until it is running, then retry.'
-        );
-        launchErr.code = 'DOCKER_DESKTOP_LAUNCH_FAILED';
-        throw launchErr;
+        // Process name check (tasklist) failed, but Docker may still be running
+        // under a different name or with a permission mismatch. Fall through to
+        // the daemon wait loop — if Docker is genuinely up, the ping succeeds
+        // within seconds. If it's not, the 360s daemon wait surfaces the real error.
+        log.warn('Docker Desktop process not detected via tasklist — falling through to daemon wait');
+        showProgress('Docker Desktop process not confirmed — waiting for daemon…');
       }
     }
     // Docker Desktop process is up; its setup dialog (if any) has had its
