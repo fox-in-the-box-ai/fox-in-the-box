@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self';">
+<style>
+@font-face {
+  font-family: "Sora";
+  src: url("fonts/Sora.woff2") format("woff2-variations");
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: "Sora", "Segoe UI", system-ui, sans-serif;
+  background: #0D0D1A;
+  color: #FFF8DC;
+  height: 100vh;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 36px 44px;
+  overflow: hidden;
+}
+
+.wrap { width: 100%; max-width: 480px; }
+
+.brand-name {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: rgba(255,248,220,0.5);
+  margin-bottom: 4px;
+}
+
+.error-bar {
+  height: 2px;
+  background: linear-gradient(90deg, #E53935 0%, rgba(229,57,53,0.2) 100%);
+  border-radius: 1px;
+  margin: 12px 0 20px;
+}
+
+.error-heading {
+  font-size: 16px;
+  font-weight: 600;
+  color: #EF5350;
+  letter-spacing: -0.01em;
+  margin-bottom: 14px;
+}
+
+.meta {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 14px;
+  font-size: 11.5px;
+  color: rgba(255,248,220,0.55);
+  line-height: 1.7;
+}
+.meta b { color: rgba(255,248,220,0.8); }
+
+.message {
+  font-size: 12.5px;
+  color: rgba(255,248,220,0.8);
+  line-height: 1.6;
+  margin-bottom: 10px;
+}
+
+.remediation {
+  font-size: 12px;
+  color: rgba(255,248,220,0.55);
+  line-height: 1.6;
+  margin-bottom: 10px;
+}
+.remediation b { color: rgba(255,215,0,0.8); }
+
+.log-path {
+  font-size: 11px;
+  color: rgba(255,248,220,0.3);
+  margin-bottom: 12px;
+  word-break: break-all;
+}
+
+/* Diagnostics collapsible */
+.diag {
+  border-top: 1px solid rgba(255,255,255,0.07);
+  padding-top: 10px;
+  margin-bottom: 16px;
+}
+.diag summary {
+  font-size: 11px;
+  font-weight: 500;
+  color: rgba(255,248,220,0.35);
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  outline: none;
+  transition: color 0.15s;
+}
+.diag summary:hover { color: rgba(255,248,220,0.6); }
+.diag summary::-webkit-details-marker { display: none; }
+.diag-arrow {
+  display: inline-block;
+  font-size: 8px;
+  transition: transform 0.2s;
+}
+details[open] .diag-arrow { transform: rotate(90deg); }
+.diag-body {
+  margin-top: 8px;
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  font-size: 10px;
+  color: rgba(255,248,220,0.28);
+  line-height: 1.55;
+  max-height: 90px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.diag-body::-webkit-scrollbar { width: 3px; }
+.diag-body::-webkit-scrollbar-track { background: transparent; }
+.diag-body::-webkit-scrollbar-thumb { background: rgba(229,57,53,0.25); border-radius: 2px; }
+
+.actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.btn {
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 8px 16px;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.btn:hover { opacity: 0.85; }
+
+.btn-copy {
+  background: rgba(255,215,0,0.12);
+  color: #FFD700;
+  border: 1px solid rgba(255,215,0,0.3);
+}
+.btn-close {
+  background: rgba(255,255,255,0.08);
+  color: rgba(255,248,220,0.7);
+  border: 1px solid rgba(255,255,255,0.1);
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand-name">Fox in the Box</div>
+  <div class="error-bar"></div>
+  <div class="error-heading">Startup failed</div>
+
+  <div class="meta" id="meta">
+    <!-- populated by JS -->
+  </div>
+
+  <p class="message" id="message"></p>
+  <p class="remediation" id="remediation"></p>
+  <p class="log-path" id="log-path"></p>
+
+  <details class="diag" id="diag">
+    <summary><span class="diag-arrow">▶</span> Diagnostics</summary>
+    <div class="diag-body" id="diag-body"></div>
+  </details>
+
+  <div class="actions">
+    <button class="btn btn-copy" id="btn-copy">Copy diagnostics</button>
+    <button class="btn btn-close" id="btn-close">Close</button>
+  </div>
+</div>
+
+<script>
+if (window.fitbError) {
+  window.fitbError.getData().then(d => {
+
+    document.getElementById('meta').innerHTML =
+      `<div><b>Session:</b> ${esc(d.sessionId)}</div>` +
+      `<div><b>Phase:</b> ${esc(d.phase)}</div>` +
+      `<div><b>Error code:</b> ${esc(d.code)}</div>`;
+    document.getElementById('message').textContent = d.message;
+    document.getElementById('remediation').innerHTML = `<b>Try:</b> ${esc(d.remediation)}`;
+    document.getElementById('log-path').textContent = d.logPath;
+    document.getElementById('diag-body').textContent = d.diagnosticsText;
+  });
+}
+
+document.getElementById('btn-copy').addEventListener('click', () => {
+  if (window.fitbError) window.fitbError.copyDiagnostics();
+});
+
+document.getElementById('btn-close').addEventListener('click', () => {
+  if (window.fitbError) window.fitbError.close();
+});
+
+function esc(s) {
+  return String(s || '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+</script>
+</body>
+</html>
