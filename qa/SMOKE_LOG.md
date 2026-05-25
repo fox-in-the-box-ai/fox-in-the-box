@@ -25,6 +25,18 @@ Skipped sections are OK as long as they're explicitly noted with reason. Empty e
 
 ---
 
+## v0.7.39 — 2026-05-25 (DV — 7-step progress alignment; engineer-side verified)
+
+- [x] (a) Jest: startup-orchestrator, startup, progress-window, health-check all green
+- [x] (b) progress.js STEPS array matches orchestrator STEP_ORDER (7 entries, same sequence)
+- [x] (c) INSTALL_STEPS match strings in main.js correspond to STEP_LABELS values
+- [x] (d) Skipped steps (daemonWasRunning=true) return immediately → instant checkmark in UI
+- [x] (e) Tailscale poll extracted into orchestrator connect_network phase; closeProgress called after all phases
+- [x] (f) openFox() no longer calls showProgress/closeProgress internally
+- [ ] (g) **POST-RELEASE:** On-device smoke — verify 7 steps render consecutively on fresh launch and returning-user launch
+
+---
+
 ## v0.7.38 — 2026-05-25 (DV — launcher window size + Docker fallback; engineer-side verified)
 
 - [x] (a) Jest: 101/101 green

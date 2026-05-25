@@ -7,6 +7,17 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.7.39] - 2026-05-25
+
+**Progress UI aligned to 7 consecutive backend phases.**
+
+### Changed
+- Launcher now shows 7 steps that map 1:1 to actual startup operations: Checking system → Installing Docker → Starting Docker → Downloading Fox image → Starting container → Waiting for services → Connecting to network.
+- Steps that don't apply (Docker already running, local-only mode) get an instant checkmark instead of being hidden — consistent frame of reference across launches.
+- Tailscale connection polling moved into the orchestrator as a dedicated phase; progress window stays open until all phases complete.
+
+---
+
 ## [0.7.38] - 2026-05-25
 
 **Larger launcher window, selectable diagnostics, Docker detection fallback.**
