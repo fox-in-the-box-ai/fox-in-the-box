@@ -14,7 +14,7 @@
 !define FITB_CONTAINER   "fox-in-the-box"
 !define FITB_IMAGE       "ghcr.io/fox-in-the-box-ai/cloud:stable"
 
-!include "build\mode-page.nsh"
+!include "mode-page.nsh"
 
 ; Register the mode-selection page after the directory selection page.
 ; electron-builder calls !insertmacro customPageAfterChangeDir in its

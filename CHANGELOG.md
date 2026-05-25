@@ -7,6 +7,17 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.7.34] - 2026-05-25
+
+**Consistent dark error window + Windows build pipeline fix.**
+
+### Fixed
+- Error window now matches the progress window style: dark navy background, Sora font, branded red accent bar, collapsible diagnostics pane. Previously the error window used a white/Segoe UI layout via an inline `data:` URL, creating a jarring two-style launcher.
+- Windows NSIS installer build: corrected `!include` path for `mode-page.nsh`. electron-builder already adds `build/` to the NSIS include path, so `!include "build\mode-page.nsh"` resolved to the nonexistent `build/build/mode-page.nsh`. This was the root cause of Windows CI failures in v0.7.32–v0.7.33.
+- `packages/electron/package.json` version synchronized to 0.7.34 (was stuck at 0.7.31 since the batch release commit in v0.7.22–31).
+
+---
+
 ## [0.7.33] - 2026-05-24
 
 **Polished installer + progress window + startup loop fix.**
