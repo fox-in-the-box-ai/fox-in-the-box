@@ -73,10 +73,11 @@ describe('runStartup', () => {
         pullImage: jest.fn().mockResolvedValue(undefined),
         ensureContainerRunning: jest.fn().mockResolvedValue(undefined),
       },
+      waitForDaemon: jest.fn().mockResolvedValue(false),
     });
 
     await expect(runStartup(deps)).rejects.toMatchObject({
-      phase: 'docker_daemon_ready',
+      phase: 'docker_start',
       code: 'DAEMON_NOT_READY',
     });
     expect(deps.onDaemonNotReady).toHaveBeenCalledTimes(1);

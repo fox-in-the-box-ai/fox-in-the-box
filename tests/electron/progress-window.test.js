@@ -27,26 +27,32 @@ describe('_activeStepIndex step mapping', () => {
 
   const skip = !fn;
 
-  (skip ? test.skip : test)('maps "Initialize app" phase to index 0', () => {
-    expect(fn('Step 1/6 - Initialize app: Preparing...')).toBe(0);
+  (skip ? test.skip : test)('maps "Check system" phase to index 0', () => {
+    expect(fn('Step 1/7 - Check system: Preparing...')).toBe(0);
   });
-  (skip ? test.skip : test)('maps "Prepare Docker" phase to index 1', () => {
-    expect(fn('Step 2/6 - Prepare Docker daemon: starting...')).toBe(1);
+  (skip ? test.skip : test)('maps "Install Docker" phase to index 1', () => {
+    expect(fn('Step 2/7 - Install Docker: installing...')).toBe(1);
   });
-  (skip ? test.skip : test)('maps "Ensure container image" phase to index 2', () => {
-    expect(fn('Step 3/6 - Ensure container image: pulling...')).toBe(2);
+  (skip ? test.skip : test)('maps "Start Docker" phase to index 2', () => {
+    expect(fn('Step 3/7 - Start Docker: waiting...')).toBe(2);
   });
-  (skip ? test.skip : test)('maps "Prepare container" phase to index 3', () => {
-    expect(fn('Step 4/6 - Prepare container: creating...')).toBe(3);
+  (skip ? test.skip : test)('maps "Download image" phase to index 3', () => {
+    expect(fn('Step 4/7 - Download image: pulling...')).toBe(3);
   });
-  (skip ? test.skip : test)('maps "Wait for services" phase to index 4', () => {
-    expect(fn('Step 5/6 - Wait for services: waiting...')).toBe(4);
+  (skip ? test.skip : test)('maps "Start container" phase to index 4', () => {
+    expect(fn('Step 5/7 - Start container: creating...')).toBe(4);
   });
-  (skip ? test.skip : test)('freeform Docker string maps to index 1', () => {
-    expect(fn('Starting Docker Desktop...')).toBe(1);
+  (skip ? test.skip : test)('maps "Wait for services" phase to index 5', () => {
+    expect(fn('Step 6/7 - Wait for services: waiting...')).toBe(5);
   });
-  (skip ? test.skip : test)('freeform image string maps to index 2', () => {
-    expect(fn('Docker is ready — pulling container image...')).toBe(2);
+  (skip ? test.skip : test)('maps "Connect network" phase to index 6', () => {
+    expect(fn('Step 7/7 - Connect network: connecting...')).toBe(6);
+  });
+  (skip ? test.skip : test)('freeform Docker start string maps to index 2', () => {
+    expect(fn('Starting Docker Desktop...')).toBe(2);
+  });
+  (skip ? test.skip : test)('freeform image string maps to index 3', () => {
+    expect(fn('Docker is ready — pulling container image...')).toBe(3);
   });
   (skip ? test.skip : test)('empty string returns -1', () => {
     expect(fn('')).toBe(-1);

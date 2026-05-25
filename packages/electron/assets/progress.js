@@ -2,11 +2,12 @@
 
 const STEPS = [
   'Checking system',
-  'Setting up Docker',
-  'Pulling container image',
+  'Installing Docker',
+  'Starting Docker',
+  'Downloading Fox image',
   'Starting container',
-  'Waiting for Fox to be ready',
-  'Opening Fox',
+  'Waiting for services',
+  'Connecting to network',
 ];
 
 let currentIdx = 0;
