@@ -296,7 +296,7 @@ async function ensureDockerWindows(progressCb = showProgress) {
     const dockerConfigPath = path.join(os.homedir(), 'AppData', 'Roaming', 'Docker', 'settings.json');
     const dockerAlreadyConfigured = fs.existsSync(dockerConfigPath);
     if (!dockerAlreadyConfigured) {
-      await dialog.showMessageBox({
+      await dialog.showMessageBox(getDialogParent(), {
         type: 'info',
         title: 'Fox in the Box — Docker setup',
         message: 'Docker Desktop is about to start.',
@@ -333,7 +333,7 @@ async function ensureDockerWindows(progressCb = showProgress) {
 // ─── macOS Docker install (kept separate) ────────────────────────────────────
 
 async function installDockerMac(progressCb = showProgress) {
-  const { response } = await dialog.showMessageBox({
+  const { response } = await dialog.showMessageBox(getDialogParent(), {
     type: 'question',
     buttons: ['Install Docker', 'Cancel'],
     defaultId: 0,
@@ -394,7 +394,7 @@ async function showDaemonRecoveryRequired(platform) {
     // fails, the dialog copy below would be a lie — registerWindowsRunOnceResume
     // logs but does not throw, so detect that we have an exe path at least.
     await registerWindowsRunOnceResume(app.getPath('exe'));
-    const { response } = await dialog.showMessageBox({
+    const { response } = await dialog.showMessageBox(getDialogParent(), {
       type: 'warning',
       title: 'Restart required to finish Docker setup',
       message: 'Docker Desktop needs a restart before Fox in the box can continue.',
@@ -414,7 +414,7 @@ async function showDaemonRecoveryRequired(platform) {
   }
 
   if (platform === 'darwin') {
-    const { response } = await dialog.showMessageBox({
+    const { response } = await dialog.showMessageBox(getDialogParent(), {
       type: 'warning',
       title: 'Docker not ready',
       message: 'Docker Desktop is installed but daemon is not ready yet.',
@@ -502,7 +502,7 @@ async function openFox() {
       const lines = mode === '3'
         ? `Local access: http://localhost:8787\nFrom other devices: ${tailnetUrl}`
         : `From other devices: ${tailnetUrl}`;
-      const { response } = await dialog.showMessageBox({
+      const { response } = await dialog.showMessageBox(getDialogParent(), {
         type: 'info',
         title: 'Fox in the box — Ready',
         message: 'Fox in the box is ready!',
@@ -511,6 +511,15 @@ async function openFox() {
         defaultId: 0,
       });
       if (response === 1) clipboard.writeText(tailnetUrl);
+    } else {
+      await dialog.showMessageBox(getDialogParent(), {
+        type: 'info',
+        title: 'Fox in the box — Tailscale not connected yet',
+        message: 'Tailscale hasn\'t connected yet.',
+        detail: 'Open the Tailscale app, sign in if prompted, and wait until it shows "Connected".\n\nFox is opening locally in the meantime. Once Tailscale connects, your tailnet URL will be available from the Tailscale menu.',
+        buttons: ['OK'],
+        defaultId: 0,
+      });
     }
   }
   shell.openExternal(APP_HOME_URL);
