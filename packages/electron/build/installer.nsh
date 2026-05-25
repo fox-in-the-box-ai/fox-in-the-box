@@ -14,7 +14,12 @@
 !define FITB_CONTAINER   "fox-in-the-box"
 !define FITB_IMAGE       "ghcr.io/fox-in-the-box-ai/cloud:stable"
 
+; NSIS warning 6010 ("install function not referenced") fires for FitbModePageCreate
+; and FitbModePageLeave during the uninstaller pass — NSIS doesn't count Page custom
+; registrations as function references. electron-builder passes -WX, so suppress it.
+!pragma warning disable 6010
 !include "mode-page.nsh"
+!pragma warning default 6010
 
 ; Register the mode-selection page after the directory selection page.
 ; electron-builder calls !insertmacro customPageAfterChangeDir in its
