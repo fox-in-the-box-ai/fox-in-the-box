@@ -125,6 +125,7 @@ function showProgress(message) {
 
   if (_progressWin) {
     _progressWin.webContents.send('progress:step', idx, _progressState.detail || '');
+    _progressWin.webContents.send('progress:log', _progressState.title);
     if (_progressState.detail) {
       _progressWin.webContents.send('progress:log', _progressState.detail);
     }
@@ -157,10 +158,13 @@ function showProgress(message) {
   _progressWin.loadFile(path.join(__dirname, '..', 'assets', 'progress.html'));
   _progressWin.setMenu(null);
 
-  // Send initial state once the page is ready.
+  // Send current state once the page is ready. Use _progressState at fire time,
+  // not the idx captured at window-creation time (startup may have advanced).
   _progressWin.webContents.once('did-finish-load', () => {
     if (!_progressWin || _progressWin.isDestroyed()) return;
-    _progressWin.webContents.send('progress:step', idx, _progressState.detail || '');
+    const currentIdx = _activeStepIndex(_progressState.title);
+    _progressWin.webContents.send('progress:step', currentIdx, _progressState.detail || '');
+    _progressWin.webContents.send('progress:log', _progressState.title);
     if (_progressState.detail) {
       _progressWin.webContents.send('progress:log', _progressState.detail);
     }
