@@ -289,15 +289,19 @@ describe('ensureDockerWindows', () => {
     expect(result).toEqual({ result: 'started' });
   });
 
-  test('fails fast when Docker Desktop process does not launch', async () => {
+  test('falls through to daemon wait when Desktop process detection fails', async () => {
+    // tasklist can miss Docker Desktop.exe due to process name differences or
+    // permissions. Rather than failing fast, Fox now falls through to the daemon
+    // wait loop. If the daemon never comes up, it surfaces DAEMON_NOT_READY.
     const deps = makeDeps({
       _findExe: jest.fn().mockResolvedValue('C:\\Docker\\Docker Desktop.exe'),
       waitForDesktopStart: jest.fn().mockResolvedValue(false),
       waitForDaemon: jest.fn().mockResolvedValue(false),
     });
     await expect(ensureDockerWindows(deps)).rejects.toMatchObject({
-      code: 'DOCKER_DESKTOP_LAUNCH_FAILED',
+      code: 'DAEMON_NOT_READY',
     });
+    expect(deps.showRebootRequired).not.toHaveBeenCalled();
   });
 
   test('diagnoses missing WSL backend and throws specific error', async () => {

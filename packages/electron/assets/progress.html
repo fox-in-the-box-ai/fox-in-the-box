@@ -27,7 +27,7 @@ body {
   -webkit-user-select: none;
 }
 
-.wrap { width: 100%; max-width: 420px; }
+.wrap { width: 100%; max-width: 520px; }
 
 .brand-name {
   font-size: 17px;
@@ -117,10 +117,13 @@ details[open] .diag-arrow { transform: rotate(90deg); }
   font-size: 10.5px;
   color: rgba(255,248,220,0.32);
   line-height: 1.6;
-  max-height: 110px;
+  max-height: 200px;
   overflow-y: auto;
   white-space: pre-wrap;
   word-break: break-all;
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
 }
 .diag-body::-webkit-scrollbar { width: 3px; }
 .diag-body::-webkit-scrollbar-track { background: transparent; }

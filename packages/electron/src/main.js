@@ -133,8 +133,8 @@ function showProgress(message) {
   }
 
   _progressWin = new BrowserWindow({
-    width: 520,
-    height: 420,
+    width: 620,
+    height: 560,
     resizable: false,
     minimizable: false,
     maximizable: false,
