@@ -25,6 +25,18 @@ Skipped sections are OK as long as they're explicitly noted with reason. Empty e
 
 ---
 
+## v0.7.38 — 2026-05-25 (DV — launcher window size + Docker fallback; engineer-side verified)
+
+- [x] (a) Jest: 101/101 green
+- [x] (b) All CI checks green on PR #390 (smoke, validate, Electron win/mac, container)
+- [x] (c) Progress window dimensions updated 520×420 → 620×560 in main.js
+- [x] (d) `.diag-body` CSS: max-height 110→200px, user-select text added
+- [x] (e) startup.js: early DOCKER_DESKTOP_LAUNCH_FAILED throw removed; falls through to daemon wait
+- [x] (f) startup.test.js updated to expect DAEMON_NOT_READY for this path
+- [ ] (g) **POST-RELEASE:** On-device Windows smoke — verify progress window is larger, diagnostics text is selectable, Docker detection proceeds past step 2
+
+---
+
 ## v0.7.37 — 2026-05-25 (DV — CSP inline-script block fix; engineer-side verified)
 
 - [x] (a) Jest: 101/101 green
