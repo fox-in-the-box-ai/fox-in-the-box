@@ -7,6 +7,17 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.7.38] - 2026-05-25
+
+**Larger launcher window, selectable diagnostics, Docker detection fallback.**
+
+### Fixed
+- Progress window is 20% wider and 33% taller (520×420 → 620×560). All six steps and the diagnostics section are visible at once. Wrap max-width 420→520px, diagnostics max-height 110→200px.
+- Diagnostics log text is now selectable — users can Ctrl+C lines for support. (`body` had `user-select: none`; `.diag-body` overrides with `user-select: text`.)
+- On Windows, Fox threw `DOCKER_DESKTOP_LAUNCH_FAILED` when `tasklist` didn't find "Docker Desktop.exe" — even when Docker was running. Process name lookup can fail due to name differences or permissions. Fox now falls through to the 360 s daemon wait; if Docker is genuinely up the ping succeeds in seconds, if not the daemon wait expires with a clearer `DAEMON_NOT_READY` error.
+
+---
+
 ## [0.7.37] - 2026-05-25
 
 **Launcher progress window now actually works.**
