@@ -499,6 +499,7 @@ async function ensureDockerWindows(deps) {
     // path fires Fox immediately after login while Docker Desktop is still
     // initializing its WSL distros. Give Docker a 15s head start before the
     // first probe so we don't waste the first polling slice on a guaranteed miss.
+    showProgress('Docker Desktop is starting up — waiting for it to initialize…');
     await _sleep(15_000);
     let remainingMs = 360_000;  // 240s → 360s: covers slower hardware on reboot
     let diagnostics = null;
