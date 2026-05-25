@@ -7,6 +7,17 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.7.36] - 2026-05-25
+
+**Progress window now shows steps and live diagnostics.**
+
+### Fixed
+- Launcher progress window showed an empty step list and a blank diagnostics pane on first launch. Root cause: `showProgress()` only sent `progress:log` when an optional `detail` field was set, but every caller passes a plain string (title only), so the diagnostics pane was always empty. Now every progress update logs its title to the diagnostics pane.
+- Step tracker showed stale active step when startup advanced before the progress page finished loading. The `did-finish-load` handler captured the step index at window-creation time; now recomputes it at fire time.
+- Pending steps were rendered at 22% opacity on the dark `#0D0D1A` background — effectively invisible. Raised to 38%.
+
+---
+
 ## [0.7.35] - 2026-05-25
 
 **Launcher dialogs on top, no more silent freeze, Tailscale guidance.**
