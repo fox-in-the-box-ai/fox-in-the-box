@@ -7,6 +7,17 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.7.35] - 2026-05-25
+
+**Launcher dialogs on top, no more silent freeze, Tailscale guidance.**
+
+### Fixed
+- All system dialogs (Docker ToS, reboot prompt, network mode) now open on top of the launcher window. Previously they could appear behind it, making Fox look frozen.
+- Eliminated the 15-second silent freeze during Docker startup on Windows reboot. The launcher now shows "Docker Desktop is starting up — waiting for it to initialize…" during the settle delay instead of stalling on the last message.
+- Tailscale timeout path now shows actionable guidance: "Open the Tailscale app, sign in if prompted, and wait until it shows Connected." Fox still opens locally regardless.
+
+---
+
 ## [0.7.34] - 2026-05-25
 
 **Consistent dark error window + Windows build pipeline fix.**

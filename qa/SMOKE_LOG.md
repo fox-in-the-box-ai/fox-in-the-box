@@ -25,6 +25,17 @@ Skipped sections are OK as long as they're explicitly noted with reason. Empty e
 
 ---
 
+## v0.7.35 — 2026-05-25 (DV — launcher UX fixes; engineer-side verified)
+
+- [x] (a) Jest: 101/101 green
+- [x] (b) All CI checks green on PR #381 (smoke, validate, Electron win/mac, container)
+- [x] (c) All 7 dialog.showMessageBox calls verified — each passes getDialogParent() or win as first arg
+- [x] (d) showProgress call confirmed before await _sleep(15_000) in startup.js
+- [x] (e) openFox() else branch confirmed: null tailnetUrl → dialog with connect guidance; openExternal fires regardless
+- [ ] (f) **POST-RELEASE:** Windows smoke — verify dialogs appear on top of launcher; confirm "Docker Desktop is starting up" message visible on reboot path
+
+---
+
 ## v0.7.34 — 2026-05-25 (DV — error window redesign + build pipeline fix)
 
 Bypass reason: Two infrastructure/visual-only changes. (1) NSIS `!include` path fix is CI/build only — no installer behavior changed, no user-visible effect. (2) Error window swap is static HTML/CSS with no logic change; style verified in-session against the progress window. No new code paths, no behavioral regression risk.
