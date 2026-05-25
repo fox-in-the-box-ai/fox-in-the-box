@@ -20,8 +20,6 @@ Function FitbModePageCreate
     Abort   ; skip this page — fresh install
   ${EndIf}
 
-  !insertmacro MUI_HEADER_TEXT "Installation mode" "An existing Fox in the Box installation was found."
-
   nsDialogs::Create 1018
   Pop $FitbDlg
   ${If} $FitbDlg == error
