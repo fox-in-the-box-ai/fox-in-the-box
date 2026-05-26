@@ -25,6 +25,16 @@ Skipped sections are OK as long as they're explicitly noted with reason. Empty e
 
 ---
 
+## v0.7.42 — 2026-05-27 (DV — Ollama picker dedup + wizard model persistence)
+
+- [x] (a) Dedup guard: model ID set comparison removes Ollama dupes from Custom group
+- [x] (b) Config key: use_model() writes model.default so get_effective_default_model() returns wizard-selected model
+- [x] (c) Unit traces: dedup happy path, partial overlap, hint-only edge case, config key readback — all pass
+- [x] (d) CI: validate-overlay, Playwright smoke, container build — all green
+- [ ] (e) **POST-RELEASE:** On-device smoke — Ollama models appear once under OLLAMA, wizard model preselected, chat sends full model ID
+
+---
+
 ## v0.7.41 — 2026-05-26 (DV — Fox logo + spinner fix)
 
 - [x] (a) Patch 006 applies cleanly: full 6-patch series verified via check-overlay-basis.sh
