@@ -7,6 +7,15 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.7.42] - 2026-05-27
+
+### Fixed
+- Ollama model picker: models no longer appear twice (CUSTOM + OLLAMA). Upstream's alias resolution mapped "ollama" to "custom", creating a duplicate group; Fox now removes overlapping model IDs from other groups before adding the OLLAMA section.
+- Wizard-selected Ollama model is now preselected on first chat load. Previously the config wrote `model.name` but upstream reads `model.default`; added the correct key so the API returns the right default.
+- Ollama model 404 errors (`model 'latest' not found`) resolved. Picking from the duplicate Custom group set a mismatched provider context that triggered colon-based ID truncation (`llama3.1:latest` → `latest`).
+
+---
+
 ## [0.7.41] - 2026-05-26
 
 ### Fixed
