@@ -183,6 +183,28 @@ def _splice_ollama_group(result: dict) -> None:
             "label": "Install Ollama from ollama.com/download",
         }]
 
+    # #389: upstream's alias resolution maps "ollama" → "custom", so it builds
+    # a "Custom" group containing the same Ollama models.  Remove overlapping
+    # model IDs from other groups so each model appears exactly once (under
+    # the OLLAMA heading).
+    ollama_ids = {m["id"] for m in models if not m["id"].startswith("__ollama_hint:")}
+    if ollama_ids:
+        surviving = []
+        for g in groups:
+            if not isinstance(g, dict):
+                surviving.append(g)
+                continue
+            g_models = g.get("models")
+            if not isinstance(g_models, list):
+                surviving.append(g)
+                continue
+            filtered = [m for m in g_models if not (isinstance(m, dict) and m.get("id") in ollama_ids)]
+            if filtered:
+                g["models"] = filtered
+                surviving.append(g)
+            # else: group empty after removing Ollama dupes — drop it
+        groups[:] = surviving
+
     group: dict = {
         "provider": "Ollama",
         "provider_id": "ollama",
