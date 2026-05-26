@@ -469,6 +469,7 @@ def use_model(model_name: str) -> dict[str, Any]:
     model_cfg = {
         "provider": "ollama",
         "base_url": base_url,
+        "default": name,
         "name": name,
     }
     cfg["model"] = model_cfg
