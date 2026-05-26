@@ -10,9 +10,10 @@ const STEPS = [
   'Connecting to network',
 ];
 
-let currentIdx = 0;
+let currentIdx = -1;
 
 function render(idx) {
+  if (idx === currentIdx) return;
   currentIdx = idx;
   document.getElementById('steps').innerHTML = STEPS.map((label, i) => {
     let iconHtml, cls;
@@ -33,7 +34,7 @@ function appendLog(line) {
   el.scrollTop = el.scrollHeight;
 }
 
-render(currentIdx);
+render(0);
 
 if (window.fitb) {
   window.fitb.onStepUpdate((idx) => render(idx));
