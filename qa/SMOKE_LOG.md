@@ -25,6 +25,15 @@ Skipped sections are OK as long as they're explicitly noted with reason. Empty e
 
 ---
 
+## v0.7.41 — 2026-05-26 (DV — Fox logo + spinner fix)
+
+- [x] (a) Patch 006 applies cleanly: full 6-patch series verified via check-overlay-basis.sh
+- [x] (b) progress.js: render() no-ops when idx unchanged — spinner animation uninterrupted
+- [x] (c) Jest: progress-window + startup tests pass (48 tests)
+- [ ] (d) **POST-RELEASE:** On-device smoke — Fox avatar visible in chat empty state, spinner smooth during image pull
+
+---
+
 ## v0.7.40 — 2026-05-25 (DV — 7-step progress + post-reboot Docker fix; engineer-side verified)
 
 - [x] (a) Jest: startup-orchestrator, startup, progress-window all green

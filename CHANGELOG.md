@@ -7,6 +7,14 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.7.41] - 2026-05-26
+
+### Fixed
+- Chat empty-state logo replaced: Hermes caduceus → Fox avatar (overlay patch 006, survives upstream updates).
+- Launcher spinner no longer restarts animation when same step emits multiple progress messages (e.g., Docker image layer pulls).
+
+---
+
 ## [0.7.40] - 2026-05-25
 
 **7-step progress alignment + post-reboot Docker fix.**
