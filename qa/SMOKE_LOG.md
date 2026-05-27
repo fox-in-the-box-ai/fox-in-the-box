@@ -25,6 +25,18 @@ Skipped sections are OK as long as they're explicitly noted with reason. Empty e
 
 ---
 
+## v0.7.43 — 2026-05-27 (DV — Ollama provider routing + colon-split fix)
+
+- [x] (a) Provider routing: use_model() writes provider: "custom" — verified by test_ollama_provider_routing.py (5 tests)
+- [x] (b) Colon-split: _split_provider_qualified_model splits on first colon — verified by test_ollama_provider_routing.py (8 tests)
+- [x] (c) Frontend colon-split: _normalizeConfiguredModelKey, _getOptionProviderId, _providerFromModelValue, _findMatchingModelOption all use indexOf/regex — manually traced 4 examples
+- [x] (d) OLLAMA group provider_id: "custom" — test_config_patch.py updated and passing (4 tests)
+- [x] (e) Defense-in-depth: streaming.py keyless fallback for local server providers
+- [x] (f) Full test suite: 165 passed, 0 failed, 1 skipped
+- [ ] (g) **POST-RELEASE:** On-device smoke — Ollama local models route correctly, no 404s, no "no API key" errors
+
+---
+
 ## v0.7.42 — 2026-05-27 (DV — Ollama picker dedup + wizard model persistence)
 
 - [x] (a) Dedup guard: model ID set comparison removes Ollama dupes from Custom group

@@ -309,10 +309,11 @@ def test_picker_gets_ollama_group_when_daemon_up(fresh_config, monkeypatch):
     ])
     patch_mod.apply()
     result = _u.get_available_models()
-    ollama_groups = [g for g in result["groups"] if g.get("provider_id") == "ollama"]
+    ollama_groups = [g for g in result["groups"] if g.get("provider") == "Ollama"]
     assert len(ollama_groups) == 1, "expected exactly one OLLAMA group"
     g = ollama_groups[0]
     assert g["provider"] == "Ollama"
+    assert g["provider_id"] == "custom"
     model_ids = {m["id"] for m in g["models"]}
     assert model_ids == {"phi4-mini:latest", "llama3.1:8b"}
     # Labels go through _format_ollama_label
@@ -327,7 +328,7 @@ def test_picker_has_ollama_hint_when_daemon_down(fresh_config, monkeypatch):
     _stub_ollama_get_models(monkeypatch, running=False, models=[])
     patch_mod.apply()
     result = _u.get_available_models()
-    ollama_groups = [g for g in result["groups"] if g.get("provider_id") == "ollama"]
+    ollama_groups = [g for g in result["groups"] if g.get("provider") == "Ollama"]
     assert len(ollama_groups) == 1
     # Hint placeholder present — tells user to install Ollama
     hint_ids = [m["id"] for m in ollama_groups[0].get("models", [])]
@@ -342,7 +343,7 @@ def test_picker_has_ollama_hint_when_daemon_up_no_models(fresh_config, monkeypat
     _stub_ollama_get_models(monkeypatch, running=True, models=[])
     patch_mod.apply()
     result = _u.get_available_models()
-    ollama_groups = [g for g in result["groups"] if g.get("provider_id") == "ollama"]
+    ollama_groups = [g for g in result["groups"] if g.get("provider") == "Ollama"]
     assert len(ollama_groups) == 1, "Ollama group must always be present (v0.7.18 #337)"
     hint_ids = [m["id"] for m in ollama_groups[0].get("models", [])]
     assert any(h.startswith("__ollama_hint:") for h in hint_ids)
@@ -389,7 +390,7 @@ def test_picker_skips_malformed_model_entries(fresh_config, monkeypatch):
     ])
     patch_mod.apply()
     result = _u.get_available_models()
-    ollama_groups = [g for g in result["groups"] if g.get("provider_id") == "ollama"]
+    ollama_groups = [g for g in result["groups"] if g.get("provider") == "Ollama"]
     assert len(ollama_groups) == 1
     assert [m["id"] for m in ollama_groups[0]["models"]] == ["good-model"]
 

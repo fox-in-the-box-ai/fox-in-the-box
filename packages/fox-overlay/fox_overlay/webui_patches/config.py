@@ -207,7 +207,7 @@ def _splice_ollama_group(result: dict) -> None:
 
     group: dict = {
         "provider": "Ollama",
-        "provider_id": "ollama",
+        "provider_id": "custom",
         "models": models,
     }
     if status_message:
