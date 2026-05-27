@@ -134,12 +134,13 @@ def split_fn(monkeypatch):
     routes_path = routes_dir / "api" / "routes.py"
     source = routes_path.read_text(encoding="utf-8")
 
-    # Extract _clean_session_model_provider and _split_provider_qualified_model
+    # Extract _clean_session_model_provider and _split_provider_qualified_model.
+    # The colon-split fix (patch 008) changes rsplit(":", 1) to split(":", 1)
+    # at Docker build time. Apply the same substitution here so the test
+    # validates the PATCHED behavior.
     ns = {}
-    # _clean_session_model_provider is a dependency of _split_provider_qualified_model
     for fn_name in ("_clean_session_model_provider", "_split_provider_qualified_model"):
         start = source.index(f"def {fn_name}(")
-        # Find next top-level def or class (line starting with no indentation)
         rest = source[start:]
         lines = rest.split("\n")
         fn_lines = [lines[0]]
@@ -147,7 +148,13 @@ def split_fn(monkeypatch):
             if line and not line[0].isspace() and not line.startswith("#"):
                 break
             fn_lines.append(line)
-        exec("\n".join(fn_lines), ns)
+        fn_source = "\n".join(fn_lines)
+        if fn_name == "_split_provider_qualified_model":
+            assert '.rsplit(":", 1)' in fn_source or '.split(":", 1)' in fn_source, (
+                "anchor for patch 008 not found in _split_provider_qualified_model"
+            )
+            fn_source = fn_source.replace('.rsplit(":", 1)', '.split(":", 1)')
+        exec(fn_source, ns)
 
     yield ns["_split_provider_qualified_model"]
 
