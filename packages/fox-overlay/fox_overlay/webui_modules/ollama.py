@@ -455,19 +455,15 @@ def use_model(model_name: str) -> dict[str, Any]:
     # at worst those keys riding along on requests if the OpenAI-compat
     # client respects them. Replace the model block wholesale instead of
     # patching it.
-    # v0.7.20 #278: write `provider: "ollama"` instead of `provider: "custom"` so
-    # the chat model picker classifies the active Ollama model under the OLLAMA
-    # group instead of CUSTOM. Backend routing is unaffected — upstream's
-    # `hermes_cli.auth._PROVIDER_ALIASES` maps `"ollama" -> "custom"` (auth.py:1412),
-    # so the model still routes through the OpenAI-compat custom provider for
-    # the actual HTTP request to host.docker.internal:11434. Also aligns with
-    # upstream's own URL-based provider detection at api/config.py:3284 which
-    # writes `provider = "ollama"` when the base_url contains "ollama"/127.0.0.1/
-    # localhost — Fox is just being explicit about it here at active-model write
-    # time. Closes the user-visible "model appears in two categories" bug
-    # @bsgdigital flagged (also closes the v0.7.18 #343 dup-of-#278 instance).
+    # Write `provider: "custom"` so the model routes through the OpenAI-compat
+    # custom provider path for the local daemon. Using "ollama" as provider
+    # broke auxiliary tasks (compression, vision, web-extract) because
+    # upstream's auxiliary_client.py doesn't alias "ollama" → "custom" in its
+    # _PROVIDER_ALIASES dict. The OLLAMA picker group uses
+    # `provider_id: "custom"` to match, ensuring `model_with_provider_context`
+    # doesn't add an `@ollama:` prefix that would break routing.
     model_cfg = {
-        "provider": "ollama",
+        "provider": "custom",
         "base_url": base_url,
         "default": name,
         "name": name,
@@ -501,7 +497,7 @@ def use_model(model_name: str) -> dict[str, Any]:
         "ok": True,
         "active_model": name,
         "base_url": base_url,
-        "provider": "ollama",  # v0.7.20 #278: matches what was written to config above.
+        "provider": "custom",
     }
 
 

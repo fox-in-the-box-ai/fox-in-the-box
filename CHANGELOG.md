@@ -7,6 +7,17 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.7.43] - 2026-05-27
+
+### Fixed
+- Ollama local models now route through the correct provider. Previously `provider: "ollama"` in config.yaml collided with upstream's Ollama Cloud path, causing "no API key found" errors and 404s. Config now writes `provider: "custom"` with the local daemon's base URL.
+- Model ID truncation fixed across frontend and backend. Ollama tag-based IDs (`llama3.1:latest`) contain colons that four JavaScript functions and one Python function incorrectly split on, reducing the model to bare `"latest"`. All five sites now split on the first colon only.
+- Orphan "Configured" badge no longer appears for Ollama models. The frontend's model-key normalizer collapsed `@custom:llama3.1:latest` to `"latest"`, bypassing the dedup check and injecting a phantom entry. Fixed normalizer strips only the `@provider:` prefix.
+- OLLAMA picker group uses `provider_id: "custom"` to match the config provider, preventing `model_with_provider_context` from injecting an `@ollama:` prefix that broke routing.
+- Defense-in-depth: streaming layer now supplies a keyless placeholder API key when a local-server provider has a base URL but no key, catching edge cases where the runtime resolver returns empty credentials.
+
+---
+
 ## [0.7.42] - 2026-05-27
 
 ### Fixed

@@ -1,0 +1,37 @@
+diff --git a/static/ui.js b/static/ui.js
+index c6a5cd2a..b2bbed76 100644
+--- a/static/ui.js
++++ b/static/ui.js
+@@ -750,12 +750,12 @@ function _getOptionProviderId(opt){
+     return group.dataset.provider;
+   }
+   const value=String(opt.value||'');
+-  if(value.startsWith('@') && value.includes(':')) return value.slice(1,value.lastIndexOf(':'));
++  if(value.startsWith('@') && value.includes(':')) return value.slice(1,value.indexOf(':'));
+   return '';
+ }
+ function _providerFromModelValue(modelId){
+   const value=String(modelId||'').trim();
+-  if(value.startsWith('@')&&value.includes(':')) return value.slice(1,value.lastIndexOf(':'));
++  if(value.startsWith('@')&&value.includes(':')) return value.slice(1,value.indexOf(':'));
+   return '';
+ }
+ function _providerSkipsModelMismatchWarning(providerId){
+@@ -892,7 +892,7 @@ function _findModelInDropdown(modelId, sel, preferredProviderId){
+   let explicitProvider='';
+   const rawModel=String(modelId||'');
+   if(rawModel.startsWith('@')&&rawModel.includes(':')){
+-    explicitProvider=rawModel.slice(1,rawModel.lastIndexOf(':'));
++    explicitProvider=rawModel.slice(1,rawModel.indexOf(':'));
+   }
+   const preferred=String(preferredProviderId||explicitProvider||'').toLowerCase();
+   if(preferred){
+@@ -1236,7 +1236,7 @@ function _normalizeConfiguredModelKey(modelId){
+   // Strip @provider: prefix (e.g., @custom:jingdong:GLM-5 -> GLM-5).
+   // Defensive: trailing-colon / trailing-slash falls back to the original key
+   // so malformed configs don't collapse distinct ids to '' (matches backend _norm_model_id).
+-  if(s.startsWith('@')&&s.includes(':')){const last=s.split(':').pop();s=last||s;}
++  if(s.startsWith('@')&&s.includes(':')){const stripped=s.replace(/^@[^:]*:/,'');s=stripped||s;}
+   if(s.includes('/')){const last=s.split('/').pop();s=last||s;}
+   return s.replace(/-/g,'.');
+ }

@@ -1,0 +1,13 @@
+diff --git a/api/routes.py b/api/routes.py
+index eee4f166..6b661ab7 100644
+--- a/api/routes.py
++++ b/api/routes.py
+@@ -1455,7 +1455,7 @@ def _clean_session_model_provider(value: str | None) -> str | None:
+ def _split_provider_qualified_model(model: str) -> tuple[str, str | None]:
+     model = str(model or "").strip()
+     if model.startswith("@") and ":" in model:
+-        provider_hint, bare_model = model[1:].rsplit(":", 1)
++        provider_hint, bare_model = model[1:].split(":", 1)
+         provider = _clean_session_model_provider(provider_hint)
+         bare = bare_model.strip()
+         if provider and bare:
