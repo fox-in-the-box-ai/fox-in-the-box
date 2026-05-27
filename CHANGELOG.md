@@ -12,6 +12,11 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Fixed
 - Removed dead code in streaming patch: keyless local-server fallback (substitution 0) never fired because `_is_local_server_provider("custom")` returns False. The primary keyless path works via upstream's `_resolve_openrouter_runtime`.
 - Fixed `getModelLabel` display for custom gateway models with Ollama-style tags. `@custom:gateway:llama3.1:latest` previously displayed as `latest`; now correctly shows `llama3.1:latest`.
+- Refreshed webui patches 001–003 for upstream v0.51.145. Bootstrap, dispatch hook, and onboarding redirect patches now apply cleanly against the latest upstream (CSP block, `/api/shutdown` route, `BrokenPipeError` catch blocks). Patches 004–008 unchanged.
+- Fixed Windows uninstaller Docker Desktop removal path. `$PROGRAMFILES` resolves to `Program Files (x86)` on 64-bit Windows; changed to `$PROGRAMFILES64`. Also switched from `nsExec::ExecToLog` to `ExecWait` for the GUI-based Docker Desktop uninstaller.
+
+### Changed
+- CHANGELOG header now says "inspired by" Keep a Changelog (was "follows"), reflecting the project-specific sections.
 
 ---
 
