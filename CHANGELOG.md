@@ -2,7 +2,7 @@
 
 All notable changes to Fox in the Box are documented here.
 
-The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
+The format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), with additional sections for project context.
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---

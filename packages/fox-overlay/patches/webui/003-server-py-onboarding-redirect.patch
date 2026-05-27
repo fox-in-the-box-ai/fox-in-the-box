@@ -23,13 +23,13 @@ Reference: forks/hermes-webui@62c08548:server.py lines 95, 147-148,
 167-168 (the v0.5.4 pre-migration state). Issue #331.
 
 diff --git a/server.py b/server.py
+index 65b22077..aeb79339 100644
 --- a/server.py
 +++ b/server.py
-@@ -120,7 +120,21 @@
-         raise
+@@ -122,6 +122,20 @@ except ModuleNotFoundError as _fox_e:
  except Exception as _fox_e:
      logger.warning("fox_overlay.bootstrap failed (%s); Fox routes disabled", _fox_e)
-+
+
 +# Fox onboarding redirect: bounce un-onboarded users to /setup before any
 +# other routing fires. v0.5.4 had this inline; the Phase 7/8 overlay
 +# migration moved the helpers into fox_overlay.webui_modules.onboarding
@@ -42,12 +42,12 @@ diff --git a/server.py b/server.py
 +        raise
 +    should_redirect_to_setup = lambda _path: False  # noqa: E731 — vanilla-webui fallback
 +    redirect_to_setup = None
- 
 +
- from api.auth import check_auth
- from api.config import HOST, PORT, STATE_DIR, SESSION_DIR, DEFAULT_WORKSPACE
- from api.helpers import j, get_profile_cookie
-@@ -257,6 +271,10 @@
++
+ _CSP_CONNECT_BASE = (
+     "'self' http://127.0.0.1:* http://localhost:* "
+     "ws://127.0.0.1:* ws://localhost:*"
+@@ -316,6 +330,10 @@ class Handler(BaseHTTPRequestHandler):
              set_request_profile(cookie_profile)
          try:
              parsed = urlparse(self.path)
@@ -58,7 +58,7 @@ diff --git a/server.py b/server.py
              if not check_auth(self, parsed): return
              result = handle_get(self, parsed)
              if result is False:
-@@ -275,6 +293,10 @@
+@@ -339,6 +357,10 @@ class Handler(BaseHTTPRequestHandler):
              set_request_profile(cookie_profile)
          try:
              parsed = urlparse(self.path)

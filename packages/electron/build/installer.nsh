@@ -80,8 +80,9 @@
         "Fox was the only application using Docker on this PC.$\n$\nWould you like to remove Docker Desktop as well?" \
         IDYES fitb_remove_docker IDNO fitb_skip_docker
       fitb_remove_docker:
-        IfFileExists "$PROGRAMFILES\Docker\Docker\Docker Desktop Installer.exe" 0 fitb_skip_docker
-        nsExec::ExecToLog '"$PROGRAMFILES\Docker\Docker\Docker Desktop Installer.exe" uninstall --quiet'
+        IfFileExists "$PROGRAMFILES64\Docker\Docker\Docker Desktop Installer.exe" 0 fitb_skip_docker
+        DetailPrint "Uninstalling Docker Desktop..."
+        ExecWait '"$PROGRAMFILES64\Docker\Docker\Docker Desktop Installer.exe" uninstall --quiet'
       fitb_skip_docker:
     ${EndIf}
 

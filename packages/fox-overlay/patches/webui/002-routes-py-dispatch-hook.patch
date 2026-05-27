@@ -1,11 +1,11 @@
 diff --git a/api/routes.py b/api/routes.py
-index 93900d7..0e26b1d 100644
+index c80d74aa..af409237 100644
 --- a/api/routes.py
 +++ b/api/routes.py
-@@ -3261,6 +3261,14 @@ def _serve_manifest(handler) -> bool:
+@@ -3776,6 +3776,14 @@ def _serve_manifest(handler) -> bool:
  def handle_get(handler, parsed) -> bool:
      """Handle all GET routes. Returns True if handled, False for 404."""
- 
+
 +    try:
 +        from fox_overlay.dispatch import handle_get as _fox_get
 +        if _fox_get(handler, parsed):
@@ -17,10 +17,10 @@ index 93900d7..0e26b1d 100644
      if parsed.path.startswith("/session/static/"):
          # Strip the leading "/session" so _serve_static() sees a path that
          # starts with "/static/" (its required prefix). _serve_static enforces
-@@ -4328,6 +4336,14 @@ def handle_post(handler, parsed) -> bool:
+@@ -4989,6 +4997,14 @@ def handle_post(handler, parsed) -> bool:
              if diag:
                  diag.finish()
- 
+
 +    try:
 +        from fox_overlay.dispatch import handle_post as _fox_post
 +        if _fox_post(handler, parsed):
@@ -29,6 +29,6 @@ index 93900d7..0e26b1d 100644
 +        if _fox_e.name not in ("fox_overlay", "fox_overlay.dispatch"):
 +            raise
 +
-     if parsed.path == "/api/upload":
-         return handle_upload(handler)
-     if parsed.path == "/api/upload/extract":
+     if parsed.path == "/api/shutdown":
+         return _handle_shutdown(handler)
+
