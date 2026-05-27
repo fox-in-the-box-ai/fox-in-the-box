@@ -25,13 +25,24 @@ Skipped sections are OK as long as they're explicitly noted with reason. Empty e
 
 ---
 
+## v0.7.44 — 2026-05-27 (DV — post-ship cleanup: dead code removal + getModelLabel fix)
+
+- [x] (a) Dead code removed: streaming.py substitution 0 (FITB#278 keyless fallback) deleted — `_is_local_server_provider("custom")` returned False, never fired
+- [x] (b) Patch 007 hunk 5: getModelLabel `lastIndexOf` → `indexOf` — `@custom:gateway:llama3.1:latest` now shows `llama3.1:latest` instead of `latest`
+- [x] (c) Patch 007 applies cleanly: `git apply --check` passes against upstream pin (5 hunks)
+- [x] (d) Test: `test_three_substitutions_present` asserts FITB#278 absent from substitution source
+- [x] (e) Full test suite: 165 passed, 0 failed, 1 skipped
+- [ ] (f) **POST-RELEASE:** On-device smoke — getModelLabel displays correctly for Ollama models in custom gateway config
+
+---
+
 ## v0.7.43 — 2026-05-27 (DV — Ollama provider routing + colon-split fix)
 
 - [x] (a) Provider routing: use_model() writes provider: "custom" — verified by test_ollama_provider_routing.py (5 tests)
 - [x] (b) Colon-split: _split_provider_qualified_model splits on first colon — verified by test_ollama_provider_routing.py (8 tests)
 - [x] (c) Frontend colon-split: _normalizeConfiguredModelKey, _getOptionProviderId, _providerFromModelValue, _findMatchingModelOption all use indexOf/regex — manually traced 4 examples
 - [x] (d) OLLAMA group provider_id: "custom" — test_config_patch.py updated and passing (4 tests)
-- [x] (e) Defense-in-depth: streaming.py keyless fallback for local server providers
+- [x] (e) ~~Defense-in-depth: streaming.py keyless fallback~~ — removed in v0.7.44 (was dead code)
 - [x] (f) Full test suite: 165 passed, 0 failed, 1 skipped
 - [ ] (g) **POST-RELEASE:** On-device smoke — Ollama local models route correctly, no 404s, no "no API key" errors
 

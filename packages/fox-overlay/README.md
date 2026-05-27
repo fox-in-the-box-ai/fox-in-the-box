@@ -9,7 +9,7 @@ releases without carrying a perpetually-conflicting fork.
 
 | Path | Purpose |
 |---|---|
-| `patches/{agent,webui}/` | Quilt-style patch series applied at Docker build time. Today: 1 agent patch (gateway bootstrap shim), 3 webui patches (server.py bootstrap + routes.py dispatcher hook + server.py onboarding-redirect added in v0.7.13/v0.7.15). |
+| `patches/{agent,webui}/` | Quilt-style patch series applied at Docker build time. Today: 1 agent patch (gateway bootstrap shim), 8 webui patches (001 server.py bootstrap, 002 routes.py dispatcher hook, 003 onboarding-redirect, 004 fox-bot-name, 005 fox-avatar, 006 empty-state-branding, 007 ui.js colon-split fix, 008 routes.py colon-split fix). |
 | `.fox-removals` | File paths from upstream that Fox doesn't ship (consumed by the Dockerfile installer). |
 | `fox_overlay/webui_modules/` | Additive HTTP route modules — register handlers with `fox_overlay.dispatch.register_get/post`. Today: ollama, tailscale, local_fallback, models_download, hostname, onboarding, test_hooks (FITB_TEST_MODE=1 only). |
 | `fox_overlay/webui_patches/` | Runtime monkey-patches on upstream webui modules via `inspect.getsource` + textual substitution. Today: config (settings defaults + #303 OLLAMA picker splice), streaming (FITB#9 plumbing + #303 silent failover). |
@@ -21,7 +21,7 @@ releases without carrying a perpetually-conflicting fork.
 | `versions.toml` | Pinned upstream tags + their bump history. |
 | `MANIFEST.toml` | Inventory of overlay artifacts (used by `scripts/check-overlay-basis.sh`). |
 | `scripts/check-overlay-basis.sh` | CI gate — verifies every overlay artifact still applies cleanly against the current submodule pin. |
-| `tests/` | Pytest regression suite (~130 tests across 12 modules covering dispatcher, monkey-patches, wraps, modules). |
+| `tests/` | Pytest regression suite (~165 tests across 14 modules covering dispatcher, monkey-patches, wraps, modules). |
 
 ## Where to learn more
 

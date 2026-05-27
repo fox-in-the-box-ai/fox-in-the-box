@@ -2,13 +2,13 @@
 
 ## After uninstall — manual cleanup
 
-The NSIS uninstaller removes application files and the **RunOnce** resume entry
-(`FoxInTheBoxResumeSetup`). It does **not** remove Docker images/containers or
-the Fox data directory used by the container.
+Since v0.7.26 the NSIS uninstaller offers to remove Fox data and (since v0.7.27)
+Docker Desktop if no other images remain. If you declined those prompts or are
+on an older version, the items below may need manual cleanup.
 
 | What | Typical location | Action |
 |------|------------------|--------|
-| Electron user data (logs, updater cache) | `%APPDATA%\@fox-in-the-box\` | Delete folder if you want a clean slate |
+| Electron user data (logs, updater cache) | `%APPDATA%\fox-in-the-box\` | Delete folder if you want a clean slate |
 | Docker named volume / bind data | `%USERPROFILE%` path passed to Docker as `/data` host mount | Remove only if you know your install used it |
 | `Fox in the box` Start menu shortcut | Start menu → right‑click → Unpin / delete | Optional cosmetic cleanup |
 
