@@ -7,6 +7,14 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.7.44] - 2026-05-27
+
+### Fixed
+- Removed dead code in streaming patch: keyless local-server fallback (substitution 0) never fired because `_is_local_server_provider("custom")` returns False. The primary keyless path works via upstream's `_resolve_openrouter_runtime`.
+- Fixed `getModelLabel` display for custom gateway models with Ollama-style tags. `@custom:gateway:llama3.1:latest` previously displayed as `latest`; now correctly shows `llama3.1:latest`.
+
+---
+
 ## [0.7.43] - 2026-05-27
 
 ### Fixed
@@ -14,7 +22,6 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - Model ID truncation fixed across frontend and backend. Ollama tag-based IDs (`llama3.1:latest`) contain colons that four JavaScript functions and one Python function incorrectly split on, reducing the model to bare `"latest"`. All five sites now split on the first colon only.
 - Orphan "Configured" badge no longer appears for Ollama models. The frontend's model-key normalizer collapsed `@custom:llama3.1:latest` to `"latest"`, bypassing the dedup check and injecting a phantom entry. Fixed normalizer strips only the `@provider:` prefix.
 - OLLAMA picker group uses `provider_id: "custom"` to match the config provider, preventing `model_with_provider_context` from injecting an `@ollama:` prefix that broke routing.
-- Defense-in-depth: streaming layer now supplies a keyless placeholder API key when a local-server provider has a base URL but no key, catching edge cases where the runtime resolver returns empty credentials.
 
 ---
 

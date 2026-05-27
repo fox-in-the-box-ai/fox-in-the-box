@@ -1,5 +1,5 @@
 diff --git a/static/ui.js b/static/ui.js
-index c6a5cd2a..b2bbed76 100644
+index c6a5cd2a..19521732 100644
 --- a/static/ui.js
 +++ b/static/ui.js
 @@ -750,12 +750,12 @@ function _getOptionProviderId(opt){
@@ -35,3 +35,12 @@ index c6a5cd2a..b2bbed76 100644
    if(s.includes('/')){const last=s.split('/').pop();s=last||s;}
    return s.replace(/-/g,'.');
  }
+@@ -2557,7 +2557,7 @@ function getModelLabel(modelId){
+   //   @custom:qwen397b-64k               -> qwen397b-64k
+   if(rawId.startsWith('@custom:')){
+     const rest=rawId.slice('@custom:'.length);
+-    if(rest.includes(':')) return rest.slice(rest.lastIndexOf(':')+1)||rawId;
++    if(rest.includes(':')) return rest.slice(rest.indexOf(':')+1)||rawId;
+     if(rest.includes('/')) return rest.split('/').pop()||rawId;
+     return rest||rawId;
+   }

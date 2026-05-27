@@ -1,14 +1,8 @@
 """Fox webui patch: streaming.py — FITB#9 local-fallback plumbing + #303
-silent failover engine (v0.7.6 rebuild) + #278 keyless local-server
-fallback (v0.7.43).
+silent failover engine (v0.7.6 rebuild).
 
-Four substitutions inside ``_run_agent_streaming``:
+Three substitutions inside ``_run_agent_streaming``:
 
-0. **FITB#278 keyless local-server fallback.** After
-   ``_resolve_custom_provider_runtime_overrides``, supply a keyless
-   placeholder API key when the provider is a known local server
-   (Ollama, LM Studio, etc.) with a ``base_url`` but no ``api_key``.
-   Prevents "no API key found" errors for keyless daemons.
 1. **FITB#9 local-fallback plumbing.** If Settings → Providers
    "Local fallback" is ON AND the bundled llama-server is healthy,
    plumb it through as ``_fallback_resolved`` (preempts any
@@ -105,37 +99,11 @@ def apply() -> None:
     _check_signature(_u._run_agent_streaming, _EXPECTED_RUN_AGENT_STREAMING_SIG,
                      "_run_agent_streaming")
 
-    # ── Substitute _run_agent_streaming with 4 anchored edits ───────────
+    # ── Substitute _run_agent_streaming with 3 anchored edits ───────────
     substitute_function(
         upstream_module=_u,
         function_name="_run_agent_streaming",
         substitutions=[
-            # ── (0) FITB#278 keyless local-server fallback ──
-            # After _resolve_custom_provider_runtime_overrides, supply a
-            # keyless placeholder when the provider is a known local
-            # server (Ollama, LM Studio, etc.) with a base_url but no
-            # API key. Prevents "no API key found" errors for keyless
-            # daemons. Anchor: the _resolve_custom_provider_runtime_overrides
-            # call through to "Read per-profile config".
-            (
-                "            resolved_provider, resolved_api_key, resolved_base_url = _resolve_custom_provider_runtime_overrides(\n"
-                "                resolved_provider, resolved_api_key, resolved_base_url\n"
-                "            )\n"
-                "\n"
-                "            # Read per-profile config at call time (not module-level snapshot)\n",
-
-                "            resolved_provider, resolved_api_key, resolved_base_url = _resolve_custom_provider_runtime_overrides(\n"
-                "                resolved_provider, resolved_api_key, resolved_base_url\n"
-                "            )\n"
-                "\n"
-                "            # FITB#278: keyless fallback for local server providers.\n"
-                "            if not resolved_api_key and resolved_base_url:\n"
-                "                from api.config import _is_local_server_provider as _fox_is_local\n"
-                "                if _fox_is_local(str(resolved_provider or '')):\n"
-                "                    resolved_api_key = _KEYLESS_CUSTOM_API_KEY\n"
-                "\n"
-                "            # Read per-profile config at call time (not module-level snapshot)\n",
-            ),
             # ── (1) FITB#9 local-fallback plumbing ──
             # Insert the local-fallback block right BEFORE "Build kwargs
             # defensively". Anchor includes 3 lines of context to remain
