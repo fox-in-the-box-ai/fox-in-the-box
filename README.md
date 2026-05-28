@@ -279,14 +279,16 @@ The app itself is free and open source. You only pay for AI usage at your provid
 
 What we're working on next. No promises on dates — this is a small team — but this is the direction. v0.7.x is the stabilization cycle: v0.8.0 only ships once the verification rebuild is complete and the project is genuinely solid.
 
-**Just shipped (v0.7.6)**
-- **Silent failover to local AI** — when a remote provider has a transient failure (rate limit, 5xx, etc.) and your local llama-server is ready, Fox auto-swaps to local and tells you. Your message stays in the transcript; one tap re-sends to local. Closes the local-AI happy path that's been incomplete since v0.5.x.
+**Just shipped (v0.7.33–v0.7.44)**
+- **7-step progress window** — real-time install progress with diagnostics pane, post-reboot Docker resume, smooth animations (v0.7.33–v0.7.40)
+- **Fox branding in WebUI** — custom bot name, avatar, and empty-state branding via build-time patches (v0.7.23)
+- **Ollama local model routing** — correct provider routing, colon-split fixes across frontend and backend, picker dedup (v0.7.42–v0.7.44)
+- **Windows installer overhaul** — install-mode selection, HyperV/WSL2 detection, uninstaller data cleanup, Docker Desktop uninstall integration (v0.7.22–v0.7.27)
 
 **v0.7.x stabilization in flight**
-- **Documentation at parity with shipped reality** (v0.7.7) — this audit
-- **Playwright E2E test foundation** (v0.7.7 → v0.7.8) — replacing the manual smoke-checklist gate that has been the human-in-the-loop release process since v0.4.7
-- **Polish on the local-AI surface** — picker categorization, settings styling
-- **Diagnostic report button** in the launcher — one-click bundle of version + container digest + supervisord state + recent logs for filing useful bug reports
+- **#336 — Wizard local-fallback error on Windows** — needs Win11 Docker logs for diagnosis
+- **On-device smoke backlog** — 14 POST-RELEASE items unchecked since v0.7.17
+- **Upstream anchor drift (#439)** — blocks the next upstream bump
 
 **Eventually (v0.8.0 and beyond)**
 - UI overhaul — a clean, professional design system replacing the current developer-tool look

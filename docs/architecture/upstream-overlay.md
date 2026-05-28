@@ -16,8 +16,10 @@ Container build COPYs the pinned upstream content, then layers Fox behavior on t
 via four mechanisms (in the order they apply at build/run time):
 
 1. **Webui patch series** (`packages/fox-overlay/patches/webui/`) — `git apply`'d
-   at Docker build time. Today: 3 patches (server.py bootstrap, routes.py
-   dispatcher hook, server.py onboarding-redirect added in v0.7.13/v0.7.15).
+   at Docker build time. Today: 8 patches (001 server.py bootstrap, 002 routes.py
+   dispatcher hook, 003 server.py onboarding-redirect, 004 fox-bot-name-override,
+   005 fox-avatar-override, 006 fox-empty-state-branding, 007 ui.js colon-split
+   fix, 008 routes.py colon-split fix).
 2. **Agent patch series** (`packages/fox-overlay/patches/agent/`) — same, for the
    agent submodule. Today: 1 patch (bootstrap shim).
 3. **`.fox-removals` manifest** (`packages/fox-overlay/.fox-removals`) — file paths
@@ -31,7 +33,7 @@ via four mechanisms (in the order they apply at build/run time):
      `/test/*` routes when `FITB_TEST_MODE=1`; in production the module
      loads but is inert.
    - `webui_patches/` — runtime monkey-patches on upstream webui modules
-     (Phase 6 patches: config, providers, streaming)
+     (Phase 6 patches: config, streaming)
    - `agent_plugins/` — entry-point-loaded agent monkey-patches (Phase 3:
      runtime_provider, auxiliary_client, cron_diagnostics)
    - `agent_memory_plugins/` — fox-only memory providers COPYd into upstream's

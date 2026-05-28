@@ -142,13 +142,12 @@ def _get_substitutions():
 
 
 def test_three_substitutions_present():
-    """v0.7.6 added 2 substitutions to the original 1 (FITB#9 plumbing)."""
+    """Exactly 3 substitutions: FITB#9 plumbing + 2x FITB#303 failover."""
     src = _get_substitutions()
-    # Each substitution is a 2-tuple inside the substitutions= list. Count
-    # the comment headers as a proxy.
     assert "(1) FITB#9 local-fallback plumbing" in src
     assert "(2) FITB#303 silent failover — success path" in src
     assert "(3) FITB#303 silent failover — exception path" in src
+    assert "FITB#278" not in src, "dead-code sub-0 should be removed"
 
 
 def test_failover_substitution_wires_local_fallback_module():

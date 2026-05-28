@@ -2,8 +2,21 @@
 
 All notable changes to Fox in the Box are documented here.
 
-The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
+The format is inspired by [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), with additional sections for project context.
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+---
+
+## [0.7.44] - 2026-05-27
+
+### Fixed
+- Removed dead code in streaming patch: keyless local-server fallback (substitution 0) never fired because `_is_local_server_provider("custom")` returns False. The primary keyless path works via upstream's `_resolve_openrouter_runtime`.
+- Fixed `getModelLabel` display for custom gateway models with Ollama-style tags. `@custom:gateway:llama3.1:latest` previously displayed as `latest`; now correctly shows `llama3.1:latest`.
+- Refreshed webui patches 001–003 for upstream v0.51.145. Bootstrap, dispatch hook, and onboarding redirect patches now apply cleanly against the latest upstream (CSP block, `/api/shutdown` route, `BrokenPipeError` catch blocks). Patches 004–008 unchanged.
+- Fixed Windows uninstaller Docker Desktop removal path. `$PROGRAMFILES` resolves to `Program Files (x86)` on 64-bit Windows; changed to `$PROGRAMFILES64`. Also switched from `nsExec::ExecToLog` to `ExecWait` for the GUI-based Docker Desktop uninstaller.
+
+### Changed
+- CHANGELOG header now says "inspired by" Keep a Changelog (was "follows"), reflecting the project-specific sections.
 
 ---
 
@@ -14,7 +27,6 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - Model ID truncation fixed across frontend and backend. Ollama tag-based IDs (`llama3.1:latest`) contain colons that four JavaScript functions and one Python function incorrectly split on, reducing the model to bare `"latest"`. All five sites now split on the first colon only.
 - Orphan "Configured" badge no longer appears for Ollama models. The frontend's model-key normalizer collapsed `@custom:llama3.1:latest` to `"latest"`, bypassing the dedup check and injecting a phantom entry. Fixed normalizer strips only the `@provider:` prefix.
 - OLLAMA picker group uses `provider_id: "custom"` to match the config provider, preventing `model_with_provider_context` from injecting an `@ollama:` prefix that broke routing.
-- Defense-in-depth: streaming layer now supplies a keyless placeholder API key when a local-server provider has a base URL but no key, catching edge cases where the runtime resolver returns empty credentials.
 
 ---
 
