@@ -105,15 +105,15 @@ def apply() -> None:
         function_name="_run_agent_streaming",
         substitutions=[
             # ── (1) FITB#9 local-fallback plumbing ──
-            # Insert the local-fallback block right BEFORE "Build kwargs
-            # defensively". Anchor includes 3 lines of context to remain
-            # unique within the function.
+            # Insert the local-fallback block right AFTER upstream sets
+            # _fallback_resolved, BEFORE "Build kwargs defensively".
+            # Anchor: the assignment + blank line + comment header.
             (
-                "                    }\n"
+                "            _fallback_resolved = _fallback_chain or None\n"
                 "\n"
                 "            # Build kwargs defensively — guard newer params so the WebUI\n",
 
-                "                    }\n"
+                "            _fallback_resolved = _fallback_chain or None\n"
                 "\n"
                 "            # FITB local AI fallback (issue #9) — opt-in toggle takes\n"
                 "            # precedence over any config-driven fallback_model.\n"
