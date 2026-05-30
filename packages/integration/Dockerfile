@@ -65,7 +65,7 @@ RUN pip install --no-cache-dir supervisor
 # ── Qdrant binary ─────────────────────────────────────────────────────────────
 RUN set -eux; \
     mkdir -p /app/qdrant; \
-    case "${TARGETARCH}" in \
+    case "${TARGETARCH:-amd64}" in \
         arm64) ARCH="aarch64" ;; \
         *)     ARCH="x86_64"  ;; \
     esac; \
@@ -92,7 +92,7 @@ RUN set -eux; \
 # the user hasn't enabled local fallback.
 RUN set -eux; \
     mkdir -p /app/llama-cpp; \
-    case "${TARGETARCH}" in \
+    case "${TARGETARCH:-amd64}" in \
         arm64) ARCH_SUFFIX="arm64" ;; \
         *)     ARCH_SUFFIX="x64"  ;; \
     esac; \
