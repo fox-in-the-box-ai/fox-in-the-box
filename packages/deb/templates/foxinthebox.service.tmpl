@@ -1,0 +1,21 @@
+[Unit]
+Description=Fox in the Box
+Documentation=https://github.com/fox-in-the-box-ai/fox-in-the-box
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=foxinthebox
+Group=foxinthebox
+RuntimeDirectory=foxinthebox
+RuntimeDirectoryMode=0770
+
+ExecStartPre=__APP_DIR__/scripts/preflight.sh
+ExecStart=/usr/local/bin/supervisord -c /etc/foxinthebox/supervisord.conf
+
+Restart=on-failure
+RestartSec=10s
+
+[Install]
+WantedBy=multi-user.target

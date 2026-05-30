@@ -1,0 +1,40 @@
+#!/bin/bash
+set -e
+ACTION="$1"
+PREV_VERSION="${2:-}"
+
+# ── 1. Create system user (idempotent) ────────────────────────────────────────
+if ! id foxinthebox &>/dev/null; then
+    adduser --system --group --home /opt/foxinthebox --shell /bin/bash foxinthebox
+fi
+
+# ── 2. Set ownership of app directory ────────────────────────────────────────
+chown -R foxinthebox:foxinthebox /opt/foxinthebox
+
+# ── 3. Run install-core.sh (idempotent — handles fresh install and upgrade) ──
+FITB_APP_DIR=/opt/foxinthebox \
+FITB_CONTEXT=bare-metal \
+bash /opt/foxinthebox/install-core.sh
+
+# ── 4. Install and enable systemd units ──────────────────────────────────────
+if command -v systemctl &>/dev/null && systemctl is-system-running --quiet 2>/dev/null || true; then
+    systemctl daemon-reload
+    systemctl enable foxinthebox.service        || true
+    systemctl enable foxinthebox-updater.path   || true
+fi
+
+# ── 5. Fresh install: start the service ──────────────────────────────────────
+if [ "$ACTION" = "configure" ] && [ -z "$PREV_VERSION" ]; then
+    if command -v systemctl &>/dev/null; then
+        systemctl start foxinthebox.service || true
+    fi
+    echo "Fox in the Box is starting. Open http://localhost:8787 in your browser."
+fi
+
+# ── 6. Upgrade: restart to pick up new version ───────────────────────────────
+if [ "$ACTION" = "configure" ] && [ -n "$PREV_VERSION" ]; then
+    if command -v systemctl &>/dev/null; then
+        systemctl restart foxinthebox.service || true
+    fi
+    echo "Fox in the Box upgraded to $(cat /opt/foxinthebox/version.txt 2>/dev/null || echo unknown)"
+fi
