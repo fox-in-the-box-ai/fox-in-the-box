@@ -1,0 +1,25 @@
+Package: foxinthebox
+Version: __VERSION__
+Architecture: __ARCH__
+Maintainer: Fox in the Box <support@foxinthebox.ai>
+Installed-Size: __SIZE_KB__
+Depends: python3.11 | python3 (>= 3.11),
+         python3-pip,
+         python3-venv,
+         nodejs (>= 18),
+         git,
+         curl,
+         ca-certificates,
+         libgomp1,
+         libcurl4,
+         iproute2,
+         iptables
+Recommends: tailscale
+Section: net
+Priority: optional
+Homepage: https://foxinthebox.ai
+Description: Fox in the Box — privacy-first self-hosted AI assistant
+ Fox in the Box bundles Hermes Agent, a customized web UI, Qdrant vector
+ store, and a local LLM fallback. Runs entirely on your machine.
+ .
+ Supports Ubuntu 22.04 LTS, Ubuntu 24.04 LTS, Zorin OS 16, Zorin OS 17.
