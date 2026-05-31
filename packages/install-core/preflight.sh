@@ -131,18 +131,7 @@ chmod 750 /run/foxinthebox
         exit 0
     fi
 
-    # Grant operator access to foxinthebox user
-    _opi=0
-    while [ "$_opi" -lt 60 ]; do
-        if tailscale set --operator=foxinthebox 2>/dev/null; then
-            _log "Granted foxinthebox tailscale operator access."
-            break
-        fi
-        _opi=$((_opi + 2))
-        sleep 2
-    done
-
-    # Wait for Tailscale login (up to ~15 min)
+    # Wait for Tailscale login then set up serve (up to ~15 min)
     _ts_iters=450
     _ti=0
     while [ "$_ti" -lt "$_ts_iters" ]; do

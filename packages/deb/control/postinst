@@ -16,22 +16,60 @@ FITB_APP_DIR=/opt/foxinthebox \
 FITB_CONTEXT=bare-metal \
 bash /opt/foxinthebox/install-core.sh
 
-# ── 4. Install and enable systemd units ──────────────────────────────────────
+# ── 4. Ensure tailscaled is running (core feature, not optional) ──────────
+TAILSCALE_READY=false
+if command -v tailscale &>/dev/null; then
+    echo "Tailscale detected — enabling and starting tailscaled..."
+    if command -v systemctl &>/dev/null; then
+        systemctl enable tailscaled 2>/dev/null || true
+        systemctl start tailscaled 2>/dev/null || true
+    fi
+    # Wait briefly for socket, then grant foxinthebox operator access
+    # (needed so preflight.sh can `tailscale serve` as non-root later)
+    for _i in 1 2 3 4 5; do
+        if tailscale set --operator=foxinthebox 2>/dev/null; then
+            TAILSCALE_READY=true
+            echo "Granted foxinthebox tailscale operator access."
+            break
+        fi
+        sleep 1
+    done
+fi
+
+# ── 5. Install and enable Fox systemd units ─────────────────────────────────
 if command -v systemctl &>/dev/null && systemctl is-system-running --quiet 2>/dev/null || true; then
     systemctl daemon-reload
     systemctl enable foxinthebox.service        || true
     systemctl enable foxinthebox-updater.path   || true
 fi
 
-# ── 5. Fresh install: start the service ──────────────────────────────────────
+# ── 6. Fresh install: start the service ──────────────────────────────────────
 if [ "$ACTION" = "configure" ] && [ -z "$PREV_VERSION" ]; then
     if command -v systemctl &>/dev/null; then
         systemctl start foxinthebox.service || true
     fi
-    echo "Fox in the Box is starting. Open http://localhost:8787 in your browser."
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "  Fox in the Box installed!"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    echo "  Open: http://localhost:8787"
+    echo ""
+    if [ "$TAILSCALE_READY" != "true" ]; then
+        echo "  For private HTTPS access from anywhere (recommended):"
+        echo "    1. sudo tailscale up"
+        echo "    2. Then visit https://fox-<name>.<your-tailnet>.ts.net"
+        echo ""
+    else
+        echo "  Tailscale is ready. Configure in the web UI:"
+        echo "    Settings → Providers → Tailscale"
+        echo ""
+    fi
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
 fi
 
-# ── 6. Upgrade: restart to pick up new version ───────────────────────────────
+# ── 7. Upgrade: restart to pick up new version ───────────────────────────────
 if [ "$ACTION" = "configure" ] && [ -n "$PREV_VERSION" ]; then
     if command -v systemctl &>/dev/null; then
         systemctl restart foxinthebox.service || true

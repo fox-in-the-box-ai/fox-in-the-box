@@ -1,8 +1,8 @@
 [Unit]
 Description=Fox in the Box
 Documentation=https://github.com/fox-in-the-box-ai/fox-in-the-box
-After=network-online.target
-Wants=network-online.target
+After=network-online.target tailscaled.service
+Wants=network-online.target tailscaled.service
 
 [Service]
 Type=simple
