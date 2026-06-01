@@ -26,6 +26,11 @@ set -euo pipefail
 # ── 0. Config ─────────────────────────────────────────────────────────────────
 FITB_APP_DIR="${FITB_APP_DIR:-/opt/foxinthebox}"
 FITB_CONTEXT="${FITB_CONTEXT:-bare-metal}"
+if [ "$FITB_CONTEXT" = "docker" ]; then
+    FITB_DATA_DIR="${FITB_DATA_DIR:-/data}"
+else
+    FITB_DATA_DIR="${FITB_DATA_DIR:-/opt/foxinthebox/.foxinthebox}"
+fi
 QDRANT_VERSION="${QDRANT_VERSION:-v1.9.4}"
 LLAMACPP_VERSION="${LLAMACPP_VERSION:-b9026}"
 FITB_SKIP_BINARIES="${FITB_SKIP_BINARIES:-0}"
@@ -286,36 +291,34 @@ _pip_install() {
 # ── 9. supervisord.conf (generated — paths substituted) ───────────────────────
 _write_supervisord_conf() {
     local app="$FITB_APP_DIR"
+    local data="$FITB_DATA_DIR"
 
-    # Output path differs by context
     local conf_path
     if [ "$FITB_CONTEXT" = "docker" ]; then
         conf_path="/etc/supervisor/supervisord.conf"
-        local sock_dir="/run/fitb"
         local sock_path="/run/fitb/supervisor.sock"
         local pid_path="/run/fitb/supervisord.pid"
     else
         conf_path="/etc/foxinthebox/supervisord.conf"
-        local sock_dir="/run/foxinthebox"
         local sock_path="/run/foxinthebox/supervisor.sock"
         local pid_path="/run/foxinthebox/supervisord.pid"
     fi
 
     mkdir -p "$(dirname "$conf_path")"
-    _log "Writing $conf_path..."
+    _log "Writing $conf_path (app=$app, data=$data)..."
 
     cat > "$conf_path" << SUPERVISORD_EOF
 [supervisord]
 nodaemon=true
 user=root
-logfile=/data/logs/supervisord.log
+logfile=${data}/logs/supervisord.log
 logfile_maxbytes=10MB
 logfile_backups=3
 pidfile=${pid_path}
-childlogdir=/data/logs
+childlogdir=${data}/logs
 
-; Unix socket must NOT live under /data: bind-mounting /data from macOS or Windows
-; (Docker Desktop) breaks AF_UNIX bind() with EINVAL.
+; Unix socket must NOT live under the data volume: bind-mounting from macOS or
+; Windows (Docker Desktop) breaks AF_UNIX bind() with EINVAL.
 [unix_http_server]
 file=${sock_path}
 chmod=0770
@@ -329,12 +332,12 @@ supervisor.rpcinterface_factory = supervisor.rpcinterface:make_main_rpcinterface
 
 ; ── tailscaled ────────────────────────────────────────────────────────────────
 [program:tailscaled]
-command=tailscaled --state=/data/data/tailscale/tailscaled.state
+command=tailscaled --state=${data}/data/tailscale/tailscaled.state
 user=root
 autostart=true
 autorestart=true
-stdout_logfile=/data/logs/tailscaled.log
-stderr_logfile=/data/logs/tailscaled.err
+stdout_logfile=${data}/logs/tailscaled.log
+stderr_logfile=${data}/logs/tailscaled.err
 stdout_logfile_maxbytes=10MB
 stdout_logfile_backups=3
 stderr_logfile_maxbytes=10MB
@@ -347,8 +350,8 @@ command=${app}/scripts/tailscale-operator-watchdog.sh
 user=root
 autostart=true
 autorestart=true
-stdout_logfile=/data/logs/ts-operator-watchdog.log
-stderr_logfile=/data/logs/ts-operator-watchdog.err
+stdout_logfile=${data}/logs/ts-operator-watchdog.log
+stderr_logfile=${data}/logs/ts-operator-watchdog.err
 stdout_logfile_maxbytes=10MB
 stdout_logfile_backups=3
 stderr_logfile_maxbytes=10MB
@@ -357,12 +360,12 @@ priority=15
 
 ; ── qdrant ────────────────────────────────────────────────────────────────────
 [program:qdrant]
-command=${app}/qdrant/qdrant --config-path /data/config/qdrant.yaml
+command=${app}/qdrant/qdrant --config-path ${data}/config/qdrant.yaml
 user=foxinthebox
 autostart=true
 autorestart=true
-stdout_logfile=/data/logs/qdrant.log
-stderr_logfile=/data/logs/qdrant.err
+stdout_logfile=${data}/logs/qdrant.log
+stderr_logfile=${data}/logs/qdrant.err
 stdout_logfile_maxbytes=10MB
 stdout_logfile_backups=3
 stderr_logfile_maxbytes=10MB
@@ -375,39 +378,39 @@ command=/usr/bin/nice -n 10 ${app}/scripts/run-with-env.sh python -m hermes_cli.
 user=foxinthebox
 autostart=true
 autorestart=true
-stdout_logfile=/data/logs/hermes-gateway.log
-stderr_logfile=/data/logs/hermes-gateway.err
+stdout_logfile=${data}/logs/hermes-gateway.log
+stderr_logfile=${data}/logs/hermes-gateway.err
 stdout_logfile_maxbytes=10MB
 stdout_logfile_backups=3
 stderr_logfile_maxbytes=10MB
 stderr_logfile_backups=3
-environment=HOME="${app}",PYTHONPATH="/data/apps/hermes-agent",PATH="/usr/local/bin:/usr/bin:/bin",HERMES_HOME="/data/data/hermes",BRAVE_API_KEY="__BRAVE_API_KEY__"
+environment=HOME="${app}",PYTHONPATH="${data}/apps/hermes-agent",PATH="/usr/local/bin:/usr/bin:/bin",HERMES_HOME="${data}/data/hermes",BRAVE_API_KEY="__BRAVE_API_KEY__"
 priority=30
 
 ; ── hermes webui ──────────────────────────────────────────────────────────────
 [program:hermes-webui]
-command=${app}/scripts/run-with-env.sh python /data/apps/hermes-webui/server.py
+command=${app}/scripts/run-with-env.sh python ${data}/apps/hermes-webui/server.py
 user=foxinthebox
 autostart=true
 autorestart=true
-stdout_logfile=/data/logs/hermes-webui.log
-stderr_logfile=/data/logs/hermes-webui.err
+stdout_logfile=${data}/logs/hermes-webui.log
+stderr_logfile=${data}/logs/hermes-webui.err
 stdout_logfile_maxbytes=10MB
 stdout_logfile_backups=3
 stderr_logfile_maxbytes=10MB
 stderr_logfile_backups=3
-environment=HOME="${app}",PYTHONPATH="/data/apps/hermes-webui",HERMES_WEBUI_HOST="0.0.0.0",HERMES_WEBUI_AGENT_DIR="/data/apps/hermes-agent",HERMES_WEBUI_STATE_DIR="/data/state/webui",HERMES_HOME="/data/data/hermes",ONBOARDING_PATH="/data/config/onboarding.json",PATH="/usr/local/bin:/usr/bin:/bin"
+environment=HOME="${app}",PYTHONPATH="${data}/apps/hermes-webui",HERMES_WEBUI_HOST="0.0.0.0",HERMES_WEBUI_AGENT_DIR="${data}/apps/hermes-agent",HERMES_WEBUI_STATE_DIR="${data}/state/webui",HERMES_HOME="${data}/data/hermes",ONBOARDING_PATH="${data}/config/onboarding.json",PATH="/usr/local/bin:/usr/bin:/bin"
 priority=40
 
 ; ── llama-server (local AI fallback — autostart=false) ───────────────────────
 [program:llama-server]
-command=${app}/llama-cpp/llama-server -m /data/models/microsoft_Phi-4-mini-instruct-Q4_K_M.gguf --host 127.0.0.1 --port 8643 -c 4096 -t 4 --sleep-idle-seconds 60
+command=${app}/llama-cpp/llama-server -m ${data}/models/microsoft_Phi-4-mini-instruct-Q4_K_M.gguf --host 127.0.0.1 --port 8643 -c 4096 -t 4 --sleep-idle-seconds 60
 user=foxinthebox
 autostart=false
 autorestart=true
 startretries=2
-stdout_logfile=/data/logs/llama-server.log
-stderr_logfile=/data/logs/llama-server.err
+stdout_logfile=${data}/logs/llama-server.log
+stderr_logfile=${data}/logs/llama-server.err
 stdout_logfile_maxbytes=10MB
 stdout_logfile_backups=3
 stderr_logfile_maxbytes=10MB
@@ -416,65 +419,6 @@ priority=50
 SUPERVISORD_EOF
 
     _log "supervisord.conf written."
-}
-
-# ── 10. Write systemd units (bare-metal only) ─────────────────────────────────
-_write_systemd_units() {
-    local app="$FITB_APP_DIR"
-    local unit_dir="/lib/systemd/system"
-    mkdir -p "$unit_dir"
-    _log "Writing systemd units to $unit_dir..."
-
-    # foxinthebox.service
-    cat > "$unit_dir/foxinthebox.service" << UNIT_EOF
-[Unit]
-Description=Fox in the Box
-Documentation=https://github.com/fox-in-the-box-ai/fox-in-the-box
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=simple
-User=foxinthebox
-Group=foxinthebox
-RuntimeDirectory=foxinthebox
-RuntimeDirectoryMode=0770
-
-ExecStartPre=${app}/scripts/preflight.sh
-ExecStart=/usr/local/bin/supervisord -c /etc/foxinthebox/supervisord.conf
-
-Restart=on-failure
-RestartSec=10s
-
-[Install]
-WantedBy=multi-user.target
-UNIT_EOF
-
-    # foxinthebox-updater.service
-    cat > "$unit_dir/foxinthebox-updater.service" << UNIT_EOF
-[Unit]
-Description=Fox in the Box updater
-After=network-online.target
-
-[Service]
-Type=oneshot
-ExecStart=/bin/bash -c 'apt-get install --only-upgrade -y foxinthebox && systemctl restart foxinthebox && rm -f \${HOME}/.foxinthebox/update.trigger'
-UNIT_EOF
-
-    # foxinthebox-updater.path (watches update.trigger sentinel)
-    cat > "$unit_dir/foxinthebox-updater.path" << UNIT_EOF
-[Unit]
-Description=Watch for Fox in the Box update sentinel file
-
-[Path]
-PathExistsGlob=/home/*/.foxinthebox/update.trigger
-Unit=foxinthebox-updater.service
-
-[Install]
-WantedBy=multi-user.target
-UNIT_EOF
-
-    _log "Systemd units written."
 }
 
 # ── Main ──────────────────────────────────────────────────────────────────────
@@ -490,9 +434,5 @@ _apply_removals
 _install_soul
 _pip_install
 _write_supervisord_conf
-
-if [ "$FITB_CONTEXT" != "docker" ]; then
-    _write_systemd_units
-fi
 
 _log "Fox in the Box install complete (v${FITB_VERSION})."

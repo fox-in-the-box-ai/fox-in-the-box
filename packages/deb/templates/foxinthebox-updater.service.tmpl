@@ -4,4 +4,4 @@ After=network-online.target
 
 [Service]
 Type=oneshot
-ExecStart=/bin/bash -c 'apt-get install --only-upgrade -y foxinthebox && systemctl restart foxinthebox && rm -f ${HOME}/.foxinthebox/update.trigger'
+ExecStart=/bin/bash -c 'apt-get install --only-upgrade -y foxinthebox && systemctl restart foxinthebox && rm -f __DATA_DIR__/update.trigger'

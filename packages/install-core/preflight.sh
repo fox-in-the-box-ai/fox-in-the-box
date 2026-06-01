@@ -98,7 +98,7 @@ if [ -f "$HERMES_YAML" ] && ! grep -q "^skills:" "$HERMES_YAML"; then
 # ── Skills ────────────────────────────────────────────────────────────────────
 skills:
   external_dirs:
-    - /data/apps/hermes-agent/skills
+    - ${DATA_DIR}/apps/hermes-agent/skills
 EOF
 fi
 

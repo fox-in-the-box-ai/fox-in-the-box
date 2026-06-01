@@ -3,9 +3,9 @@ set -e
 case "$1" in
     purge)
         rm -rf /opt/foxinthebox
-        rm -f /etc/systemd/system/foxinthebox.service
-        rm -f /etc/systemd/system/foxinthebox-updater.service
-        rm -f /etc/systemd/system/foxinthebox-updater.path
+        rm -f /lib/systemd/system/foxinthebox.service
+        rm -f /lib/systemd/system/foxinthebox-updater.service
+        rm -f /lib/systemd/system/foxinthebox-updater.path
         if command -v systemctl &>/dev/null; then
             systemctl daemon-reload || true
         fi

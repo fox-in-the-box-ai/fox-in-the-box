@@ -62,8 +62,9 @@ done
 # ── Systemd units ─────────────────────────────────────────────────────────────
 for tmpl in "$REPO_ROOT/packages/deb/templates/"*.tmpl; do
     name="$(basename "$tmpl" .tmpl)"
-    sed "s|__APP_DIR__|/opt/foxinthebox|g" "$tmpl" \
-        > "$BUILDDIR/lib/systemd/system/$name"
+    sed -e "s|__APP_DIR__|/opt/foxinthebox|g" \
+        -e "s|__DATA_DIR__|/opt/foxinthebox/.foxinthebox|g" \
+        "$tmpl" > "$BUILDDIR/lib/systemd/system/$name"
 done
 
 # ── Build the .deb ────────────────────────────────────────────────────────────

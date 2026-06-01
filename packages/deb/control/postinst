@@ -8,13 +8,14 @@ if ! id foxinthebox &>/dev/null; then
     adduser --system --group --home /opt/foxinthebox --shell /bin/bash foxinthebox
 fi
 
-# ── 2. Set ownership of app directory ────────────────────────────────────────
-chown -R foxinthebox:foxinthebox /opt/foxinthebox
-
-# ── 3. Run install-core.sh (idempotent — handles fresh install and upgrade) ──
+# ── 2. Run install-core.sh (idempotent — handles fresh install and upgrade) ──
+# Runs as root (dpkg convention). Creates venv, clones repos, writes configs.
 FITB_APP_DIR=/opt/foxinthebox \
 FITB_CONTEXT=bare-metal \
 bash /opt/foxinthebox/install-core.sh
+
+# ── 3. Set ownership of app directory (AFTER install-core.sh creates files) ──
+chown -R foxinthebox:foxinthebox /opt/foxinthebox
 
 # ── 4. Install and enable systemd units ──────────────────────────────────────
 if command -v systemctl &>/dev/null && systemctl is-system-running --quiet 2>/dev/null || true; then
