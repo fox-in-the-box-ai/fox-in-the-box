@@ -53,31 +53,30 @@ def apply() -> None:
         sentinel="_fox_patched_provider_auto_fallback",
     )
 
-    # 2) _get_auxiliary_task_config: docstring + trailing logic
+    # 2) _get_auxiliary_task_config: layer auxiliary.default underneath task config.
+    # Refreshed for v2026.5.29.2: upstream added multi-line docstring and
+    # plugin-declared defaults (register_auxiliary_task). Fox's auxiliary.default
+    # fallback is a different feature (reads from config.yaml, not plugins).
+    # We insert it between the config read and the plugin-defaults layering.
     substitute_function(
         upstream_module=_u,
         function_name="_get_auxiliary_task_config",
         substitutions=[
             (
-                '    """Return the config dict for auxiliary.<task>, or {} when unavailable."""\n',
-                '    """Return the config dict for auxiliary.<task>, or {} when unavailable.\n'
-                '\n'
-                '    Falls back to auxiliary.default when no task-specific config exists.\n'
-                '    Task-specific keys win over default keys ({**default_config, **task_config}).\n'
-                '    """\n',
-            ),
-            (
                 '    aux = config.get("auxiliary", {}) if isinstance(config, dict) else {}\n'
-                '    task_config = aux.get(task, {}) if isinstance(aux, dict) else {}\n'
-                '    return task_config if isinstance(task_config, dict) else {}\n',
+                '    task_config = aux.get(task, {}) if isinstance(aux, dict) else {}\n',
                 '    aux = config.get("auxiliary", {}) if isinstance(config, dict) else {}\n'
-                '    if not isinstance(aux, dict):\n'
-                '        return {}\n'
-                '    default_config = aux.get("default", {})\n'
-                '    default_config = default_config if isinstance(default_config, dict) else {}\n'
-                '    task_config = aux.get(task, {}) if isinstance(aux, dict) else {}\n'
-                '    task_config = task_config if isinstance(task_config, dict) else {}\n'
-                '    return {**default_config, **task_config}\n',
+                '    # Fox patch: layer auxiliary.default underneath task-specific config\n'
+                '    if isinstance(aux, dict):\n'
+                '        _default_config = aux.get("default", {})\n'
+                '        if isinstance(_default_config, dict) and _default_config:\n'
+                '            _task_raw = aux.get(task, {}) if isinstance(aux, dict) else {}\n'
+                '            _task_raw = _task_raw if isinstance(_task_raw, dict) else {}\n'
+                '            task_config = {**_default_config, **_task_raw}\n'
+                '        else:\n'
+                '            task_config = aux.get(task, {}) if isinstance(aux, dict) else {}\n'
+                '    else:\n'
+                '        task_config = {}\n',
             ),
         ],
         sentinel="_fox_patched_auxiliary_default_fallback",
