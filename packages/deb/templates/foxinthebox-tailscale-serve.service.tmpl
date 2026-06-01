@@ -1,0 +1,25 @@
+[Unit]
+Description=Fox in the Box — Tailscale Serve setup
+After=foxinthebox.service tailscaled.service
+Wants=foxinthebox.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/bash -c '\
+  for i in $(seq 1 120); do \
+    curl -fsS --connect-timeout 2 --max-time 6 http://127.0.0.1:8787/health >/dev/null 2>&1 && break; \
+    sleep 2; \
+  done; \
+  tailscale set --operator=foxinthebox 2>/dev/null || true; \
+  for i in $(seq 1 450); do \
+    if tailscale status --json 2>/dev/null | python3 -c "import json,sys; sys.exit(0 if json.load(sys.stdin).get(\"BackendState\")==\"Running\" else 1)" 2>/dev/null; then \
+      tailscale serve --bg 8787 2>/dev/null && echo "[tailscale-serve] Configured (https -> localhost:8787)." || true; \
+      exit 0; \
+    fi; \
+    sleep 2; \
+  done; \
+  echo "[tailscale-serve] No Running backend within timeout — OK for port-only."'
+
+[Install]
+WantedBy=foxinthebox.service

@@ -106,7 +106,7 @@ jobs:
 
   release:
     name: Create GitHub Release
-    needs: [wait-for-container, wait-for-electron]
+    needs: [wait-for-container, wait-for-electron, deb-smoke-test]
     runs-on: ubuntu-latest
 
     permissions:
@@ -226,6 +226,13 @@ jobs:
           name: fox-macos
           path: release-artifacts/macos
 
+      - name: Download .deb artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: deb-*
+          path: release-artifacts/deb
+          merge-multiple: true
+
       - name: Extract release notes from CHANGELOG
         id: changelog
         run: |
@@ -249,5 +256,6 @@ jobs:
             release-artifacts/windows/*.exe
             release-artifacts/macos/*.dmg
             release-artifacts/macos/*.zip
+            release-artifacts/deb/*.deb
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

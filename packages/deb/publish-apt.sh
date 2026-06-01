@@ -27,25 +27,18 @@ _die() { echo "[publish-apt] ERROR: $*" >&2; exit 1; }
 
 # ── 1. Install tools ──────────────────────────────────────────────────────────
 _log "Installing tools..."
-sudo apt-get install -y -q reprepro gpg
-if ! command -v rclone &>/dev/null; then
-    curl -fsSL https://rclone.org/install.sh | sudo bash
-fi
+sudo apt-get install -y -q reprepro gpg rclone
 
 # ── 2. Import GPG key ─────────────────────────────────────────────────────────
 _log "Importing GPG key..."
 echo "$GPG_PRIVATE_KEY" | gpg --batch --import
 
-# ── 3. Configure rclone for R2 ───────────────────────────────────────────────
-mkdir -p ~/.config/rclone
-cat > ~/.config/rclone/rclone.conf << EOF
-[r2]
-type = s3
-provider = Cloudflare
-access_key_id = ${R2_ACCESS_KEY}
-secret_access_key = ${R2_SECRET_KEY}
-endpoint = ${ENDPOINT}
-EOF
+# ── 3. Configure rclone for R2 (env vars — no credentials written to disk) ───
+export RCLONE_CONFIG_R2_TYPE=s3
+export RCLONE_CONFIG_R2_PROVIDER=Cloudflare
+export RCLONE_CONFIG_R2_ACCESS_KEY_ID="$R2_ACCESS_KEY"
+export RCLONE_CONFIG_R2_SECRET_ACCESS_KEY="$R2_SECRET_KEY"
+export RCLONE_CONFIG_R2_ENDPOINT="$ENDPOINT"
 
 # ── 4. Pull current apt repo state ───────────────────────────────────────────
 _log "Pulling current repo state from R2..."

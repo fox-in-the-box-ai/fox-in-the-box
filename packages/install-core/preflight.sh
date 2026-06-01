@@ -112,59 +112,10 @@ sed -i "s|__BRAVE_API_KEY__|${BRAVE_API_KEY:-}|g" "$SUPERVISORD_CONF"
 mkdir -p /run/foxinthebox
 chmod 750 /run/foxinthebox
 
-# ── 10. Tailscale Serve (background — waits for WebUI and Tailscale login) ────
-# Mirrors the background subshell in entrypoint.sh.
-(
-    sleep 10
-    _health_dead=240
-    _hi=0
-    while [ "$_hi" -lt "$_health_dead" ]; do
-        if curl -fsS --connect-timeout 2 --max-time 6 "http://127.0.0.1:8787/health" >/dev/null 2>&1; then
-            _log "WebUI healthy — configuring Tailscale Serve..."
-            break
-        fi
-        _hi=$((_hi + 2))
-        sleep 2
-    done
-    if [ "$_hi" -ge "$_health_dead" ]; then
-        _log "Tailscale Serve helper: WebUI not ready within ${_health_dead}s — skipping."
-        exit 0
-    fi
-
-    # Grant operator access to foxinthebox user
-    _opi=0
-    while [ "$_opi" -lt 60 ]; do
-        if tailscale set --operator=foxinthebox 2>/dev/null; then
-            _log "Granted foxinthebox tailscale operator access."
-            break
-        fi
-        _opi=$((_opi + 2))
-        sleep 2
-    done
-
-    # Wait for Tailscale login (up to ~15 min)
-    _ts_iters=450
-    _ti=0
-    while [ "$_ti" -lt "$_ts_iters" ]; do
-        if tailscale status --json 2>/dev/null | python3 -c "
-import json, sys
-try:
-    d = json.load(sys.stdin)
-    sys.exit(0 if d.get('BackendState') == 'Running' else 1)
-except Exception:
-    sys.exit(1)
-" 2>/dev/null; then
-            if tailscale serve --bg 8787 2>/dev/null; then
-                _log "Tailscale Serve configured (https -> localhost:8787)."
-            else
-                _warn "tailscale serve failed — may need HTTPS enabled at https://login.tailscale.com/admin/dns."
-            fi
-            exit 0
-        fi
-        _ti=$((_ti + 1))
-        sleep 2
-    done
-    _log "Tailscale Serve not configured (no Running backend within timeout — OK for port-only)."
-) &
+# ── 10. Tailscale Serve ──────────────────────────────────────────────────────
+# Moved to foxinthebox-tailscale-serve.service (ExecStartPost= in the main
+# unit). Running a background subshell in ExecStartPre= is unsafe — systemd
+# may reap it when the pre-start phase completes.
+# See: packages/deb/templates/foxinthebox-tailscale-serve.service.tmpl
 
 _log "Preflight complete."
