@@ -33,6 +33,77 @@ jobs:
       # dependency on tag-name patterns (Azure FICs don't actually wildcard).
       signing-environment: release
 
+  # ── .deb build (amd64 + arm64, native runners) ───────────────────────────────
+  build-deb:
+    name: Build .deb (${{ matrix.arch }})
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
+    runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-22.04-arm' || 'ubuntu-22.04' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install dpkg-dev
+        run: sudo apt-get install -y -q dpkg-dev
+
+      - name: Build .deb
+        run: bash packages/deb/build.sh ${{ matrix.arch }}
+
+      - name: Upload .deb artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: deb-${{ matrix.arch }}
+          path: dist/*.deb
+          if-no-files-found: error
+
+  # ── .deb smoke test ───────────────────────────────────────────────────────────
+  deb-smoke-test:
+    name: .deb smoke test (amd64)
+    needs: build-deb
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download amd64 .deb
+        uses: actions/download-artifact@v4
+        with:
+          name: deb-amd64
+          path: dist/
+
+      - name: Run smoke test
+        run: bash tests/container/test_deb_install.sh
+
+  # ── Publish to apt.foxinthebox.ai ─────────────────────────────────────────────
+  publish-apt:
+    name: Publish to apt.foxinthebox.ai
+    needs: [build-deb, deb-smoke-test]
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download amd64 .deb
+        uses: actions/download-artifact@v4
+        with:
+          name: deb-amd64
+          path: dist/
+
+      - name: Download arm64 .deb
+        uses: actions/download-artifact@v4
+        with:
+          name: deb-arm64
+          path: dist/
+
+      - name: Publish to apt repo
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.APT_GPG_PRIVATE_KEY }}
+          GPG_KEY_ID:      ${{ secrets.APT_GPG_KEY_ID }}
+          R2_ACCOUNT_ID:   ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY:   ${{ secrets.R2_ACCESS_KEY }}
+          R2_SECRET_KEY:   ${{ secrets.R2_SECRET_KEY }}
+        run: bash packages/deb/publish-apt.sh
+
   release:
     name: Create GitHub Release
     needs: [wait-for-container, wait-for-electron]

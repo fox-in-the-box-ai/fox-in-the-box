@@ -1,0 +1,17 @@
+#!/bin/bash
+set -e
+case "$1" in
+    purge)
+        rm -rf /opt/foxinthebox
+        rm -f /lib/systemd/system/foxinthebox.service
+        rm -f /lib/systemd/system/foxinthebox-updater.service
+        rm -f /lib/systemd/system/foxinthebox-updater.path
+        if command -v systemctl &>/dev/null; then
+            systemctl daemon-reload || true
+        fi
+        deluser --system foxinthebox 2>/dev/null || true
+        delgroup foxinthebox 2>/dev/null || true
+        echo "Fox in the Box removed."
+        echo "Your data was NOT deleted. To also remove it: rm -rf ~/.foxinthebox"
+        ;;
+esac
