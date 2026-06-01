@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
-# test_deb_install.sh — Smoke test: build .deb, install in ubuntu:22.04, assert /health
+# test_deb_install.sh — Smoke test: install .deb in ubuntu:22.04, verify package integrity
+#
+# Scope: verifies dpkg install succeeds, dependencies resolve, and installed
+# files are present. Does NOT verify service start — the test container has no
+# systemd, so foxinthebox.service cannot run. Full service testing requires a
+# VM or bare-metal machine.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -14,17 +19,26 @@ echo "[test-deb] Built: $DEB"
 echo "[test-deb] Installing in ubuntu:22.04 container..."
 docker run --rm \
     -v "$REPO_ROOT/dist:/debs:ro" \
-    ubuntu:22.04 bash -c "
+    ubuntu:22.04 bash -c '
         set -euo pipefail
         export DEBIAN_FRONTEND=noninteractive
         apt-get update -q
         apt-get install -y -q /debs/foxinthebox_*_amd64.deb
-        echo 'Install complete. Waiting for service...'
-        sleep 20
-        curl -sf http://localhost:8787/health && echo 'PASS: health check ok' || {
-            echo 'FAIL: health check failed'
-            exit 1
-        }
-    "
+
+        echo "--- Verify installed files ---"
+        [ -f /opt/foxinthebox/install-core.sh ] || { echo "FAIL: install-core.sh missing"; exit 1; }
+        [ -f /opt/foxinthebox/version.txt ]     || { echo "FAIL: version.txt missing"; exit 1; }
+        [ -d /opt/foxinthebox/fox-overlay ]      || { echo "FAIL: fox-overlay missing"; exit 1; }
+        [ -f /opt/foxinthebox/scripts/preflight.sh ] || { echo "FAIL: preflight.sh missing"; exit 1; }
+        [ -f /lib/systemd/system/foxinthebox.service ] || { echo "FAIL: systemd unit missing"; exit 1; }
+
+        echo "--- Verify foxinthebox user ---"
+        id foxinthebox || { echo "FAIL: foxinthebox user not created"; exit 1; }
+
+        echo "--- Verify supervisor available ---"
+        command -v supervisord || { echo "FAIL: supervisord not found"; exit 1; }
+
+        echo "PASS: package installed, files present, user created"
+    '
 
 echo "[test-deb] PASS"
