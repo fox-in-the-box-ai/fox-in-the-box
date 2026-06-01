@@ -17,7 +17,7 @@ hermes_agent_url = "https://github.com/NousResearch/hermes-agent"
 
 [meta]
 pinned_at = "2026-06-01"
-pinned_in_pr = ""
+pinned_in_pr = "fox-in-the-box-ai/fox-in-the-box#458"
 phase = "option-b-clean-bump"
 notes = "Clean Option B bump. All 8 webui patches apply without refresh. Agent bumped from v2026.5.16 to v2026.5.29.2 (first agent bump since v0.6.3). check-overlay-basis.sh returned 0."
 
