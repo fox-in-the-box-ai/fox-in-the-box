@@ -150,9 +150,9 @@ jobs:
         working-directory: qa/playwright
         run: pnpm install --frozen-lockfile=false
 
-      - name: Install Playwright browsers (${{ matrix.browser }})
+      - name: Install Playwright browsers (chromium + ${{ matrix.browser }})
         working-directory: qa/playwright
-        run: pnpm exec playwright install --with-deps ${{ matrix.browser }}
+        run: pnpm exec playwright install --with-deps chromium ${{ matrix.browser }}
 
       - name: Pull :stable container
         run: docker pull ghcr.io/fox-in-the-box-ai/cloud:stable
