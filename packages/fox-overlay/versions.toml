@@ -10,20 +10,21 @@
 # for shell-friendly grepping.
 
 [upstream]
-hermes_webui_tag = "v0.51.145"
+hermes_webui_tag = "v0.51.185"
 hermes_webui_url = "https://github.com/nesquena/hermes-webui"
-hermes_agent_tag = "v2026.5.16"
+hermes_agent_tag = "v2026.5.29.2"
 hermes_agent_url = "https://github.com/NousResearch/hermes-agent"
 
 [meta]
-pinned_at = "2026-05-27"
-pinned_in_pr = "fox-in-the-box-ai/fox-in-the-box#439"
-phase = "patch-refresh-bump"
-notes = "Patch refresh bump. Patches 001, 002, 003 refreshed for upstream v0.51.145 (CSP block added to server.py, /api/shutdown route added to routes.py, BrokenPipeError catch blocks). Patches 004-008 applied cleanly without changes. Agent pin (v2026.5.16) unchanged."
+pinned_at = "2026-06-01"
+pinned_in_pr = ""
+phase = "option-b-clean-bump"
+notes = "Clean Option B bump. All 8 webui patches apply without refresh. Agent bumped from v2026.5.16 to v2026.5.29.2 (first agent bump since v0.6.3). check-overlay-basis.sh returned 0."
 
 [history]
 prior_pins = [
   # newest first
+  "webui=v0.51.145, agent=v2026.5.16 — patch refresh bump #439 (2026-05-27)",
   "webui=v0.51.124, agent=v2026.5.16 — fourth Option B bump #367 (2026-05-24)",
   "webui=v0.51.118, agent=v2026.5.16 — third Option B bump #349 (2026-05-23)",
   "webui=v0.51.107, agent=v2026.5.16 — second Option B bump #296 (2026-05-22)",
