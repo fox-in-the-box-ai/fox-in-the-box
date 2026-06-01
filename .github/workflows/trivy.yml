@@ -28,7 +28,7 @@ jobs:
         run: docker pull ghcr.io/fox-in-the-box-ai/cloud:stable
 
       - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ghcr.io/fox-in-the-box-ai/cloud:stable
           format: sarif
@@ -44,7 +44,7 @@ jobs:
           category: trivy-container
 
       - name: Trivy summary (table)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ghcr.io/fox-in-the-box-ai/cloud:stable
           format: table
