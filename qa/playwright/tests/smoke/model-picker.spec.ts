@@ -85,7 +85,8 @@ test.describe('Phase 1 — #337 Ollama tile always present (v0.7.18+)', () => {
     const data = await res.json();
 
     const ollamaGroup = data.groups.find(
-      (g: { provider_id?: string }) => g.provider_id === 'ollama',
+      (g: { provider_id?: string; provider?: string }) =>
+        g.provider_id === 'ollama' || (g.provider || '').toLowerCase() === 'ollama',
     );
     expect(ollamaGroup, 'Ollama group missing — see prior test').toBeDefined();
 
