@@ -234,6 +234,8 @@ Most users start with **OpenRouter** — one key, hundreds of models. Add more f
 | Tailscale | Optional VPN tunneling and automatic HTTPS |
 | supervisord | Process management inside the container |
 
+> **Developer tools.** The `forks/figma-mcp` submodule is a [Figma MCP server](https://github.com/nicekid1/Figma-Context-MCP) fork used for design-to-code workflows during development. It is not part of the runtime — it's a developer tool for extracting Figma context into code. Initialize it separately if needed: `git submodule update --init forks/figma-mcp`.
+
 **Container vs. data:** the published Docker image bundles Hermes agent and webui source (from `forks/` submodules) at **build** time. The container's `/data` volume holds your config, databases, logs, and Tailscale state. Updating Hermes for end users means pulling a newer image, not re-cloning at runtime.
 
 **Tech stack:** Electron 28 (desktop wrapper) · Python 3.11 (Hermes Agent + WebUI) · Qdrant (vector DB) · mem0 (memory layer) · supervisord (process management) · Tailscale (remote access) · Docker (packaging). Hermes WebUI is intentionally vanilla — Python `http.server` + plain JavaScript, no SPA framework — so the chat UI loads instantly on any device.
