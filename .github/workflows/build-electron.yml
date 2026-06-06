@@ -48,7 +48,7 @@ jobs:
 
     steps:
       - name: Checkout (with submodules)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           submodules: recursive
 
@@ -62,12 +62,12 @@ jobs:
           Write-Host "Long paths enabled"
 
       - name: Setup pnpm 9
-        uses: pnpm/action-setup@v3
+        uses: pnpm/action-setup@v6
         with:
           version: 9
 
       - name: Setup Node.js 20
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: "20"
 
@@ -108,7 +108,7 @@ jobs:
       # ship to a release.
       - name: Azure login (OIDC)
         if: runner.os == 'Windows' && inputs.signing-environment != ''
-        uses: azure/login@v2
+        uses: azure/login@v3
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -119,7 +119,7 @@ jobs:
       # gate as the login step — only signs when bound to the signing environment.
       - name: Sign Windows installer (Azure Trusted Signing)
         if: runner.os == 'Windows' && inputs.signing-environment != ''
-        uses: azure/artifact-signing-action@v1
+        uses: azure/artifact-signing-action@v2
         with:
           azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
@@ -133,7 +133,7 @@ jobs:
           timestamp-digest: SHA256
 
       - name: Upload build artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact-name }}
           path: ${{ matrix.artifact-path }}

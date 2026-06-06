@@ -29,13 +29,13 @@ jobs:
 
     steps:
       - name: Checkout PR (with submodules)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           submodules: recursive
           fetch-depth: 1
 
       - name: Set up Python (for bootstrap import smoke + unit tests)
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.12'
 

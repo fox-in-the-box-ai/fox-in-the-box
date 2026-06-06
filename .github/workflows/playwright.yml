@@ -39,15 +39,15 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           submodules: false
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: '20'
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         # pnpm version comes from root package.json's "packageManager" field
         # (pnpm@9.0.0). action-setup@v4 rejects having both `version:` here
         # AND `packageManager:` in package.json, so we omit `version:` here.
@@ -58,7 +58,7 @@ jobs:
 
       - name: Cache Playwright browsers
         id: pw-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.cache/ms-playwright
           key: pw-browsers-${{ runner.os }}-${{ hashFiles('qa/playwright/package.json') }}
@@ -102,7 +102,7 @@ jobs:
 
       - name: Upload report on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-report-smoke
           path: qa/playwright/playwright-report/
@@ -133,15 +133,15 @@ jobs:
         shard: [1, 2, 3, 4]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           submodules: false
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: '20'
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         # pnpm version comes from root package.json's "packageManager" field
         # (pnpm@9.0.0). action-setup@v4 rejects having both `version:` here
         # AND `packageManager:` in package.json, so we omit `version:` here.
@@ -187,7 +187,7 @@ jobs:
 
       - name: Upload report on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-report-${{ matrix.browser }}-shard${{ matrix.shard }}
           path: qa/playwright/playwright-report/
@@ -213,13 +213,13 @@ jobs:
         os: [macos-latest, windows-latest]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: '20'
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         # pnpm version comes from root package.json's "packageManager" field
         # (pnpm@9.0.0). action-setup@v4 rejects having both `version:` here
         # AND `packageManager:` in package.json, so we omit `version:` here.
