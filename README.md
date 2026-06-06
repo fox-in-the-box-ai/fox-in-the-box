@@ -4,6 +4,8 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)](https://github.com/fox-in-the-box-ai/fox-in-the-box/releases)
 [![Release](https://img.shields.io/github/v/release/fox-in-the-box-ai/fox-in-the-box)](https://github.com/fox-in-the-box-ai/fox-in-the-box/releases/latest)
+[![Playwright](https://github.com/fox-in-the-box-ai/fox-in-the-box/actions/workflows/playwright.yml/badge.svg)](https://github.com/fox-in-the-box-ai/fox-in-the-box/actions/workflows/playwright.yml)
+[![CodeQL](https://github.com/fox-in-the-box-ai/fox-in-the-box/actions/workflows/codeql.yml/badge.svg)](https://github.com/fox-in-the-box-ai/fox-in-the-box/actions/workflows/codeql.yml)
 
 > A private AI assistant that runs on your computer. No subscriptions, no cloud lock-in, no data leaving your machine without your say-so.
 

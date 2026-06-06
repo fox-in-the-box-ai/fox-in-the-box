@@ -1,0 +1,34 @@
+version: 2
+
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: npm
+    directory: /packages/electron
+    schedule:
+      interval: weekly
+    groups:
+      electron-deps:
+        patterns: ["*"]
+
+  - package-ecosystem: npm
+    directory: /qa/playwright
+    schedule:
+      interval: weekly
+    groups:
+      playwright-deps:
+        patterns: ["*"]
+
+  - package-ecosystem: pip
+    directory: /packages/fox-overlay
+    schedule:
+      interval: weekly
+    groups:
+      overlay-deps:
+        patterns: ["*"]
