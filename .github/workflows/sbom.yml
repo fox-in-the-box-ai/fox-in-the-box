@@ -1,0 +1,24 @@
+name: SBOM
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sbom:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0
+        with:
+          path: .
+          format: cyclonedx-json
+          output-file: sbom.cdx.json
+      - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
+        with:
+          files: sbom.cdx.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
