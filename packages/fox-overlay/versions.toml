@@ -10,20 +10,21 @@
 # for shell-friendly grepping.
 
 [upstream]
-hermes_webui_tag = "v0.51.185"
+hermes_webui_tag = "v0.51.195"
 hermes_webui_url = "https://github.com/nesquena/hermes-webui"
 hermes_agent_tag = "v2026.5.29.2"
 hermes_agent_url = "https://github.com/NousResearch/hermes-agent"
 
 [meta]
-pinned_at = "2026-06-01"
-pinned_in_pr = "fox-in-the-box-ai/fox-in-the-box#458"
+pinned_at = "2026-06-07"
+pinned_in_pr = "fox-in-the-box-ai/fox-in-the-box#485"
 phase = "option-b-clean-bump"
-notes = "Clean Option B bump. All 8 webui patches apply without refresh. Agent bumped from v2026.5.16 to v2026.5.29.2 (first agent bump since v0.6.3). check-overlay-basis.sh returned 0."
+notes = "Clean Option B bump. All 8 webui patches apply without refresh. Agent unchanged at v2026.5.29.2. check-overlay-basis.sh returned 0."
 
 [history]
 prior_pins = [
   # newest first
+  "webui=v0.51.185, agent=v2026.5.29.2 — clean Option B bump #458 (2026-06-01)",
   "webui=v0.51.145, agent=v2026.5.16 — patch refresh bump #439 (2026-05-27)",
   "webui=v0.51.124, agent=v2026.5.16 — fourth Option B bump #367 (2026-05-24)",
   "webui=v0.51.118, agent=v2026.5.16 — third Option B bump #349 (2026-05-23)",
