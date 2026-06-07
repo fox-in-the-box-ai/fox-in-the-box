@@ -117,12 +117,12 @@ jobs:
       # gate as the login step — only signs when bound to the signing environment.
       - name: Sign Windows installer (Azure Trusted Signing)
         if: runner.os == 'Windows' && inputs.signing-environment != ''
-        uses: azure/artifact-signing-action@b443cf8ea4124818d2ea9f043cba29fc3ec47b16 # v1
+        uses: azure/artifact-signing-action@c0ae2c1d0c1847ab81ac0ab8521bee597cfedd30 # v2
         with:
           azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
           endpoint: https://eus.codesigning.azure.net/
-          trusted-signing-account-name: Icemint
+          signing-account-name: Icemint
           certificate-profile-name: fitb-exe-signing
           files-folder: packages/electron/dist
           files-folder-filter: exe
