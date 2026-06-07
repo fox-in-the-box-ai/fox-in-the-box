@@ -20,4 +20,5 @@ from . import models_download  # noqa: F401  -- registers /api/local-models (bar
 from . import hostname  # noqa: F401  -- registers /api/settings/hostname (bare); imports _write_env_key from onboarding
 from . import readyz  # noqa: F401  -- registers GET /readyz (bare); always auth-exempt per INSTANCE_CONTRACT §4.5
 from . import version  # noqa: F401  -- registers GET /version (bare); auth-gated in managed mode per INSTANCE_CONTRACT §4.5
+from . import capabilities  # noqa: F401  -- registers GET /capabilities (bare); auth-gated in managed mode per INSTANCE_CONTRACT §4.5
 from . import test_hooks  # noqa: F401  -- (v0.7.7 #264) registers POST /test/* ONLY when FITB_TEST_MODE=1; production builds = no-op
