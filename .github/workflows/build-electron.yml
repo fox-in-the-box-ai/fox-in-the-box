@@ -112,11 +112,27 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      # Sign the NSIS installer in place using Azure Trusted Signing (Icemint LLC
-      # certificate profile). Auth comes from the azure/login step above. Same
-      # gate as the login step — only signs when bound to the signing environment.
-      - name: Sign Windows installer (Azure Trusted Signing)
+      - name: Pre-sign diagnostics
         if: runner.os == 'Windows' && inputs.signing-environment != ''
+        shell: pwsh
+        run: |
+          Write-Host "::group::Azure identity"
+          az account show --query '{subscriptionId:id, tenantId:tenantId, state:state}' -o json
+          Write-Host "::endgroup::"
+          Write-Host "::group::Signing account"
+          az trustedsigning show --name Icemint --resource-group Icemint --query '{name:name, sku:sku.name, provisioningState:provisioningState, location:location}' -o json 2>&1 || Write-Host "az trustedsigning CLI extension not available"
+          Write-Host "::endgroup::"
+          Write-Host "::group::Certificate profile"
+          az trustedsigning certificate-profile show --account-name Icemint --resource-group Icemint --name fitb-exe-signing --query '{status:status, profileType:profileType, certificates:certificates[].{thumbprint:thumbprint, status:status, notAfter:notAfter}}' -o json 2>&1 || Write-Host "az trustedsigning CLI extension not available"
+          Write-Host "::endgroup::"
+          Write-Host "::group::Files to sign"
+          Get-ChildItem packages/electron/dist -Filter *.exe | ForEach-Object { "$($_.Name)  $($_.Length) bytes  SHA256=$(Get-FileHash $_.FullName -Algorithm SHA256 | Select-Object -ExpandProperty Hash)" }
+          Write-Host "::endgroup::"
+
+      - name: Sign Windows installer (Azure Trusted Signing)
+        id: sign-windows
+        if: runner.os == 'Windows' && inputs.signing-environment != ''
+        continue-on-error: true
         uses: azure/artifact-signing-action@c0ae2c1d0c1847ab81ac0ab8521bee597cfedd30 # v2
         with:
           azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -129,6 +145,19 @@ jobs:
           file-digest: SHA256
           timestamp-rfc3161: http://timestamp.acs.microsoft.com
           timestamp-digest: SHA256
+
+      - name: Post-sign diagnostics
+        if: runner.os == 'Windows' && inputs.signing-environment != '' && steps.sign-windows.outcome != 'success'
+        shell: pwsh
+        run: |
+          Write-Host "::warning::Signing step outcome: ${{ steps.sign-windows.outcome }}"
+          Write-Host "::group::File state after signing attempt"
+          Get-ChildItem packages/electron/dist -Filter *.exe | ForEach-Object {
+            $sig = Get-AuthenticodeSignature $_.FullName
+            Write-Host "$($_.Name)  Authenticode=$($sig.Status)  Signer=$($sig.SignerCertificate.Subject)"
+          }
+          Write-Host "::endgroup::"
+          Write-Host "::warning::The .exe will be uploaded UNSIGNED. See https://github.com/${{ github.repository }}/issues/494"
 
       - name: Upload build artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
