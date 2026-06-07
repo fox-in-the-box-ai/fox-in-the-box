@@ -77,6 +77,32 @@ See [AGENTS.md](AGENTS.md) for the full development workflow used by coding agen
 
 ---
 
+## Developer Certificate of Origin (DCO)
+
+All contributions must be signed off to certify you have the right to submit
+them under the project's open-source license. Add a `Signed-off-by` line to
+every commit:
+
+```bash
+git commit -s -m "feat: add widget support"
+```
+
+This adds a trailer like:
+
+```
+Signed-off-by: Jane Doe <jane@example.com>
+```
+
+By signing off, you agree to the [DCO](https://developercertificate.org/).
+CI checks for this trailer on every PR. If you forget, amend and force-push:
+
+```bash
+git commit --amend -s
+git push --force-with-lease
+```
+
+---
+
 ## Coding standards
 
 - Python: match the style of the existing codebase in `forks/hermes-webui/`
