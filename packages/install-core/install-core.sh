@@ -104,7 +104,8 @@ _read_versions_toml() {
 }
 
 _sync_repo() {
-    local name="$1" url="$2" tag="$3" dest="$FITB_APP_DIR/$name"
+    local name="$1" url="$2" tag="$3"
+    local dest="$FITB_APP_DIR/$name"
     if [ -d "$dest/.git" ]; then
         _log "$name exists — fetching tag $tag..."
         git -C "$dest" fetch --depth=1 origin "refs/tags/$tag:refs/tags/$tag" 2>/dev/null || \
