@@ -39,4 +39,6 @@ def apply_all() -> None:
     # guard natively. See git history for the dropped patches.
     from . import streaming
     streaming.apply()
-    _log.warning("[fox-overlay] webui_patches.apply_all() complete (%d patch modules)", 2)
+    from . import auth
+    auth.apply()
+    _log.warning("[fox-overlay] webui_patches.apply_all() complete (%d patch modules)", 3)
