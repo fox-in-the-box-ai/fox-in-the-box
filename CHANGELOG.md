@@ -7,6 +7,37 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.7.45] - 2026-06-07
+
+### Added
+- Bare-metal `.deb` package with apt repository and CI. Supports both amd64 and arm64 Debian/Ubuntu installs with systemd service management and automated updates.
+- SBOM (CycloneDX) generation attached to GitHub Releases.
+- CODE_OF_CONDUCT.md (Contributor Covenant v2.1).
+- DCO (Developer Certificate of Origin) section in CONTRIBUTING.md.
+- Star history badge in README.
+
+### Changed
+- Upstream bump: hermes-webui v0.51.145 → v0.51.293 (148 upstream releases absorbed), hermes-agent v2026.5.16 → v2026.6.5.
+- All GitHub Actions pinned by commit SHA for supply-chain hardening — mutable version tags replaced with immutable SHAs across 12 workflow files.
+- LICENSE copyright updated to Vulpy Inc. (operating as Fox in the Box).
+- Expanded SECURITY.md with vulnerability disclosure process.
+
+### Fixed
+- Docker build: install script now prefers `requirements.txt` over bare `pyproject.toml` for hermes-webui, fixing build failure introduced by upstream v0.51.293 adding a tooling-only `pyproject.toml` with no `[build-system]` section.
+- Patch 007 (colon-split fix) refreshed for upstream v0.51.293 line numbers. All 8 webui patches apply cleanly.
+- Agent overlay anchor refreshed for v2026.5.29.2.
+- Streaming patch substitution #1 anchor refreshed for v0.51.145.
+- `.deb` package: resolved 6 code review warnings, added apt repo setup guide.
+- Playwright CI: fixed nightly full matrix model-picker test drift and missing Chromium.
+- CI: pnpm/action-setup v4 version conflict resolved — explicit `version: 9` dropped in favor of `packageManager` field in package.json.
+
+### Security
+- CodeQL code scanning and Dependabot alerts enabled.
+- GitHub Actions pinned by SHA across all workflows.
+- SBOM attestation added to release artifacts.
+
+---
+
 ## [0.7.44] - 2026-05-27
 
 ### Fixed

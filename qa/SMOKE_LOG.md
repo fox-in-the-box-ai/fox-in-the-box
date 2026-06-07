@@ -25,6 +25,20 @@ Skipped sections are OK as long as they're explicitly noted with reason. Empty e
 
 ---
 
+## v0.7.45 — 2026-06-07 (DV — upstream v0.51.293 bump + supply-chain + governance)
+
+- [x] (a) Upstream bump: hermes-webui v0.51.185→v0.51.293, hermes-agent v2026.5.29.2→v2026.6.5 — submodule pointers verified against versions.toml
+- [x] (b) Patch 007 (colon-split fix) refreshed for v0.51.293 line numbers — all 8 webui patches apply cleanly (`check-overlay-basis.sh` returns 0)
+- [x] (c) Docker build: install script `requirements.txt` preference fix verified — amd64 and arm64 Build & Push CI green
+- [x] (d) GitHub Actions SHA-pinned: 12 workflow files updated, Electron smoke (macOS/Windows) green after pnpm version conflict fix
+- [x] (e) SBOM workflow: CycloneDX generation configured for release events
+- [x] (f) Governance: LICENSE copyright Vulpy Inc., DCO in CONTRIBUTING.md, CODE_OF_CONDUCT.md
+- [x] (g) All CI checks green: CodeQL, Trivy, container smoke, option-b-diff-guard, Electron smoke
+- [ ] (h) **POST-RELEASE:** On-device Docker container start with v0.51.293 upstream — verify model picker + Ollama routing intact
+- [ ] (i) **POST-RELEASE:** .deb package install + apt repo update cycle on Debian/Ubuntu
+
+---
+
 ## v0.7.44 — 2026-05-27 (DV — cleanup + upstream drift + installer fix)
 
 - [x] (a) Dead code removed: streaming.py substitution 0 (FITB#278 keyless fallback) deleted — `_is_local_server_provider("custom")` returned False, never fired
