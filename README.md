@@ -6,6 +6,7 @@
 [![Release](https://img.shields.io/github/v/release/fox-in-the-box-ai/fox-in-the-box)](https://github.com/fox-in-the-box-ai/fox-in-the-box/releases/latest)
 [![Playwright](https://github.com/fox-in-the-box-ai/fox-in-the-box/actions/workflows/playwright.yml/badge.svg)](https://github.com/fox-in-the-box-ai/fox-in-the-box/actions/workflows/playwright.yml)
 [![CodeQL](https://github.com/fox-in-the-box-ai/fox-in-the-box/actions/workflows/codeql.yml/badge.svg)](https://github.com/fox-in-the-box-ai/fox-in-the-box/actions/workflows/codeql.yml)
+[![Star History](https://img.shields.io/github/stars/fox-in-the-box-ai/fox-in-the-box?style=flat&label=Stars)](https://star-history.com/#fox-in-the-box-ai/fox-in-the-box&Date)
 
 > A private AI assistant that runs on your computer. No subscriptions, no cloud lock-in, no data leaving your machine without your say-so.
 
@@ -251,6 +252,7 @@ See **[docs/RESET.md](docs/RESET.md)** for the full reset procedure (Windows and
 ## Documentation
 
 - [CHANGELOG.md](CHANGELOG.md) — release history
+- [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) — community standards
 - [CONTRIBUTING.md](CONTRIBUTING.md) — how to contribute
 - [SECURITY.md](SECURITY.md) — vulnerability reporting
 - [docs/DEV_MODE.md](docs/DEV_MODE.md) — local development with bind-mounted submodules
