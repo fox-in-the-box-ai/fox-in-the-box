@@ -29,10 +29,10 @@ def _stub_upstream():
     api.auth = auth
     api.config = config
     api.helpers = helpers
-    sys.modules.setdefault("api", api)
-    sys.modules.setdefault("api.auth", auth)
-    sys.modules.setdefault("api.config", config)
-    sys.modules.setdefault("api.helpers", helpers)
+    sys.modules["api"] = api
+    sys.modules["api.auth"] = auth
+    sys.modules["api.config"] = config
+    sys.modules["api.helpers"] = helpers
 
 
 @pytest.fixture(autouse=True)
