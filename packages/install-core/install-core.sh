@@ -268,14 +268,14 @@ _pip_install() {
         --quiet --no-cache-dir
 
     _log "Installing hermes-webui..."
-    if [ -f "$FITB_APP_DIR/hermes-webui/pyproject.toml" ] || \
-       [ -f "$FITB_APP_DIR/hermes-webui/setup.py" ]; then
-        "$pip_cmd" install -e "$FITB_APP_DIR/hermes-webui" --quiet --no-cache-dir
-    elif [ -f "$FITB_APP_DIR/hermes-webui/requirements.txt" ]; then
+    if [ -f "$FITB_APP_DIR/hermes-webui/requirements.txt" ]; then
         "$pip_cmd" install -r "$FITB_APP_DIR/hermes-webui/requirements.txt" \
             --quiet --no-cache-dir
+    elif [ -f "$FITB_APP_DIR/hermes-webui/setup.py" ] || \
+         grep -q '^\[build-system\]' "$FITB_APP_DIR/hermes-webui/pyproject.toml" 2>/dev/null; then
+        "$pip_cmd" install -e "$FITB_APP_DIR/hermes-webui" --quiet --no-cache-dir
     else
-        _die "hermes-webui has no pyproject.toml, setup.py, or requirements.txt"
+        _die "hermes-webui has no requirements.txt, setup.py, or installable pyproject.toml"
     fi
 
     _log "Installing fox-overlay..."
