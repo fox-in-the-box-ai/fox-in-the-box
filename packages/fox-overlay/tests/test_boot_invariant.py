@@ -97,13 +97,16 @@ def test_standalone_empty_secret_skips_check(monkeypatch):
     b._check_managed_mode_invariant()
 
 
-def test_api_auth_not_importable_warns(tmp_path, monkeypatch, caplog):
+def test_api_auth_not_importable_warns(monkeypatch, caplog):
     """If api.auth can't be imported, warn but don't crash."""
-    for name in list(sys.modules):
-        if name == "api" or name.startswith("api."):
-            del sys.modules[name]
     monkeypatch.setenv("FOX_PLANE_AUTH_SECRET", "test-secret")
     b = _reload_bootstrap(monkeypatch)
+
+    for name in list(sys.modules):
+        if name == "api" or name.startswith("api."):
+            monkeypatch.delitem(sys.modules, name, raising=False)
+    monkeypatch.setitem(sys.modules, "api", None)
+    monkeypatch.setitem(sys.modules, "api.auth", None)
 
     import logging
     with caplog.at_level(logging.WARNING, logger="fox_overlay.bootstrap"):
