@@ -18,7 +18,7 @@ bash /opt/foxinthebox/install-core.sh
 chown -R foxinthebox:foxinthebox /opt/foxinthebox
 
 # ── 4. Install and enable systemd units ──────────────────────────────────────
-if command -v systemctl &>/dev/null && systemctl is-system-running --quiet 2>/dev/null || true; then
+if command -v systemctl &>/dev/null && { systemctl is-system-running --quiet 2>/dev/null || true; }; then
     systemctl daemon-reload
     systemctl enable foxinthebox.service        || true
     systemctl enable foxinthebox-updater.path   || true
