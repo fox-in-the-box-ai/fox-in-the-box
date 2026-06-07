@@ -114,6 +114,7 @@ jobs:
 
       - name: Pre-sign diagnostics
         if: runner.os == 'Windows' && inputs.signing-environment != ''
+        continue-on-error: true
         shell: pwsh
         run: |
           Write-Host "::group::Azure identity"
@@ -148,6 +149,7 @@ jobs:
 
       - name: Post-sign diagnostics
         if: runner.os == 'Windows' && inputs.signing-environment != '' && steps.sign-windows.outcome != 'success'
+        continue-on-error: true
         shell: pwsh
         run: |
           Write-Host "::warning::Signing step outcome: ${{ steps.sign-windows.outcome }}"
