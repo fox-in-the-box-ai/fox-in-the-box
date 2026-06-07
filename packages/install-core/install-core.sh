@@ -255,8 +255,10 @@ _pip_install() {
         # Create an isolated venv so Fox doesn't pollute system Python
         local venv="$FITB_APP_DIR/venv"
         if [ ! -f "$venv/bin/pip" ]; then
-            _log "Creating Python venv at $venv..."
-            python3 -m venv "$venv"
+            local py_bin
+            py_bin="$(command -v python3.11 || command -v python3)"
+            _log "Creating Python venv at $venv (using $py_bin)..."
+            "$py_bin" -m venv "$venv"
         fi
         pip_cmd="$venv/bin/pip"
     else
