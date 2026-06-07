@@ -61,10 +61,8 @@ jobs:
             -Name "LongPathsEnabled" -Value 1 -PropertyType DWORD -Force | Out-Null
           Write-Host "Long paths enabled"
 
-      - name: Setup pnpm 9
+      - name: Setup pnpm
         uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
-        with:
-          version: 9
 
       - name: Setup Node.js 20
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
