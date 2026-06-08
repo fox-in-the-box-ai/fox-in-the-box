@@ -18,4 +18,5 @@ from . import tailscale  # noqa: F401  -- registers /api/tailscale/ at import
 from . import local_fallback  # noqa: F401  -- registers /api/local-fallback/ at import
 from . import models_download  # noqa: F401  -- registers /api/local-models (bare) at import
 from . import hostname  # noqa: F401  -- registers /api/settings/hostname (bare); imports _write_env_key from onboarding
+from . import readyz  # noqa: F401  -- registers GET /readyz (bare); always auth-exempt per INSTANCE_CONTRACT §4.5
 from . import test_hooks  # noqa: F401  -- (v0.7.7 #264) registers POST /test/* ONLY when FITB_TEST_MODE=1; production builds = no-op
