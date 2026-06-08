@@ -7,6 +7,18 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.7.46] - 2026-06-08
+
+### Added
+- **Instance contract endpoints** — three new overlay endpoints for Fleet management plane integration:
+  - `GET /readyz` — structured readiness probe with per-subsystem checks (http_server, agent_runtime, vector_store, config_loaded). Always unauthenticated per INSTANCE_CONTRACT §4.5.
+  - `GET /version` — returns contract version, image digest, runtime name/version, and overlay version. Auth-gated in managed mode.
+  - `GET /capabilities` — feature manifest reporting supported capabilities (local_fallback, tailscale, ollama, web_search, file_upload, cron_jobs, model_download, data_plane_access). Auth-gated in managed mode.
+- **Control-plane auth gate (AUTH-01)** — `check_auth` substitution in `api/auth.py` adds PATH 5: `X-Fox-Auth` shared-secret header accepted via `hmac.compare_digest` constant-time comparison. Standalone instances (no `FOX_PLANE_AUTH_SECRET`) are byte-identical to vanilla Hermes.
+- **Boot-time managed-mode invariant (AUTH-02)** — if `FOX_PLANE_AUTH_SECRET` is set but upstream auth is disabled, the instance refuses to boot. Prevents misconfiguration where a managed instance runs without auth protection.
+
+---
+
 ## [0.7.45] - 2026-06-07
 
 ### Added
