@@ -26,12 +26,56 @@ _INSTALLED = False
 _INSTALL_LOCK = threading.Lock()
 
 
+def _check_managed_mode_invariant() -> None:
+    """Refuse to boot if FOX_PLANE_AUTH_SECRET is set but upstream auth is disabled.
+
+    ENTERPRISE_ARCHITECTURE.md §5.4: managed-mode requires upstream auth
+    (password or passkeys) so that check_auth's PATH 4 rejects sessionless,
+    secretless callers. Without upstream auth, is_auth_enabled() returns
+    False and check_auth's PATH 1 bypasses ALL auth — making
+    FOX_PLANE_AUTH_SECRET meaningless and the instance wide-open.
+
+    Standalone mode (no FOX_PLANE_AUTH_SECRET) skips this check entirely.
+    """
+    secret = os.environ.get("FOX_PLANE_AUTH_SECRET", "")
+    if not secret:
+        return
+
+    try:
+        from api.auth import is_auth_enabled
+    except ImportError:
+        _log.warning(
+            "[fox-overlay] cannot import api.auth to check managed-mode invariant; "
+            "skipping (non-webui context)"
+        )
+        return
+
+    if not is_auth_enabled():
+        _msg = (
+            "[fox-overlay] FATAL: FOX_PLANE_AUTH_SECRET is set but upstream auth "
+            "is disabled (no password, no passkeys). Managed mode requires upstream "
+            "auth — without it, check_auth bypasses ALL authentication. Either set "
+            "HERMES_WEBUI_PASSWORD / configure passkeys, or remove "
+            "FOX_PLANE_AUTH_SECRET to run in standalone mode."
+        )
+        _log.critical(_msg)
+        try:
+            import sys
+            print(_msg, file=sys.stderr)
+        except Exception:
+            pass
+        raise SystemExit(1)
+
+
 def install() -> None:
     """Apply Fox overlay to a running hermes-webui process. Idempotent + thread-safe."""
     global _INSTALLED
     with _INSTALL_LOCK:
         if _INSTALLED:
             return
+
+        _check_managed_mode_invariant()
+
         # Phase 5: import webui_modules — each sub-module calls
         # dispatch.register_get/register_post() at module-load time. Wrap
         # in ImportError so a missing sub-module surfaces as a warning but
