@@ -10,8 +10,8 @@ this header on every request to a managed instance.
 One substitution inserts a block BEFORE ``cookie_val = parse_cookie(handler)``
 (after public-path checks, before session-cookie checks). The block:
 
-1. Reads ``FOX_PLANE_AUTH_SECRET`` from the environment (cached at
-   patch time — the secret doesn't change at runtime).
+1. Reads ``FOX_PLANE_AUTH_SECRET`` from the environment on each
+   request (supports secret rotation without restart).
 2. If the env var is unset or empty, skips (standalone mode — no-op).
 3. Reads ``X-Fox-Auth`` from the request headers.
 4. Compares with ``hmac.compare_digest`` (constant-time).
