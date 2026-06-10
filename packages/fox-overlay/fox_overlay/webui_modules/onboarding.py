@@ -55,6 +55,12 @@ _SETUP_PREFIXES = (
     # against a fresh container without first completing onboarding.
     # Same shape as the /test/ whitelist above.
     "/api/models",
+    # Contract endpoints: Fleet conformance suite probes these before
+    # onboarding completes. Auth is handled by check_auth (X-Fox-Auth
+    # or session cookie), not by onboarding state.
+    "/readyz",
+    "/version",
+    "/capabilities",
 )
 
 
