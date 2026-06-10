@@ -16,9 +16,17 @@ logger = logging.getLogger(__name__)
 
 CONTRACT_VERSION = "2.0.0"
 _VERSION_FILE = "/app/version.txt"
+_RUNTIME_VERSION_FILE = "/app/runtime_version.txt"
 
 
 def _get_runtime_version() -> str:
+    try:
+        with open(_RUNTIME_VERSION_FILE) as f:
+            v = f.read().strip()
+            if v and v != "unknown":
+                return v
+    except Exception:
+        pass
     try:
         from api.updates import WEBUI_VERSION
         if WEBUI_VERSION:
