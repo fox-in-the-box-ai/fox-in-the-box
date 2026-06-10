@@ -27,6 +27,7 @@ ARG LLAMACPP_VERSION=b9026
 # FITB_VERSION: written to /app/version.txt for migrations and display.
 # hermes-agent / hermes-webui are copied from forks/ at build time (requires submodules).
 ARG FITB_VERSION=v0.1.0
+ARG FITB_RUNTIME_VERSION=unknown
 # FITB_DEV=1: runtime uses bind-mounted repos under /root/.hermes/ (see dev-init.sh).
 ARG FITB_DEV=0
 
@@ -116,6 +117,7 @@ COPY packages/integration/default-configs/ /app/defaults/
 COPY packages/integration/app-root/version.txt /app/version.txt
 # Overwrite version.txt with the build-arg value (migrations / display).
 RUN echo "${FITB_VERSION}" > /app/version.txt
+RUN echo "${FITB_RUNTIME_VERSION}" > /app/runtime_version.txt
 
 # ── migration scripts ─────────────────────────────────────────────────────────
 COPY packages/integration/scripts/ /app/scripts/
