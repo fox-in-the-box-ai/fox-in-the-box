@@ -20,12 +20,9 @@ _VERSION_FILE = "/app/version.txt"
 
 def _get_runtime_version() -> str:
     try:
-        import sys
-        mod = sys.modules.get("api.updates")
-        if mod is not None:
-            v = getattr(mod, "WEBUI_VERSION", None)
-            if v:
-                return str(v)
+        from api.updates import WEBUI_VERSION
+        if WEBUI_VERSION:
+            return str(WEBUI_VERSION)
     except Exception:
         pass
     return "unknown"
