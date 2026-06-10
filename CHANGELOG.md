@@ -7,6 +7,14 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.7.46] - 2026-06-10
+
+### Fixed
+- Exempted `/readyz`, `/version`, and `/capabilities` contract endpoints from the onboarding redirect. Previously, these endpoints returned 302 to the setup wizard on instances that hadn't completed onboarding, breaking Fleet conformance checks and health probes.
+- Corrected `check_auth` docstring in auth overlay to match the four-path runtime behavior (PATH 1–4: managed X-Fox-Auth, managed session, standalone open, reject).
+
+---
+
 ## [0.7.45] - 2026-06-07
 
 ### Added
