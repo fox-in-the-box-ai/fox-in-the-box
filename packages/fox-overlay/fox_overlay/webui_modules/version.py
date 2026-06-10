@@ -30,13 +30,15 @@ def _get_runtime_version() -> str:
 
 def _get_overlay_version() -> str:
     try:
-        from importlib.metadata import version as pkg_version
-        return pkg_version("fox-overlay")
+        with open(_VERSION_FILE) as f:
+            v = f.read().strip()
+            if v:
+                return v
     except Exception:
         pass
     try:
-        with open(_VERSION_FILE) as f:
-            return f.read().strip()
+        from importlib.metadata import version as pkg_version
+        return pkg_version("fox-overlay")
     except Exception:
         return "unknown"
 
