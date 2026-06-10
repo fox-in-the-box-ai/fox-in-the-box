@@ -16,16 +16,21 @@ logger = logging.getLogger(__name__)
 
 CONTRACT_VERSION = "2.0.0"
 _VERSION_FILE = "/app/version.txt"
+_RUNTIME_VERSION_FILE = "/app/runtime_version.txt"
 
 
 def _get_runtime_version() -> str:
     try:
-        import sys
-        mod = sys.modules.get("api.updates")
-        if mod is not None:
-            v = getattr(mod, "WEBUI_VERSION", None)
-            if v:
-                return str(v)
+        with open(_RUNTIME_VERSION_FILE) as f:
+            v = f.read().strip()
+            if v and v != "unknown":
+                return v
+    except Exception:
+        pass
+    try:
+        from api.updates import WEBUI_VERSION
+        if WEBUI_VERSION:
+            return str(WEBUI_VERSION)
     except Exception:
         pass
     return "unknown"
@@ -33,13 +38,15 @@ def _get_runtime_version() -> str:
 
 def _get_overlay_version() -> str:
     try:
-        from importlib.metadata import version as pkg_version
-        return pkg_version("fox-overlay")
+        with open(_VERSION_FILE) as f:
+            v = f.read().strip()
+            if v:
+                return v
     except Exception:
         pass
     try:
-        with open(_VERSION_FILE) as f:
-            return f.read().strip()
+        from importlib.metadata import version as pkg_version
+        return pkg_version("fox-overlay")
     except Exception:
         return "unknown"
 

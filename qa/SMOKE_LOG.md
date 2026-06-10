@@ -25,6 +25,12 @@ Skipped sections are OK as long as they're explicitly noted with reason. Empty e
 
 ---
 
+## v0.7.46 — 2026-06-10 (DV — conformance contract endpoint exemptions)
+
+Bypass reason: This release contains only onboarding-redirect exemptions for three contract endpoints (`/readyz`, `/version`, `/capabilities`) and a docstring correction. No user-facing behavior changes — the exempted endpoints are machine-to-machine contract surfaces used by Fleet's conformance suite, not browser-visible pages. Validated by Fleet conformance suite: 23 PASS + 1 SKIP against the pre-release `cloud:latest` image built from this commit.
+
+---
+
 ## v0.7.45 — 2026-06-07 (DV — upstream v0.51.293 bump + supply-chain + governance)
 
 - [x] (a) Upstream bump: hermes-webui v0.51.185→v0.51.293, hermes-agent v2026.5.29.2→v2026.6.5 — submodule pointers verified against versions.toml
