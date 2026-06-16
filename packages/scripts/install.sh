@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
-# install.sh — Fox in the Box installer (Linux & macOS)
+# install.sh — Fox in the Box unified installer (Container or Host)
 # Usage: curl -fsSL https://raw.githubusercontent.com/.../install.sh | bash
 #   or:  bash install.sh
 #
-# Non-interactive (no /dev/tty): set FOX_ACCESS_MODE to 1, 2, or 3 instead of prompting.
+# Non-interactive mode:
+#   FOX_INSTALL_MODE=1          # 1=Container (default), 2=Host (bare-metal)
+#   FOX_HOST_INSTALL_CONFIRMED=Y # Y to auto-accept host security warning
+#   FOX_ACCESS_MODE=1|2|3        # (Container only) 1=Port, 2=Tailscale, 3=Both
 # Tailscale: optional — FOX_TAILSCALE_WAIT_READY_SEC (default 120), FOX_TAILSCALE_URL_POLL_SEC (default 180)
 # Headless Tailscale (no browser): set FOX_TAILSCALE_AUTHKEY to a reusable install auth key from
 # https://login.tailscale.com/admin/settings/keys — install.sh runs `tailscale up` with TS_AUTHKEY.
@@ -57,8 +60,188 @@ fi
 DATA_DIR="${FOX_DATA_DIR:-$DEFAULT_DATA_DIR}"
 WORKSPACE_DIR="${FOX_WORKSPACE_DIR:-$DEFAULT_WORKSPACE_DIR}"
 
+
 ##############################################################################
-# 2. Check / install Docker
+# 1b. Install mode selection (Container vs Host)
+##############################################################################
+_explain_install_modes() {
+  echo
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "  Container vs Host Installation"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo
+  echo "  CONTAINER (recommended — default):"
+  echo "    • Isolated runtime (no system pollution)"
+  echo "    • Easy uninstall (one docker command)"
+  echo "    • Auto-updates via image pull"
+  echo "    • Requires Docker (we install if missing)"
+  echo
+  echo "  HOST (bare-metal systemd service):"
+  echo "    • Direct OS integration"
+  echo "    • ⚠ Full filesystem access"
+  echo "    • ⚠ More complex uninstall"
+  echo "    • Linux only (Ubuntu 22.04/24.04, Zorin 16/17)"
+  echo
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo
+}
+
+_prompt_install_mode() {
+  while true; do
+    echo
+    echo "How do you want to install Fox in the Box?"
+    echo "  [1] Container (recommended) — isolated, easiest"
+    echo "  [2] Host (bare-metal) — system service, advanced"
+    echo "  [?] What's the difference? Explain more"
+    echo
+    if [[ -t 0 ]]; then
+      read -rp "Enter 1 or 2 [default: 1]: " INSTALL_MODE
+    elif ! { read -rp "Enter 1 or 2 [default: 1]: " INSTALL_MODE < /dev/tty; } 2>/dev/null; then
+      if [[ -n "${FOX_INSTALL_MODE:-}" ]]; then
+        INSTALL_MODE="$FOX_INSTALL_MODE"
+        info "Non-interactive install: FOX_INSTALL_MODE=$INSTALL_MODE"
+      else
+        INSTALL_MODE="1"
+        warn "No usable terminal for prompts — using [1] Container."
+      fi
+    fi
+    INSTALL_MODE="${INSTALL_MODE:-1}"
+    
+    case "$INSTALL_MODE" in
+      1) CONTAINER_MODE=true; break ;;
+      2) CONTAINER_MODE=false; break ;;
+      "?"|"help"|"explain"|"what") _explain_install_modes ;;
+      *) warn "Invalid selection: '$INSTALL_MODE'. Please enter 1 or 2." ;;
+    esac
+  done
+}
+
+_warn_host_install_risks() {
+  echo
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "  ⚠  HOST INSTALLATION — SECURITY & SAFETY NOTICE"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo
+  echo "  Fox in the Box will be installed as a system service and will:"
+  echo
+  echo "  Access & Permissions:"
+  echo "    • Run as system user 'foxinthebox' with restricted privileges"
+  echo "    • Access files in /opt/foxinthebox and ~/.config/foxinthebox"
+  echo "    • Can access your default language models and local network"
+  echo "    • Auto-enable Tailscale for secure remote access (if installed)"
+  echo
+  echo "  Installation Details:"
+  echo "    • Installs to: /opt/foxinthebox"
+  echo "    • Config directory: ~/.config/foxinthebox"
+  echo "    • Systemd service: foxinthebox.service"
+  echo "    • Auto-starts on system boot"
+  echo
+  echo "  To Uninstall:"
+  echo "    sudo apt remove foxinthebox"
+  echo "    sudo userdel -r foxinthebox  (if you want to remove config too)"
+  echo
+  echo "  Do you understand and accept these terms?"
+  echo "  (Type 'Y' in uppercase to proceed, anything else to cancel)"
+  echo
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo
+}
+
+_confirm_host_install() {
+  _warn_host_install_risks
+  
+  if [[ -n "${FOX_HOST_INSTALL_CONFIRMED:-}" ]]; then
+    if [[ "$FOX_HOST_INSTALL_CONFIRMED" == "Y" ]]; then
+      return 0
+    else
+      return 1
+    fi
+  fi
+  
+  read -rp "Type 'Y' to proceed, or press Enter to cancel: " CONFIRM
+  [[ "$CONFIRM" == "Y" ]]
+}
+
+##############################################################################
+# Host installation flow (bare-metal .deb)
+##############################################################################
+_install_host_mode() {
+  # 1. Check platform (Linux only)
+  if [[ "$PLATFORM" != "linux" ]]; then
+    die "Host installation is only supported on Linux (Ubuntu 22.04/24.04, Zorin OS 16/17).\\nFor macOS, please use Container mode (install Docker, then re-run this script)."
+  fi
+
+  # 2. Show security warning and require explicit Y confirmation
+  if ! _confirm_host_install; then
+    warn "Host installation cancelled by user."
+    exit 0
+  fi
+
+  # 3. Check for apt and dpkg (Debian/Ubuntu systems)
+  if ! command -v apt &>/dev/null; then
+    die "apt not found. Host installation requires Ubuntu or Debian-based Linux.\\nTry Container mode instead, or install Debian/Ubuntu."
+  fi
+
+  # 4. Check for required build tools (git, curl, sudo)
+  for cmd in git curl sudo; do
+    if ! command -v $cmd &>/dev/null; then
+      die "Required command not found: $cmd. Please install it before proceeding."
+    fi
+  done
+
+  # 5. Add apt repository (GPG key + sources list)
+  info "Adding Fox in the Box apt repository..."
+  sudo curl -fsSL https://apt.foxinthebox.ai/gpg.asc \\
+    | sudo gpg --dearmor -o /usr/share/keyrings/foxinthebox.gpg \\
+    || die "Failed to add GPG key. Check your internet connection."
+
+  echo "deb [arch=\$(dpkg --print-architecture) signed-by=/usr/share/keyrings/foxinthebox.gpg] https://apt.foxinthebox.ai stable main" \\
+    | sudo tee /etc/apt/sources.list.d/foxinthebox.list >/dev/null \\
+    || die "Failed to add apt source."
+
+  # 6. Update apt cache and install foxinthebox
+  info "Updating apt cache..."
+  sudo apt-get update || die "apt-get update failed."
+
+  info "Installing Fox in the Box..."
+  sudo apt-get install -y foxinthebox \\
+    || die "apt-get install foxinthebox failed."
+
+  # 7. Success
+  success "Fox in the Box installed successfully!"
+  echo
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "  Installation Complete (Host Mode)"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo
+  echo "  Open: http://localhost:8787"
+  echo
+  echo "  For private HTTPS access from anywhere (recommended):"
+  echo "    1. sudo tailscale up"
+  echo "    2. Then visit https://fox-<your-hostname>.<your-tailnet>.ts.net"
+  echo
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo
+  success "To view logs: sudo journalctl -u foxinthebox -f"
+}
+
+
+##############################################################################
+# 2. Choose installation flow (Container or Host)
+##############################################################################
+_prompt_install_mode
+success "Installation mode: $([ "$CONTAINER_MODE" = true ] && echo "Container" || echo "Host (bare-metal)")"
+
+if [[ "$CONTAINER_MODE" != "true" ]]; then
+  # Host mode — skip Docker, run bare-metal installer
+  _install_host_mode
+  exit $?
+fi
+
+# Container mode — continue with Docker setup
+##############################################################################
+# 3. Check / install Docker (Container mode)
+##############################################################################
 ##############################################################################
 # Docker Desktop on macOS often installs the CLI outside a minimal PATH (e.g. curl|bash).
 _docker_prepath_macos() {
