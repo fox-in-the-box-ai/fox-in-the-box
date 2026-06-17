@@ -1,24 +1,16 @@
-# Fox in the Box — Apt Repository
+# Fox in the Box — Deb Packages
 
-`apt.foxinthebox.ai` hosts the Fox in the Box `.deb` packages for Ubuntu 22.04/24.04 and Zorin OS 16/17.
+`.deb` packages for Ubuntu 22.04/24.04 and Zorin OS 16/17.
 
 ## User install
 
+Download the `.deb` for your architecture from the [latest release](https://github.com/fox-in-the-box-ai/fox-in-the-box/releases/latest):
+
 ```bash
-# 1. Add GPG key
-curl -fsSL https://apt.foxinthebox.ai/gpg.asc \
-  | sudo gpg --dearmor -o /usr/share/keyrings/foxinthebox.gpg
-
-# 2. Add apt source
-echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/foxinthebox.gpg] \
-  https://apt.foxinthebox.ai stable main" \
-  | sudo tee /etc/apt/sources.list.d/foxinthebox.list
-
-# 3. Install
-sudo apt update && sudo apt install foxinthebox
+sudo apt install ./foxinthebox_<version>_<arch>.deb
 ```
 
-Or one-liner: `curl -fsSL https://foxinthebox.ai/install-deb.sh | bash`
+> **apt repo (coming in v0.7.49).** `apt.foxinthebox.ai` will provide `apt install foxinthebox` once GPG signing and R2 hosting are configured. Tracked in #539. Until then, download the `.deb` from GitHub Releases.
 
 ### From a local .deb file
 
