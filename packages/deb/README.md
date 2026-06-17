@@ -10,7 +10,7 @@ Download the `.deb` for your architecture from the [latest release](https://gith
 sudo apt install ./foxinthebox_<version>_<arch>.deb
 ```
 
-> **apt repo (coming in v0.7.49).** `apt.foxinthebox.ai` will provide `apt install foxinthebox` once GPG signing and R2 hosting are configured. Tracked in #539. Until then, download the `.deb` from GitHub Releases.
+> **apt repo (not yet available).** `apt.foxinthebox.ai` will provide `apt install foxinthebox` once GPG signing and R2 hosting are configured. Tracked in #539. Until then, download the `.deb` from GitHub Releases.
 
 ### From a local .deb file
 

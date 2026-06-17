@@ -7,6 +7,16 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [Unreleased]
+
+### Changed
+- `.deb` install instructions: replaced non-functional `apt.foxinthebox.ai` commands with direct `.deb` download from GitHub Releases (#539)
+
+### Fixed
+- Release workflow: `publish-apt` job no longer marks the overall release as failed when apt repo secrets are not yet configured (#539)
+
+---
+
 ## [0.7.47] — 2026-06-17
 
 ### Fixed
