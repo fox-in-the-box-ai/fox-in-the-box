@@ -1,8 +1,7 @@
 diff --git a/static/ui.js b/static/ui.js
-index 73f091a3..d948f51e 100644
 --- a/static/ui.js
 +++ b/static/ui.js
-@@ -924,12 +924,12 @@ function _getOptionProviderId(opt){
+@@ -1458,12 +1458,12 @@ function _getOptionProviderId(opt){
      return group.dataset.provider;
    }
    const value=String(opt.value||'');
@@ -17,7 +16,7 @@ index 73f091a3..d948f51e 100644
    return '';
  }
  function _providerSkipsModelMismatchWarning(providerId){
-@@ -1135,7 +1135,7 @@ function _findModelInDropdown(modelId, sel, preferredProviderId){
+@@ -1669,7 +1669,7 @@ function _findModelInDropdown(modelId, sel, preferredProviderId){
    let explicitProvider='';
    const rawModel=String(modelId||'');
    if(rawModel.startsWith('@')&&rawModel.includes(':')){
@@ -26,16 +25,7 @@ index 73f091a3..d948f51e 100644
    }
    const preferred=String(preferredProviderId||explicitProvider||'').toLowerCase();
    if(preferred){
-@@ -1511,7 +1511,7 @@ function _normalizeConfiguredModelKey(modelId){
-   // Strip @provider: prefix (e.g., @custom:jingdong:GLM-5 -> GLM-5).
-   // Defensive: trailing-colon / trailing-slash falls back to the original key
-   // so malformed configs don't collapse distinct ids to '' (matches backend _norm_model_id).
--  if(s.startsWith('@')&&s.includes(':')){const last=s.split(':').pop();s=last||s;}
-+  if(s.startsWith('@')&&s.includes(':')){const stripped=s.replace(/^@[^:]*:/,'');s=stripped||s;}
-   // Skip slash-based stripping for URI-scheme IDs (e.g. gpt://folder/model)
-   // whose slashes are path separators, not provider delimiters (#3429).
-   const _hasScheme=/^[a-z][a-z0-9+.-]*:\/\//i.test(s);
-@@ -3030,7 +3030,7 @@ function getModelLabel(modelId){
+@@ -4166,7 +4166,7 @@ function getModelLabel(modelId){
    //   @custom:qwen397b-64k               -> qwen397b-64k
    if(rawId.startsWith('@custom:')){
      const rest=rawId.slice('@custom:'.length);

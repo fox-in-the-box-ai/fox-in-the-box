@@ -10,20 +10,21 @@
 # for shell-friendly grepping.
 
 [upstream]
-hermes_webui_tag = "v0.51.293"
+hermes_webui_tag = "v0.51.475"
 hermes_webui_url = "https://github.com/nesquena/hermes-webui"
 hermes_agent_tag = "v2026.6.5"
 hermes_agent_url = "https://github.com/NousResearch/hermes-agent"
 
 [meta]
-pinned_at = "2026-06-07"
-pinned_in_pr = "fox-in-the-box-ai/fox-in-the-box#471"
+pinned_at = "2026-06-17"
+pinned_in_pr = "fox-in-the-box-ai/fox-in-the-box#546"
 phase = "option-b-patch-refresh"
-notes = "Upstream bump v0.51.185→v0.51.293, agent v2026.5.29.2→v2026.6.5. Patch 007 (colon-split fix) refreshed for new line numbers. Patches 001-006 and 008 apply without refresh. check-overlay-basis.sh returned 0."
+notes = "Upstream bump v0.51.293→v0.51.475, agent unchanged at v2026.6.5. Patches 001/003/004 refreshed (CSP functions moved to api/helpers.py, new _autoScrollFollow line). Patch 007 reduced from 4 hunks to 3 (upstream fixed _normalizeConfiguredModelKey in v0.51.421). Patches 002/005/006/008 apply without refresh."
 
 [history]
 prior_pins = [
   # newest first
+  "webui=v0.51.293, agent=v2026.6.5 — patch refresh bump #471 (2026-06-07)",
   "webui=v0.51.185, agent=v2026.5.29.2 — clean bump #458 (2026-06-01)",
   "webui=v0.51.145, agent=v2026.5.16 — patch refresh bump #439 (2026-05-27)",
   "webui=v0.51.124, agent=v2026.5.16 — fourth Option B bump #367 (2026-05-24)",

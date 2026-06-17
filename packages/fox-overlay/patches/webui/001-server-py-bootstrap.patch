@@ -1,8 +1,7 @@
 diff --git a/server.py b/server.py
-index 8d82f4ce..65b22077 100644
 --- a/server.py
 +++ b/server.py
-@@ -112,6 +112,16 @@ from urllib.parse import urlparse
+@@ -134,6 +134,16 @@ from urllib.parse import urlparse
 
  logger = logging.getLogger(__name__)
 
@@ -16,6 +15,6 @@ index 8d82f4ce..65b22077 100644
 +except Exception as _fox_e:
 +    logger.warning("fox_overlay.bootstrap failed (%s); Fox routes disabled", _fox_e)
 +
- _CSP_CONNECT_BASE = (
-     "'self' http://127.0.0.1:* http://localhost:* "
-     "ws://127.0.0.1:* ws://localhost:*"
+ from api.auth import check_auth
+ from api.config import HOST, PORT, STATE_DIR, SESSION_DIR, DEFAULT_WORKSPACE
+ from api.helpers import (
