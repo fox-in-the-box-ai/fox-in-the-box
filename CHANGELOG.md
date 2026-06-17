@@ -9,6 +9,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+---
+
+## [0.7.49] — 2026-06-17
+
 ### Changed
 - Upstream bump: hermes-webui v0.51.293 → v0.51.475 (180 upstream releases absorbed)
 - `.deb` install instructions: replaced non-functional `apt.foxinthebox.ai` commands with direct `.deb` download from GitHub Releases (#539)
