@@ -123,7 +123,7 @@ def _format_ollama_label(mid: str) -> str:
     return mid.split(":", 1)[0] if ":" in mid else mid
 
 
-def get_available_models() -> dict:
+def get_available_models(*, prefer_cache: bool = False) -> dict:
     """Stub of upstream's picker assembly. Returns a fixed shape so the
     wrap can splice on top without needing upstream's full logic."""
     return {
@@ -355,7 +355,7 @@ def test_picker_no_double_add_if_upstream_already_has_ollama(fresh_config, monke
     _stub_ollama_get_models(monkeypatch, running=True, models=[{"name": "phi4-mini"}])
     patch_mod.apply()
     # Simulate upstream returning an OLLAMA group already
-    def _upstream_already_has_ollama() -> dict:
+    def _upstream_already_has_ollama(*, prefer_cache: bool = False) -> dict:
         return {
             "active_provider": None,
             "default_model": "test-model",
@@ -398,7 +398,7 @@ def test_picker_skips_malformed_model_entries(fresh_config, monkeypatch):
 def test_signature_drift_in_get_available_models_fails_fast(tmp_path, monkeypatch):
     """If upstream changes the picker signature, the wrap must fail loudly."""
     drifted = _UPSTREAM_CONFIG_SOURCE.replace(
-        "def get_available_models() -> dict:",
+        "def get_available_models(*, prefer_cache: bool = False) -> dict:",
         "def get_available_models(workspace: str = '/tmp') -> dict:",
     )
     _install_stub(tmp_path, drifted, monkeypatch)
