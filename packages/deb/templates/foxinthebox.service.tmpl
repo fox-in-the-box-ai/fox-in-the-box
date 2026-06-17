@@ -6,13 +6,10 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=foxinthebox
-Group=foxinthebox
-RuntimeDirectory=foxinthebox
-RuntimeDirectoryMode=0770
+Environment=HOME=/opt/foxinthebox
 
 ExecStartPre=__APP_DIR__/scripts/preflight.sh
-ExecStart=/usr/local/bin/supervisord -c /etc/foxinthebox/supervisord.conf
+ExecStart=__APP_DIR__/venv/bin/supervisord -c /etc/foxinthebox/supervisord.conf
 
 Restart=on-failure
 RestartSec=10s

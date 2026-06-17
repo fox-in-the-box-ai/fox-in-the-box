@@ -42,6 +42,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import shutil
 import subprocess
 import threading
@@ -154,7 +155,7 @@ def _supervisorctl(*args: str, timeout: float = 10.0) -> tuple[int, str, str]:
         return 127, "", "supervisorctl not on PATH"
     try:
         result = subprocess.run(
-            ["supervisorctl", "-c", "/etc/supervisor/supervisord.conf", *args],
+            ["supervisorctl", "-c", os.environ.get("SUPERVISORD_CONF", "/etc/supervisor/supervisord.conf"), *args],
             capture_output=True, text=True, timeout=timeout,
         )
         return result.returncode, result.stdout, result.stderr

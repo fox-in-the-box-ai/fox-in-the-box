@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 _GATEWAY_PROGRAM = "hermes-gateway"
 _QDRANT_HEALTH_URL = "http://127.0.0.1:6333/healthz"
-_SUPERVISOR_CONF = "/etc/supervisor/supervisord.conf"
+_SUPERVISOR_CONF = os.environ.get("SUPERVISORD_CONF", "/etc/supervisor/supervisord.conf")
 
 
 def _check_http_server() -> dict:

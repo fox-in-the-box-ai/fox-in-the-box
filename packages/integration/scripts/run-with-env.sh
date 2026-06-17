@@ -9,10 +9,11 @@
 # Source is best-effort: a malformed hermes.env must not block the wrapped
 # process from starting — a missing key surfaces downstream as the existing
 # "No LLM provider configured" error, not as a supervisord crash loop.
-if [ -f /data/config/hermes.env ]; then
+_env_path="${HERMES_ENV_PATH:-/data/config/hermes.env}"
+if [ -f "$_env_path" ]; then
   set -a
   # shellcheck disable=SC1091
-  source /data/config/hermes.env || true
+  source "$_env_path" || true
   set +a
 fi
 
