@@ -36,7 +36,7 @@ docker run --rm \
         id foxinthebox || { echo "FAIL: foxinthebox user not created"; exit 1; }
 
         echo "--- Verify supervisor available ---"
-        command -v supervisord || { echo "FAIL: supervisord not found"; exit 1; }
+        [ -x /opt/foxinthebox/venv/bin/supervisord ] || { echo "FAIL: supervisord not found in venv"; exit 1; }
 
         echo "PASS: package installed, files present, user created"
     '
