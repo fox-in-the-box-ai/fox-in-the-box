@@ -25,6 +25,12 @@ Skipped sections are OK as long as they're explicitly noted with reason. Empty e
 
 ---
 
+## v0.7.47 — 2026-06-17 (DV — .deb bare-metal install fixes)
+
+Bypass reason: This release fixes 11 .deb bare-metal install bugs (systemd service template, packaging dependencies, supervisord env vars, preflight path rewriting, fox-overlay hardcoded paths). No Docker container behavior changes — all fixes are bare-metal-only code paths that are unreachable inside the container. Validated by CI: container build + multi-arch smoke (amd64/arm64) green, .deb smoke test green (supervisord venv check, installed files, user creation), CodeQL + Trivy + Scan container image clean. On-device bare-metal .deb testing deferred to post-release (requires a fresh Ubuntu VM).
+
+---
+
 ## v0.7.46 — 2026-06-10 (DV — conformance contract endpoint exemptions)
 
 Bypass reason: This release contains only onboarding-redirect exemptions for three contract endpoints (`/readyz`, `/version`, `/capabilities`) and a docstring correction. No user-facing behavior changes — the exempted endpoints are machine-to-machine contract surfaces used by Fleet's conformance suite, not browser-visible pages. Validated by Fleet conformance suite: 23 PASS + 1 SKIP against the pre-release `cloud:latest` image built from this commit.
