@@ -294,7 +294,7 @@ def handle_setup_restart(handler) -> dict:
         result = subprocess.run(
             [
                 "supervisorctl",
-                "-c", "/etc/supervisor/supervisord.conf",
+                "-c", os.environ.get("SUPERVISORD_CONF", "/etc/supervisor/supervisord.conf"),
                 "restart", "hermes-gateway", "hermes-webui",
             ],
             capture_output=True,

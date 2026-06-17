@@ -38,6 +38,10 @@ mkdir -p \
 # ── 2. Seed default configs (cp -n = never overwrite user edits) ──────────────
 if [ -d "$DEFAULTS_DIR" ]; then
     cp -n "$DEFAULTS_DIR"/* "$DATA_DIR/config/" 2>/dev/null || true
+    # Default configs ship with Docker paths (/data/...) — rewrite for bare-metal
+    if [ ! -f "/.within_container" ] && [ -f "$DATA_DIR/config/qdrant.yaml" ]; then
+        sed -i "s|/data/|${DATA_DIR}/|g" "$DATA_DIR/config/qdrant.yaml"
+    fi
 fi
 
 # ── 3. Write onboarding marker if missing ────────────────────────────────────
@@ -94,7 +98,7 @@ fi
 
 if [ -f "$HERMES_YAML" ] && ! grep -q "^skills:" "$HERMES_YAML"; then
     _log "Adding missing skills block to hermes.yaml..."
-    cat >> "$HERMES_YAML" << 'EOF'
+    cat >> "$HERMES_YAML" << EOF
 
 # ── Skills ────────────────────────────────────────────────────────────────────
 skills:
