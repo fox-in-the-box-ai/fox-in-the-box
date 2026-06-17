@@ -17,7 +17,7 @@ hermes_agent_url = "https://github.com/NousResearch/hermes-agent"
 
 [meta]
 pinned_at = "2026-06-17"
-pinned_in_pr = "fox-in-the-box-ai/fox-in-the-box#TBD"
+pinned_in_pr = "fox-in-the-box-ai/fox-in-the-box#546"
 phase = "option-b-patch-refresh"
 notes = "Upstream bump v0.51.293→v0.51.475, agent unchanged at v2026.6.5. Patches 001/003/004 refreshed (CSP functions moved to api/helpers.py, new _autoScrollFollow line). Patch 007 reduced from 4 hunks to 3 (upstream fixed _normalizeConfiguredModelKey in v0.51.421). Patches 002/005/006/008 apply without refresh."
 

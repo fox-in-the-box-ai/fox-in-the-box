@@ -75,7 +75,7 @@ _MODULE_DEFAULTS_FLAG = "_fox_settings_defaults_applied"
 
 _EXPECTED_RELOAD_CONFIG_SIG = "() -> None"
 _EXPECTED_SAVE_SETTINGS_SIG = "(settings: dict) -> dict"
-_EXPECTED_GET_AVAILABLE_MODELS_SIG = "() -> dict"
+_EXPECTED_GET_AVAILABLE_MODELS_SIG = "(*, prefer_cache: bool = False) -> dict"
 
 _FOX_DEFAULTS = {
     # Local AI fallback (#9). Toggling ON triggers a one-time GGUF
@@ -229,8 +229,8 @@ def _wrap_get_available_models(upstream_module) -> None:
 
     _check_signature(upstream_fn, _EXPECTED_GET_AVAILABLE_MODELS_SIG, "get_available_models")
 
-    def _fox_get_available_models():
-        result = upstream_fn()
+    def _fox_get_available_models(*, prefer_cache: bool = False):
+        result = upstream_fn(prefer_cache=prefer_cache)
         try:
             if isinstance(result, dict):
                 _splice_ollama_group(result)
