@@ -3,6 +3,13 @@ set -e
 ACTION="$1"
 PREV_VERSION="${2:-}"
 
+# ── 0. Preflight — catch dpkg -i without dependency resolution ───────────────
+if ! command -v python3 &>/dev/null; then
+    echo "ERROR: python3 not found. Dependencies not installed." >&2
+    echo "Run: sudo apt install -f" >&2
+    exit 1
+fi
+
 # ── 1. Create system user (idempotent) ────────────────────────────────────────
 if ! id foxinthebox &>/dev/null; then
     adduser --system --group --home /opt/foxinthebox --shell /bin/bash foxinthebox
@@ -14,8 +21,9 @@ FITB_APP_DIR=/opt/foxinthebox \
 FITB_CONTEXT=bare-metal \
 bash /opt/foxinthebox/install-core.sh
 
-# ── 3. Set ownership of app directory (AFTER install-core.sh creates files) ──
+# ── 3. Set ownership of app + config directories ────────────────────────────
 chown -R foxinthebox:foxinthebox /opt/foxinthebox
+chown -R foxinthebox:foxinthebox /etc/foxinthebox
 
 # ── 4. Install and enable systemd units ──────────────────────────────────────
 if command -v systemctl &>/dev/null && { systemctl is-system-running --quiet 2>/dev/null || true; }; then

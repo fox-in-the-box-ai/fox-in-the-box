@@ -20,6 +20,14 @@ sudo apt update && sudo apt install foxinthebox
 
 Or one-liner: `curl -fsSL https://foxinthebox.ai/install-deb.sh | bash`
 
+### From a local .deb file
+
+Always use `apt install` (not `dpkg -i`) to ensure dependencies are resolved:
+
+```bash
+sudo apt install ./foxinthebox_0.7.47_amd64.deb
+```
+
 ## One-time infrastructure setup
 
 ### Generate GPG signing key pair

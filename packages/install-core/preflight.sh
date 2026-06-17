@@ -11,6 +11,7 @@
 set -euo pipefail
 
 APP_DIR="/opt/foxinthebox"
+HOME="${HOME:-/opt/foxinthebox}"
 DATA_DIR="${FITB_DATA_DIR:-$HOME/.foxinthebox}"
 DATA_VERSION_FILE="$DATA_DIR/version.txt"
 APP_VERSION_FILE="$APP_DIR/version.txt"
