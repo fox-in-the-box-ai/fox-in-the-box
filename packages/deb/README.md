@@ -25,7 +25,7 @@ Or one-liner: `curl -fsSL https://foxinthebox.ai/install-deb.sh | bash`
 Always use `apt install` (not `dpkg -i`) to ensure dependencies are resolved:
 
 ```bash
-sudo apt install ./foxinthebox_0.7.47_amd64.deb
+sudo apt install ./foxinthebox_<version>_<arch>.deb
 ```
 
 ## One-time infrastructure setup
