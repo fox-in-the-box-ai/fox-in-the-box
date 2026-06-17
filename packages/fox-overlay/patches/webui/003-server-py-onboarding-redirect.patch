@@ -23,10 +23,9 @@ Reference: forks/hermes-webui@62c08548:server.py lines 95, 147-148,
 167-168 (the v0.5.4 pre-migration state). Issue #331.
 
 diff --git a/server.py b/server.py
-index 65b22077..aeb79339 100644
 --- a/server.py
 +++ b/server.py
-@@ -122,6 +122,20 @@ except ModuleNotFoundError as _fox_e:
+@@ -144,6 +144,20 @@ except ModuleNotFoundError as _fox_e:
  except Exception as _fox_e:
      logger.warning("fox_overlay.bootstrap failed (%s); Fox routes disabled", _fox_e)
 
@@ -44,10 +43,10 @@ index 65b22077..aeb79339 100644
 +    redirect_to_setup = None
 +
 +
- _CSP_CONNECT_BASE = (
-     "'self' http://127.0.0.1:* http://localhost:* "
-     "ws://127.0.0.1:* ws://localhost:*"
-@@ -316,6 +330,10 @@ class Handler(BaseHTTPRequestHandler):
+ from api.auth import check_auth
+ from api.config import HOST, PORT, STATE_DIR, SESSION_DIR, DEFAULT_WORKSPACE
+ from api.helpers import (
+@@ -330,6 +344,10 @@ class Handler(BaseHTTPRequestHandler):
              set_request_profile(cookie_profile)
          try:
              parsed = urlparse(self.path)
@@ -58,7 +57,7 @@ index 65b22077..aeb79339 100644
              if not check_auth(self, parsed): return
              result = handle_get(self, parsed)
              if result is False:
-@@ -339,6 +357,10 @@ class Handler(BaseHTTPRequestHandler):
+@@ -361,6 +379,10 @@ class Handler(BaseHTTPRequestHandler):
              set_request_profile(cookie_profile)
          try:
              parsed = urlparse(self.path)

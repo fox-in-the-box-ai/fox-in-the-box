@@ -10,9 +10,12 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ## [Unreleased]
 
 ### Changed
+- Upstream bump: hermes-webui v0.51.293 → v0.51.475 (182 upstream releases absorbed)
 - `.deb` install instructions: replaced non-functional `apt.foxinthebox.ai` commands with direct `.deb` download from GitHub Releases (#539)
 
 ### Fixed
+- Overlay patches 001/003/004 refreshed for upstream structural changes (CSP functions moved to `api/helpers.py`, new `_autoScrollFollow` setting inserted in boot.js)
+- Overlay patch 007 reduced from 4 hunks to 3 — upstream fixed `_normalizeConfiguredModelKey` colon-split bug independently in v0.51.421; 5 remaining colon-split sites still patched by Fox
 - Release workflow: `publish-apt` job no longer marks the overall release as failed when apt repo secrets are not yet configured (#539)
 
 ---
