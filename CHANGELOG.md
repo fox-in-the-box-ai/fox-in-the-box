@@ -7,6 +7,25 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.7.47] — 2026-06-17
+
+### Fixed
+- `.deb` bare-metal install: systemd service template now runs as root so supervisord can manage both root (tailscaled) and unprivileged (hermes) children — previously User/Group drop prevented tailscaled from starting.
+- `.deb` bare-metal install: supervisord binary path corrected to use the venv at `/opt/foxinthebox/venv/bin/supervisord` instead of the non-existent `/usr/local/bin/supervisord`.
+- `.deb` bare-metal install: removed system `supervisor` package from apt dependencies — Fox uses its own venv-installed supervisord, avoiding version conflicts.
+- `.deb` bare-metal install: added `HOME` environment variable to systemd service so preflight.sh and supervisord programs have a valid home directory.
+- `.deb` bare-metal install: added venv `bin/` to supervisord program PATH so the venv's python and supervisorctl are found.
+- `.deb` bare-metal install: added `HERMES_ENV_PATH` to supervisord environment so provider API keys are found in the correct config location.
+- `.deb` bare-metal install: added `SUPERVISORD_CONF` environment variable so fox-overlay modules (onboarding, local fallback, readyz) use the correct supervisorctl config path (`/etc/foxinthebox/` vs Docker's `/etc/supervisor/`).
+- `.deb` bare-metal install: added `HERMES_WEBUI_EXTENSION_*` environment variables to supervisord so fox-overlay UI extensions (onboarding wizard, hostname prompt, model picker, stream error retry, etc.) load on bare-metal — previously only set via Dockerfile ENV.
+- `.deb` bare-metal install: fixed `run-with-env.sh` to use `HERMES_ENV_PATH` instead of hardcoded Docker path `/data/config/hermes.env`.
+- `.deb` bare-metal install: fixed `preflight.sh` heredoc quoting so `${DATA_DIR}` expands in the skills block appended to `hermes.yaml` — previously wrote the literal variable name.
+- `.deb` bare-metal install: qdrant vector store config paths rewritten from Docker `/data/` to bare-metal data directory on first-run config seeding.
+- `.deb` bare-metal install: `postinst` now fails fast with a helpful error message when run via raw `dpkg -i` without dependency resolution.
+- `.deb` bare-metal install: `/etc/foxinthebox/` ownership set to `foxinthebox:foxinthebox` alongside `/opt/foxinthebox/`.
+
+---
+
 ## [0.7.46] - 2026-06-10
 
 ### Fixed

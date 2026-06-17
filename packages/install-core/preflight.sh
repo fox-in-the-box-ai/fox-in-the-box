@@ -11,6 +11,7 @@
 set -euo pipefail
 
 APP_DIR="/opt/foxinthebox"
+HOME="${HOME:-/opt/foxinthebox}"
 DATA_DIR="${FITB_DATA_DIR:-$HOME/.foxinthebox}"
 DATA_VERSION_FILE="$DATA_DIR/version.txt"
 APP_VERSION_FILE="$APP_DIR/version.txt"
@@ -37,6 +38,12 @@ mkdir -p \
 # ── 2. Seed default configs (cp -n = never overwrite user edits) ──────────────
 if [ -d "$DEFAULTS_DIR" ]; then
     cp -n "$DEFAULTS_DIR"/* "$DATA_DIR/config/" 2>/dev/null || true
+    # Default configs ship with Docker paths (/data/...) — rewrite for bare-metal.
+    # Guard on the literal Docker path so this is a no-op on subsequent boots.
+    if [ ! -f "/.within_container" ] && [ -f "$DATA_DIR/config/qdrant.yaml" ] \
+       && grep -q "storage_path: /data/" "$DATA_DIR/config/qdrant.yaml"; then
+        sed -i "s|: /data/|: ${DATA_DIR}/|g" "$DATA_DIR/config/qdrant.yaml"
+    fi
 fi
 
 # ── 3. Write onboarding marker if missing ────────────────────────────────────
@@ -93,7 +100,7 @@ fi
 
 if [ -f "$HERMES_YAML" ] && ! grep -q "^skills:" "$HERMES_YAML"; then
     _log "Adding missing skills block to hermes.yaml..."
-    cat >> "$HERMES_YAML" << 'EOF'
+    cat >> "$HERMES_YAML" << EOF
 
 # ── Skills ────────────────────────────────────────────────────────────────────
 skills:
@@ -107,8 +114,7 @@ SUPERVISORD_CONF="/etc/foxinthebox/supervisord.conf"
 sed -i "s|__BRAVE_API_KEY__|${BRAVE_API_KEY:-}|g" "$SUPERVISORD_CONF"
 
 # ── 9. Ensure RPC socket directory exists ────────────────────────────────────
-# systemd RuntimeDirectory=foxinthebox creates /run/foxinthebox, but
-# supervisord needs it before it starts. Belt-and-suspenders.
+# Service runs as root; create the supervisord RPC socket directory.
 mkdir -p /run/foxinthebox
 chmod 750 /run/foxinthebox
 
