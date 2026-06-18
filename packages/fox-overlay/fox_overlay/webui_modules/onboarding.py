@@ -39,7 +39,7 @@ _SETUP_PREFIXES = (
     # so the wizard's CSS + JS load cleanly without being bounced.
     "/extensions/",
     "/health",
-    "/static/favicon",
+    "/static/",
     # v0.7.17: /test/* routes are gated by FITB_TEST_MODE=1 in fox-overlay's
     # bootstrap, so in production builds they don't exist and whitelisting
     # them is a no-op. In CI / playwright runs FITB_TEST_MODE=1 is set and
