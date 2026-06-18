@@ -25,8 +25,10 @@ For every new or modified overlay patch, ask:
      overlay patch header.
 
 4. **File the upstream PR within 2 weeks** of merging the Fox overlay
-   patch. The Fox overlay is the temporary carrier; the upstream PR is
-   the path to retirement.
+   patch. Apply the `upstream-candidate` label at merge time; the
+   quarterly sweep catches any that slip past the 2-week window. The
+   Fox overlay is the temporary carrier; the upstream PR is the path
+   to retirement.
 
 ## Workflow
 
@@ -96,9 +98,10 @@ Every quarter (or every 3 upstream bumps, whichever comes first):
 model ID colon-split parsing bugs in `ui.js` and `routes.py`. In
 upstream v0.51.421, Hermes independently fixed
 `_normalizeConfiguredModelKey` — one of the four affected call sites.
-Fox patch 007 was reduced from 4 hunks to 3 during the v0.51.475 bump.
-The remaining 3 `ui.js` sites + 1 `routes.py` site are still patched
-by Fox and remain upstream candidates.
+Fox patch 007 was reduced from 4 hunks to 3 during the v0.51.475 bump
+(the fourth site, in `routes.py`, is covered by patch 008). Four
+affected call sites remain patched by Fox across the two patches and
+are upstream candidates.
 
 This validates the strategy: upstream does fix shared bugs
 independently, and carrying the overlay in the interim is the correct
