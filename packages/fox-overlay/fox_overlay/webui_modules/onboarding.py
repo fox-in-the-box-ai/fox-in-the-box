@@ -61,6 +61,11 @@ _SETUP_PREFIXES = (
     "/readyz",
     "/version",
     "/capabilities",
+    # Auth flow: check_auth redirects /setup → login?next=/setup, so
+    # /login and /api/auth/ must be exempt to break the chicken-and-egg
+    # (patch 003 places the onboarding redirect before check_auth).
+    "/login",
+    "/api/auth/",
 )
 
 

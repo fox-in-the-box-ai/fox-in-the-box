@@ -13,6 +13,9 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - Upstream overlay strategy doc (`docs/architecture/upstream-overlay.md`) — decision flow for when to push Fox overlay patches upstream, detection during patch refresh, quarterly sweep process (#307)
 - `upstream-candidate` label for tracking overlay patches that should also ship as upstream Hermes PRs
 
+### Fixed
+- Onboarding redirect loop: `/login` and `/api/auth/` paths now exempt from onboarding redirect, breaking the chicken-and-egg between patch 003's redirect-to-setup and check_auth's redirect-to-login
+
 ---
 
 ## [0.7.49] — 2026-06-17
