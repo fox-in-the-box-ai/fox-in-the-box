@@ -7,7 +7,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
-## [Unreleased]
+## [0.7.50] — 2026-06-19
 
 ### Added
 - Upstream overlay strategy doc (`docs/architecture/upstream-overlay.md`) — decision flow for when to push Fox overlay patches upstream, detection during patch refresh, quarterly sweep process (#307)
