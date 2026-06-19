@@ -41,4 +41,6 @@ def apply_all() -> None:
     streaming.apply()
     from . import auth
     auth.apply()
-    _log.warning("[fox-overlay] webui_patches.apply_all() complete (%d patch modules)", 3)
+    from . import csrf
+    csrf.apply()
+    _log.warning("[fox-overlay] webui_patches.apply_all() complete (%d patch modules)", 4)
