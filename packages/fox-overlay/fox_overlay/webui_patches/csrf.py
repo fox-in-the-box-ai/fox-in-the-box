@@ -29,12 +29,9 @@ inject a custom header.
 * INSTANCE_CONTRACT.md §3.1 — X-Fox-Auth shared secret
 """
 import inspect
-import logging
 import os
 
 from ._helpers import substitute_function
-
-_log = logging.getLogger("fox_overlay.webui_patches.csrf")
 
 _CHECK_CSRF_SENTINEL = "_fox_patched_check_csrf"
 _EXPECTED_CHECK_CSRF_SIG = "(handler) -> bool"

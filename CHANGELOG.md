@@ -15,7 +15,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 - Onboarding redirect loop: `/login` and `/api/auth/` paths now exempt from onboarding redirect, breaking the chicken-and-egg between patch 003's redirect-to-setup and check_auth's redirect-to-login
-- CSRF token verification bypass for Fleet-proxied requests: browser POST requests through Fleet's subdomain proxy no longer fail with 403 "Session expired" — X-Fox-Auth-authenticated requests skip CSRF token checks (safe because custom headers are immune to CSRF by definition)
+- CSRF token verification bypass for Fleet-proxied requests: browser POST requests through Fleet's subdomain proxy no longer fail with 403 "Session expired" — X-Fox-Auth-authenticated requests skip CSRF token checks (safe because CORS preflight blocks cross-origin injection of custom headers)
 
 ---
 
