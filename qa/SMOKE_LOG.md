@@ -25,6 +25,20 @@ Skipped sections are OK as long as they're explicitly noted with reason. Empty e
 
 ---
 
+## v0.7.50 — 2026-06-19 (DV — Fleet proxy fixes)
+
+- [x] (a) Onboarding redirect loop fix (#555): `/login` and `/api/auth/` paths exempt from onboarding redirect — verified on Lightsail deployment (fox-dennis + fox-slava instances)
+- [x] (b) Static asset prefix fix (#556): `/static/` widened in `_SETUP_PREFIXES` — favicons and static assets load without redirect
+- [x] (c) CSRF bypass for X-Fox-Auth (#558): browser POST requests through Fleet subdomain proxy return 200 instead of 403 — verified end-to-end on Lightsail via hot-patch, confirmed in browser screenshots (onboarding wizard renders, chat creation works)
+- [x] (d) Overlay strategy doc (#307/#548): upstream-overlay.md added — docs-only, no runtime impact
+- [x] (e) CI checks: Build & Push (amd64 + arm64), Smoke (amd64 + arm64), CodeQL, Trivy, check-overlay-basis all green on main (commit c89302b)
+
+Findings:
+- CSRF bypass was hot-patched via `docker cp` to running containers before this release — v0.7.50 ships the proper image with the fix baked in
+- 14 regression tests for CSRF patch cover all branches (valid/wrong/empty/missing secret, standalone mode, idempotency, signature drift)
+
+---
+
 ## v0.7.47 — 2026-06-17 (DV — .deb bare-metal install fixes)
 
 Bypass reason: This release fixes 11 .deb bare-metal install bugs (systemd service template, packaging dependencies, supervisord env vars, preflight path rewriting, fox-overlay hardcoded paths). No Docker container behavior changes — all fixes are bare-metal-only code paths that are unreachable inside the container. Validated by CI: container build + multi-arch smoke (amd64/arm64) green, .deb smoke test green (supervisord venv check, installed files, user creation), CodeQL + Trivy + Scan container image clean. On-device bare-metal .deb testing deferred to post-release (requires a fresh Ubuntu VM).
