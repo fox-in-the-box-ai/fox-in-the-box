@@ -177,7 +177,6 @@ jobs:
 
     permissions:
       contents: write
-      packages: write
 
     steps:
       - name: Checkout

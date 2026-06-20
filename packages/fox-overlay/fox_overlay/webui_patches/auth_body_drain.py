@@ -35,7 +35,7 @@ def apply() -> None:
 
     def check_auth(handler, parsed):
         result = _original(handler, parsed)
-        if not result:
+        if not result and hasattr(handler, "close_connection"):
             handler.close_connection = True
         return result
 
