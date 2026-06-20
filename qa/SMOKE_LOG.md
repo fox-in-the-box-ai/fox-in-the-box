@@ -25,6 +25,22 @@ Skipped sections are OK as long as they're explicitly noted with reason. Empty e
 
 ---
 
+## v0.7.51 — 2026-06-20 (DV — upstream bump + bug fixes + README)
+
+- [x] (a) Keep-alive stream corruption fix (#559): rejected POST requests now consume body before sending error response — prevents HTTP request smuggling on keep-alive connections
+- [x] (b) Container `:stable` promotion fix (#550): `promote-container` extracted into its own job, independent of Electron/`.deb` pipelines — failed desktop build no longer blocks container availability
+- [x] (c) `/data` ownership fix (#549): entrypoint `chown` corrected so application user can create files under mount point — fixes Fleet-provisioned containers
+- [x] (d) Onboarding.js removal (#564): upstream's `onboarding.js` script tag removed via static patch — prevents MIME type error interfering with Fox onboarding wizard
+- [x] (e) Upstream bump: hermes-webui v0.51.475→v0.51.528, hermes-agent v2026.6.5→v2026.6.19 — cron diagnostics monkey-patches updated for upstream refactoring (`run_one_job`, `_summarize_cron_failure_for_delivery`)
+- [x] (f) README comparison table (#421): vs Open WebUI, AnythingLLM, Jan, LibreChat — reviewed for factual accuracy
+- [x] (g) CI checks: Build & Push (amd64 + arm64), Smoke (amd64 + arm64), CodeQL, Trivy, validate, scan container image all green on all PRs (#565, #566, #567)
+- [ ] (h) **POST-RELEASE:** On-device Lightsail deployment — pull `cloud:stable`, verify chat + onboarding + model picker
+
+Findings:
+- None pre-release; on-device verification pending deployment
+
+---
+
 ## v0.7.50 — 2026-06-19 (DV — Fleet proxy fixes)
 
 - [x] (a) Onboarding redirect loop fix (#555): `/login` and `/api/auth/` paths exempt from onboarding redirect — verified on Lightsail deployment (fox-dennis + fox-slava instances)
