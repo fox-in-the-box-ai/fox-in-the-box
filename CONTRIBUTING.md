@@ -10,14 +10,18 @@ Thank you for your interest in contributing. This document explains how to get i
 
 Search [existing issues](https://github.com/fox-in-the-box-ai/fox-in-the-box/issues) before opening a new one. If you find a match, add any additional information as a comment rather than opening a duplicate.
 
-When opening a bug report, use the bug report template and include:
+Use the **Bug report** template and include:
 - steps to reproduce the problem
 - your OS, installation method, and Fox in the Box version
 - relevant log output (`docker logs fox-in-the-box`)
 
 ### Requesting features
 
-Open a feature request issue using the feature request template. Describe the problem you are trying to solve, not just the solution. This helps us evaluate whether the feature fits the project's direction.
+Use the **Feature request** template. Describe the problem you are trying to solve, not just the solution. This helps us evaluate whether the feature fits the project's direction.
+
+### Questions and ideas
+
+For questions, troubleshooting, or early-stage ideas, start a [Discussion](https://github.com/fox-in-the-box-ai/fox-in-the-box/discussions) instead of an issue. Issues are for defined, actionable work.
 
 ### Submitting pull requests
 
@@ -63,8 +67,8 @@ Open [http://localhost:8787](http://localhost:8787) and complete the setup wizar
 ### Running tests
 
 ```bash
-# Python integration tests
-pytest tests/ -v
+# Fox overlay tests (with coverage — CI enforces 45% minimum)
+cd packages/fox-overlay && pytest tests/ -v --cov=fox_overlay --cov-report=term-missing
 
 # Electron unit tests
 cd packages/electron && pnpm test
@@ -73,7 +77,14 @@ cd packages/electron && pnpm test
 cd tests/container && bats test_install.bats
 ```
 
-See [AGENTS.md](AGENTS.md) for the full development workflow used by coding agents in this repo.
+### Quality gates
+
+CI enforces these automatically on every PR:
+
+- **Test coverage**: fox-overlay tests must maintain at least 45% line coverage (pytest-cov)
+- **Startup time**: container must start and pass health check within 45s (warning) / 90s (hard fail)
+- **Static analysis**: CodeQL and Trivy scans must pass
+- **Container build**: multi-arch (amd64 + arm64) build and smoke test must succeed
 
 ---
 
