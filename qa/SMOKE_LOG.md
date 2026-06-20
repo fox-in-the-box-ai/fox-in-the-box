@@ -25,6 +25,12 @@ Skipped sections are OK as long as they're explicitly noted with reason. Empty e
 
 ---
 
+## v0.7.57 — 2026-06-20 (DV — supply-chain hardening)
+
+Bypass reason: Supply-chain-only release — pnpm overrides for 7 transitive npm packages (tar, protobufjs, @grpc/grpc-js, form-data, js-yaml, tmp, @babel/core) and Dockerfile pip/wheel/setuptools upgrade. No Fox overlay changes, no runtime behavior changes. Electron build verified locally. CI: Build & Push + Trivy + CodeQL + Playwright must pass on PR before merge.
+
+---
+
 ## v0.7.56 — 2026-06-20 (DV — upstream bump)
 
 Bypass reason: Pure upstream submodule bump (hermes-webui v0.51.528 → v0.51.537, 9 patch releases). No Fox overlay changes — `check-overlay-basis.sh` returned 0. hermes-agent unchanged. CI: Playwright + validate-overlay + CodeQL + Trivy + Build & Push must pass on PR before merge.
