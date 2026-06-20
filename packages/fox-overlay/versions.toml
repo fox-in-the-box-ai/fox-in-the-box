@@ -24,7 +24,7 @@ notes = "Upstream bump v0.51.528→v0.51.537 (9 webui releases), agent unchanged
 [history]
 prior_pins = [
   # newest first
-  "webui=v0.51.528, agent=v2026.6.19 — clean bump #566 (2026-06-20)",
+  "webui=v0.51.528, agent=v2026.6.19 — patch refresh bump #566 (2026-06-20)",
   "webui=v0.51.475, agent=v2026.6.5 — patch refresh bump #546 (2026-06-17)",
   "webui=v0.51.293, agent=v2026.6.5 — patch refresh bump #471 (2026-06-07)",
   "webui=v0.51.185, agent=v2026.5.29.2 — clean bump #458 (2026-06-01)",
