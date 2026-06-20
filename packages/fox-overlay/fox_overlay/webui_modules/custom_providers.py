@@ -10,6 +10,8 @@ Routes:
     POST /api/settings/custom-providers/test  → probe base_url/models
     POST /api/settings/custom-providers/delete → remove by name
 """
+from __future__ import annotations
+
 import json
 import logging
 import re
@@ -51,7 +53,7 @@ def _validate_base_url(url: str) -> tuple[bool, str]:
     return True, url
 
 
-def _validate_models(models: Any) -> tuple[bool, list[str]]:
+def _validate_models(models: Any) -> tuple[bool, list[str] | str]:
     if not isinstance(models, list):
         return False, "Models must be a list."
     cleaned = []
@@ -76,7 +78,8 @@ def _read_custom_providers() -> list[dict]:
     return [e for e in entries if isinstance(e, dict) and e.get("name")]
 
 
-def _write_custom_providers(entries: list[dict]) -> None:
+def _modify_custom_providers(mutator) -> None:
+    """Read-modify-write custom_providers atomically under _cfg_lock."""
     from api.config import (
         _cfg_lock,
         _get_config_path,
@@ -87,6 +90,11 @@ def _write_custom_providers(entries: list[dict]) -> None:
         cfg = _load_yaml_config_file(_get_config_path())
         if not isinstance(cfg, dict):
             cfg = {}
+        entries = cfg.get("custom_providers", [])
+        if not isinstance(entries, list):
+            entries = []
+        entries = [e for e in entries if isinstance(e, dict) and e.get("name")]
+        entries = mutator(entries)
         cfg["custom_providers"] = entries
         _save_yaml_config_file(_get_config_path(), cfg)
 
@@ -125,8 +133,10 @@ def upsert_provider(body: dict) -> dict[str, Any]:
     raw_key = body.get("api_key")
     if isinstance(raw_key, str):
         api_key = raw_key.strip()
+    if api_key == "****":
+        api_key = ""
 
-    new_entry = {
+    new_entry: dict[str, Any] = {
         "name": name,
         "base_url": base_url,
         "models": models,
@@ -134,21 +144,20 @@ def upsert_provider(body: dict) -> dict[str, Any]:
     if api_key:
         new_entry["api_key"] = api_key
 
-    entries = _read_custom_providers()
     name_lower = name.lower()
-    replaced = False
-    for i, entry in enumerate(entries):
-        if str(entry.get("name", "")).strip().lower() == name_lower:
-            if api_key == "****":
-                new_entry["api_key"] = entry.get("api_key", "")
-            entries[i] = new_entry
-            replaced = True
-            break
-    if not replaced:
+
+    def _mutate(entries: list[dict]) -> list[dict]:
+        for i, entry in enumerate(entries):
+            if str(entry.get("name", "")).strip().lower() == name_lower:
+                if not api_key and entry.get("api_key"):
+                    new_entry["api_key"] = entry["api_key"]
+                entries[i] = new_entry
+                return entries
         entries.append(new_entry)
+        return entries
 
     try:
-        _write_custom_providers(entries)
+        _modify_custom_providers(_mutate)
     except Exception as exc:
         logger.exception("Failed to save custom providers: %s", exc)
         return {"ok": False, "error": f"Failed to save: {exc}"}
@@ -162,19 +171,21 @@ def delete_provider(body: dict) -> dict[str, Any]:
     if not isinstance(raw_name, str) or not raw_name.strip():
         return {"ok": False, "error": "Name is required."}
     target = raw_name.strip().lower()
+    found = [False]
 
-    entries = _read_custom_providers()
-    before_len = len(entries)
-    entries = [e for e in entries if str(e.get("name", "")).strip().lower() != target]
-
-    if len(entries) == before_len:
-        return {"ok": False, "error": f"Provider '{raw_name.strip()}' not found."}
+    def _mutate(entries: list[dict]) -> list[dict]:
+        result = [e for e in entries if str(e.get("name", "")).strip().lower() != target]
+        found[0] = len(result) < len(entries)
+        return result
 
     try:
-        _write_custom_providers(entries)
+        _modify_custom_providers(_mutate)
     except Exception as exc:
         logger.exception("Failed to delete custom provider: %s", exc)
         return {"ok": False, "error": f"Failed to save: {exc}"}
+
+    if not found[0]:
+        return {"ok": False, "error": f"Provider '{raw_name.strip()}' not found."}
 
     logger.info("Custom provider deleted: %s", raw_name.strip())
     return {"ok": True}
@@ -199,8 +210,8 @@ def test_provider(body: dict) -> dict[str, Any]:
         req.add_header("Authorization", f"Bearer {api_key}")
 
     try:
-        with urllib.request.urlopen(req, timeout=5) as resp:
-            data = json.loads(resp.read().decode("utf-8", errors="replace"))
+        with urllib.request.urlopen(req, timeout=5) as resp:  # nosec B310 -- user-supplied URL, validated to http(s) scheme
+            data = json.loads(resp.read(1_048_576).decode("utf-8", errors="replace"))
             models_found = 0
             if isinstance(data, dict) and isinstance(data.get("data"), list):
                 models_found = len(data["data"])

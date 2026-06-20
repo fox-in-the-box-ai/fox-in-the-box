@@ -219,6 +219,12 @@ class TestUpsertProvider:
         assert result["ok"] is False
         assert "http" in result["error"].lower()
 
+    def test_rejects_name_too_long(self):
+        mod = _load_module()
+        result = mod.upsert_provider({"name": "x" * 65, "base_url": "http://x/v1", "models": ["m"]})
+        assert result["ok"] is False
+        assert "64" in result["error"]
+
     def test_rejects_empty_models(self):
         mod = _load_module()
         result = mod.upsert_provider({"name": "Bad", "base_url": "http://x/v1", "models": []})
