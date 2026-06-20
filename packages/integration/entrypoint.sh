@@ -133,6 +133,7 @@ fi
 # ── 4. Fix permissions ─────────────────────────────────────────────────────────
 # Exclude /data/data/tailscale — tailscaled runs as root and manages its own state.
 echo "[entrypoint] Setting ownership on /data ..."
+chown foxinthebox:foxinthebox /data
 chown -R foxinthebox:foxinthebox \
     /data/apps \
     /data/config \
