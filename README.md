@@ -22,15 +22,14 @@ There are several good self-hosted AI assistants. Here's how Fox compares on the
 
 | | **Fox in the Box** | **Open WebUI** | **AnythingLLM** | **Jan** | **LibreChat** |
 |---|---|---|---|---|---|
-| **License** | MIT | Custom (branding clause for 50+ users; not OSI-approved) | MIT | Apache 2.0 | MIT |
-| **Desktop installer** | Windows, macOS, Linux | Alpha (v0.0.x) | Windows, macOS, Linux | Windows, macOS, Linux | No (Docker only) |
-| **No-terminal setup** | Guided wizard in browser | Manual config | Guided desktop app | Guided desktop app | Docker Compose |
-| **Memory across sessions** | Semantic (mem0 + Qdrant) | Conversation history | File-based agent memory | Conversation history | Conversation history |
+| **License** | MIT | Custom (branding clause, 50+ users) | MIT | Apache 2.0 | MIT |
+| **Desktop installer** | Windows, macOS, Linux | Alpha (v0.0.x) | Windows, macOS, Linux | Windows, macOS, Linux | No (Docker / npm) |
+| **No-terminal setup** | Guided wizard in browser | Docker or pip (terminal) | Guided desktop app | Guided desktop app | Docker Compose |
+| **Memory across sessions** | Semantic (mem0 + Qdrant) | Workspace + global memories | Workspace + global memories | Conversation history | Conversation history |
 | **Remote access built-in** | Tailscale (one toggle) | Manual setup | No | No | No |
-| **Local Ollama** | Auto-detects, one-click switch | Supported | Built-in | Manual config | Supported |
-| **Offline-capable** | Yes (with local models) | Yes | Yes | Yes | Yes |
+| **Local models** | Auto-detects Ollama, one-click switch | Built-in llama.cpp + Ollama | Built-in Ollama support | Native inference (llama.cpp) + model hub | Ollama supported |
 
-**Fox's angle:** a private assistant that just works — install it, paste a key, start talking. Memory that carries across sessions, remote access without port forwarding, and an MIT license with no strings attached.
+**Fox's angle:** a private assistant that just works — install it, paste a key, start talking. Semantic memory that carries across sessions, remote access without port forwarding, and a standard MIT license.
 
 ---
 
