@@ -36,7 +36,7 @@ When your PR is ready:
 ### Prerequisites
 
 - Docker 20.10 or later
-- Node.js 18 or later and pnpm
+- Node.js 22.12.0 or later and pnpm
 - Git
 
 ### Clone and build

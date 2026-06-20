@@ -16,6 +16,9 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Changed
 - README roadmap section updated with current version targets and criteria-based v0.8.0 acceptance gate (#406)
 - Container builds use pip constraints to prevent silent dependency drift (#418)
+- Electron desktop app bumped from Electron 28 to 42 (Chromium 134), with electron-builder 24→26, dockerode 4→5, jest 29→30, rcedit 4→5 (#540)
+- CI Node.js version bumped from 20 to 22 (required by Electron 42 and rcedit 5) (#540)
+- Unsigned Electron build artifacts labeled with `-unsigned` suffix, retention reduced from 30 to 3 days (#411)
 
 ---
 

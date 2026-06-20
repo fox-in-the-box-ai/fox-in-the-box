@@ -54,7 +54,7 @@ exports.default = async function afterPack(context) {
   // electron-builder bundles `app-builder-bin` which ships rcedit, but the
   // path isn't stable. `rcedit` npm package is the simpler dep — installed
   // as a devDependency of packages/electron.
-  const rcedit = require('rcedit');
+  const { rcedit } = require('rcedit');
   await rcedit(exePath, {
     icon: iconPath,
   });
