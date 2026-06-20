@@ -10,6 +10,14 @@ updates:
         patterns: ["*"]
 
   - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      root-deps:
+        patterns: ["*"]
+
+  - package-ecosystem: npm
     directory: /packages/electron
     schedule:
       interval: weekly
