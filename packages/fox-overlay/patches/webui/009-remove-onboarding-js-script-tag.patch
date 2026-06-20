@@ -1,0 +1,10 @@
+--- a/static/index.html
++++ b/static/index.html
+@@ -1559,7 +1559,6 @@
+ <script src="static/commands.js?v=__WEBUI_VERSION__" defer></script>
+ <script src="static/messages.js?v=__WEBUI_VERSION__" defer></script>
+ <script src="static/panels.js?v=__WEBUI_VERSION__" defer></script>
+-<script src="static/onboarding.js?v=__WEBUI_VERSION__" defer></script>
+ <script src="static/boot.js?v=__WEBUI_VERSION__" defer></script>
+ <script src="static/outline.js?v=__WEBUI_VERSION__" defer></script>
+

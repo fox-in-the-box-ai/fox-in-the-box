@@ -6,7 +6,7 @@ migration (Phase 3). Five substitutions across three modules:
 
 * ``cron.jobs.create_job`` — add ``failure_history`` to the job dict.
 * ``cron.jobs.mark_job_run`` — maintain rolling last-5 failure entries.
-* ``cron.scheduler.run_job`` — enrich the FAILED output with agent
+* ``cron.scheduler._run_job_impl`` — enrich the FAILED output with agent
   diagnostics + traceback + session-log pointer.
 * ``cron.scheduler.tick`` — replace the one-line failure delivery
   message with a structured multi-line failure notification.
@@ -74,10 +74,12 @@ def apply() -> None:
         sentinel="_fox_patched_mark_job_run_failure_history",
     )
 
-    # 3) cron.scheduler.run_job — enrich FAILED output with diagnostics + traceback
+    # 3) cron.scheduler._run_job_impl — enrich FAILED output with diagnostics + traceback
+    # Upstream refactored run_job into a thin wrapper + _run_job_impl;
+    # the except-Exception error handler we patch lives in _run_job_impl.
     substitute_function(
         upstream_module=_u_scheduler,
-        function_name="run_job",
+        function_name="_run_job_impl",
         substitutions=[
             (
                 '    except Exception as e:\n'
