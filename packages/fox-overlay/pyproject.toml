@@ -3,7 +3,7 @@ name = "fox-overlay"
 version = "0.0.1"
 description = "Fox in the Box overlay for hermes-agent and hermes-webui"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = ["pyyaml>=6.0"]
 
 [project.entry-points."hermes_agent.plugins"]
 # Discovered by hermes_cli.plugins.PluginManager.discover_and_load via

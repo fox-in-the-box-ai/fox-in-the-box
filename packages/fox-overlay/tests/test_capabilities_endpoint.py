@@ -131,9 +131,29 @@ class TestGetCapabilities:
         }
         assert set(result["capabilities"].keys()) == expected
 
-    def test_data_plane_not_yet_supported(self):
+    def test_data_plane_false_in_standalone(self):
         mod = _load_capabilities()
-        result = mod.get_capabilities()
+        with mock.patch.dict("os.environ", {}, clear=True):
+            result = mod.get_capabilities()
+        assert result["capabilities"]["data_plane_access"] is False
+
+    def test_data_plane_true_when_managed_with_url(self):
+        mod = _load_capabilities()
+        env = {"FOX_PLANE_AUTH_SECRET": "s3cret", "FOX_DATA_PLANE_URL": "http://dp:9090"}
+        with mock.patch.dict("os.environ", env, clear=True):
+            result = mod.get_capabilities()
+        assert result["capabilities"]["data_plane_access"] is True
+
+    def test_data_plane_false_when_secret_only(self):
+        mod = _load_capabilities()
+        with mock.patch.dict("os.environ", {"FOX_PLANE_AUTH_SECRET": "s3cret"}, clear=True):
+            result = mod.get_capabilities()
+        assert result["capabilities"]["data_plane_access"] is False
+
+    def test_data_plane_false_when_url_only(self):
+        mod = _load_capabilities()
+        with mock.patch.dict("os.environ", {"FOX_DATA_PLANE_URL": "http://dp:9090"}, clear=True):
+            result = mod.get_capabilities()
         assert result["capabilities"]["data_plane_access"] is False
 
     def test_local_fallback_reflects_module_availability(self):
