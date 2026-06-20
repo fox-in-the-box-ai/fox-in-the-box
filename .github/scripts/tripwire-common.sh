@@ -68,21 +68,25 @@ tripwire_clear() {
     local title="$1"
     local reason="$2"
 
-    local existing
-    existing=$(gh issue list --repo "$REPO" --state open \
+    local numbers
+    numbers=$(gh issue list --repo "$REPO" --state open \
                  --search "in:title \"$title\"" \
                  --json number,title \
                  -q ".[] | select(.title == \"$title\") | .number" \
-                 2>/dev/null | head -1)
+                 2>/dev/null)
 
-    if [ -z "$existing" ]; then
+    if [ -z "$numbers" ]; then
         return 0
     fi
 
-    gh issue comment "$existing" --repo "$REPO" \
-        --body "$(printf 'Condition cleared: %s\n\n_Auto-closed by upstream-tripwires.yml run %s_' "$reason" "$RUN_URL")"
-    gh issue close "$existing" --repo "$REPO" --reason "not planned"
-    echo "[tripwire] auto-closed issue #$existing — condition cleared"
+    echo "$numbers" | while read -r num; do
+        gh issue comment "$num" --repo "$REPO" \
+            --body "$(printf 'Condition cleared: %s\n\n_Auto-closed by upstream-tripwires.yml run %s_' "$reason" "$RUN_URL")" \
+            || echo "[tripwire] warning: failed to comment on #$num"
+        gh issue close "$num" --repo "$REPO" --reason "completed" \
+            || echo "[tripwire] warning: failed to close #$num"
+        echo "[tripwire] auto-closed issue #$num — condition cleared"
+    done
 }
 
 # Stable colour per label family so the issue list reads at a glance.
