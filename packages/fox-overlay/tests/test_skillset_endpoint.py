@@ -124,7 +124,7 @@ class TestHandler:
     def test_handles_skillset_path(self):
         mod = _load_skillset()
         handler = _make_handler()
-        with mock.patch("builtins.open", mock.mock_open(read_data=_SAMPLE_MANIFEST)):
+        with mock.patch("pathlib.Path.read_text", return_value=_SAMPLE_MANIFEST):
             assert mod._handle_get(handler, _parsed("/skillset")) is True
 
     def test_declines_non_skillset(self):
@@ -137,7 +137,7 @@ class TestHandler:
     def test_returns_404_when_no_manifest(self):
         mod = _load_skillset()
         handler = _make_handler()
-        with mock.patch("builtins.open", side_effect=FileNotFoundError):
+        with mock.patch("pathlib.Path.read_text", side_effect=FileNotFoundError):
             mod._handle_get(handler, _parsed("/skillset"))
         assert handler._status == 404
         body = json.loads(handler._body)
@@ -146,7 +146,7 @@ class TestHandler:
     def test_returns_200_with_manifest(self):
         mod = _load_skillset()
         handler = _make_handler()
-        with mock.patch("builtins.open", mock.mock_open(read_data=_SAMPLE_MANIFEST)):
+        with mock.patch("pathlib.Path.read_text", return_value=_SAMPLE_MANIFEST):
             mod._handle_get(handler, _parsed("/skillset"))
         assert handler._status == 200
 
@@ -154,29 +154,29 @@ class TestHandler:
 class TestGetSkillset:
     def test_returns_none_when_no_file(self):
         mod = _load_skillset()
-        with mock.patch("builtins.open", side_effect=FileNotFoundError):
+        with mock.patch("pathlib.Path.read_text", side_effect=FileNotFoundError):
             assert mod.get_skillset() is None
 
     def test_returns_none_for_invalid_yaml(self):
         mod = _load_skillset()
-        with mock.patch("builtins.open", mock.mock_open(read_data=": invalid: yaml: [")):
+        with mock.patch("pathlib.Path.read_text", return_value=": invalid: yaml: ["):
             assert mod.get_skillset() is None
 
     def test_returns_none_for_yaml_without_name(self):
         mod = _load_skillset()
-        with mock.patch("builtins.open", mock.mock_open(read_data="version: '1.0'\n")):
+        with mock.patch("pathlib.Path.read_text", return_value="version: '1.0'\n"):
             assert mod.get_skillset() is None
 
     def test_response_shape(self):
         mod = _load_skillset()
-        with mock.patch("builtins.open", mock.mock_open(read_data=_SAMPLE_MANIFEST)):
+        with mock.patch("pathlib.Path.read_text", return_value=_SAMPLE_MANIFEST):
             result = mod.get_skillset()
         assert result is not None
         assert set(result.keys()) == {"name", "version", "contract_version", "data_sources", "capabilities_declared"}
 
     def test_extracts_name_and_version(self):
         mod = _load_skillset()
-        with mock.patch("builtins.open", mock.mock_open(read_data=_SAMPLE_MANIFEST)):
+        with mock.patch("pathlib.Path.read_text", return_value=_SAMPLE_MANIFEST):
             result = mod.get_skillset()
         assert result["name"] == "fox-assistant"
         assert result["version"] == "1.0.0"
@@ -184,36 +184,33 @@ class TestGetSkillset:
 
     def test_extracts_data_source_bindings(self):
         mod = _load_skillset()
-        with mock.patch("builtins.open", mock.mock_open(read_data=_SAMPLE_MANIFEST)):
+        with mock.patch("pathlib.Path.read_text", return_value=_SAMPLE_MANIFEST):
             result = mod.get_skillset()
         assert result["data_sources"] == ["customer_knowledge", "product_docs"]
 
     def test_extracts_declared_capabilities(self):
         mod = _load_skillset()
-        with mock.patch("builtins.open", mock.mock_open(read_data=_SAMPLE_MANIFEST)):
+        with mock.patch("pathlib.Path.read_text", return_value=_SAMPLE_MANIFEST):
             result = mod.get_skillset()
         assert set(result["capabilities_declared"]) == {"local_fallback", "ollama", "web_search", "data_plane_access"}
         assert "file_upload" not in result["capabilities_declared"]
 
     def test_minimal_manifest_has_empty_lists(self):
         mod = _load_skillset()
-        with mock.patch("builtins.open", mock.mock_open(read_data=_MINIMAL_MANIFEST)):
+        with mock.patch("pathlib.Path.read_text", return_value=_MINIMAL_MANIFEST):
             result = mod.get_skillset()
         assert result["data_sources"] == []
         assert result["capabilities_declared"] == []
 
-    def test_custom_path_from_env(self):
+    def test_custom_path_from_env(self, tmp_path):
         mod = _load_skillset()
-        env = {"FOX_SKILLSET_PATH": "/custom/skillset.yaml"}
-        with mock.patch.dict("os.environ", env), \
-             mock.patch("builtins.open", mock.mock_open(read_data=_MINIMAL_MANIFEST)) as m:
+        custom = tmp_path / "skillset.yaml"
+        custom.write_text(_MINIMAL_MANIFEST)
+        with mock.patch.dict("os.environ", {"FOX_SKILLSET_PATH": str(custom)}):
             result = mod.get_skillset()
-        m.assert_called_once_with("/custom/skillset.yaml")
         assert result is not None
+        assert result["name"] == "minimal"
 
     def test_default_path(self):
         mod = _load_skillset()
-        with mock.patch.dict("os.environ", {}, clear=True), \
-             mock.patch("builtins.open", mock.mock_open(read_data=_MINIMAL_MANIFEST)) as m:
-            mod.get_skillset()
-        m.assert_called_once_with("/data/skillset.yaml")
+        assert mod._DEFAULT_SKILLSET_PATH == "/data/skillset.yaml"

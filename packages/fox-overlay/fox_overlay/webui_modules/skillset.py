@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 import os
+from pathlib import Path
 
 import yaml
 
@@ -21,15 +22,18 @@ _DEFAULT_SKILLSET_PATH = "/data/skillset.yaml"
 
 
 def _load_manifest() -> dict | None:
-    path = os.environ.get("FOX_SKILLSET_PATH", _DEFAULT_SKILLSET_PATH)
+    path = Path(os.environ.get("FOX_SKILLSET_PATH", _DEFAULT_SKILLSET_PATH))
     try:
-        with open(path) as f:
-            manifest = yaml.safe_load(f)
-        if isinstance(manifest, dict) and "name" in manifest:
-            return manifest
-    except (OSError, yaml.YAMLError):
-        pass
-    return None
+        manifest = yaml.safe_load(path.read_text())
+    except OSError:
+        return None
+    except yaml.YAMLError:
+        logger.warning("invalid YAML in skillset manifest: %s", path)
+        return None
+    if not isinstance(manifest, dict) or "name" not in manifest:
+        logger.warning("skillset manifest missing required 'name' field: %s", path)
+        return None
+    return manifest
 
 
 def get_skillset() -> dict | None:
@@ -37,7 +41,10 @@ def get_skillset() -> dict | None:
     if manifest is None:
         return None
     data_sources = []
-    for src in manifest.get("data_sources", []):
+    raw_sources = manifest.get("data_sources", [])
+    if not isinstance(raw_sources, list):
+        raw_sources = []
+    for src in raw_sources:
         if isinstance(src, dict) and "binding" in src:
             data_sources.append(src["binding"])
         elif isinstance(src, str):
