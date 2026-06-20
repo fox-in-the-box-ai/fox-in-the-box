@@ -70,6 +70,9 @@ def _upstream():
     dispatch._BootstrapState.frozen = False
     yield
     sys.modules.pop("fox_overlay.webui_modules.custom_providers", None)
+    sys.modules.pop("api.config", None)
+    sys.modules.pop("api.helpers", None)
+    sys.modules.pop("api", None)
 
 
 def _load_module():
