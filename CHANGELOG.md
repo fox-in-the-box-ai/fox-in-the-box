@@ -9,6 +9,9 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Fixed
+- Electron build failure on electron-builder 26 — removed deprecated `publisherName` from win config (publisher name now derived from signing certificate)
+
 ---
 
 ## [0.7.53] — 2026-06-20

@@ -25,7 +25,6 @@ afterPack: ./build/afterPack.js
 
 win:
   icon: assets/icon.ico
-  publisherName: Vulpy, Inc.
   target:
     - target: nsis
       arch:
