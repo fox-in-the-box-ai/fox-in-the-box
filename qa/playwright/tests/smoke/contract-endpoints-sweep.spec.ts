@@ -28,6 +28,7 @@ test.describe('Contract + Fox endpoints sweep', () => {
   for (const { path, ok } of CONTRACT_ENDPOINTS) {
     test(`${path} registered (status in {${ok.join(', ')}})`, async ({ baseURL }) => {
       const api = await request.newContext({ baseURL });
+      await api.post('/api/setup/skip');
       const res = await api.get(path);
       const status = res.status();
       expect(
