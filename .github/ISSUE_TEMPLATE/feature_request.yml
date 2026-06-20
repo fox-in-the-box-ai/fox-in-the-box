@@ -1,0 +1,51 @@
+name: Feature request
+description: Suggest a new capability or improvement
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: |
+        What problem does this solve? Who benefits? Describe the pain point,
+        not just the solution — this helps us evaluate whether the feature
+        fits the project's direction.
+      placeholder: |
+        Users with Ollama already installed have no discoverable way to
+        use it. Adding a dedicated "Local Ollama" provider tile would
+        let them chat without an OpenRouter key.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: |
+        How should it work? Include UI sketches, API surface, or config
+        examples if applicable. Optional — the problem statement is the
+        important part.
+    validations:
+      required: false
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: |
+        Checklist of conditions that, when all true, mean this is done.
+      placeholder: |
+        - [ ] Ollama tile appears in Settings → Providers when Ollama is detected
+        - [ ] User can select a local Ollama model in the model picker
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Pre-submit checklist
+      options:
+        - label: I searched existing open and closed issues; this is not a duplicate
+          required: true
+        - label: This is a single feature, not multiple features bundled together
+          required: true

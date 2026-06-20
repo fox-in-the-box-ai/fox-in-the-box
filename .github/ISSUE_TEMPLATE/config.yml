@@ -1,8 +1,11 @@
-blank_issues_enabled: true
+blank_issues_enabled: false
 contact_links:
-  - name: Discussions
-    url: https://github.com/fox-in-the-box-ai/fox-in-the-box/discussions
-    about: Questions, ideas, or general help — start here if you're not sure it's a bug
+  - name: Ask a question
+    url: https://github.com/fox-in-the-box-ai/fox-in-the-box/discussions/categories/q-a
+    about: Questions and troubleshooting — get help from the community
+  - name: Share an idea
+    url: https://github.com/fox-in-the-box-ai/fox-in-the-box/discussions/categories/ideas
+    about: Brainstorm features or discuss design directions before opening a formal request
   - name: Documentation
     url: https://github.com/fox-in-the-box-ai/fox-in-the-box/tree/main/docs
     about: Reading the docs may answer your question faster
