@@ -46,7 +46,7 @@ diff --git a/server.py b/server.py
  from api.auth import check_auth
  from api.config import HOST, PORT, STATE_DIR, SESSION_DIR, DEFAULT_WORKSPACE
  from api.helpers import (
-@@ -330,6 +344,10 @@ class Handler(BaseHTTPRequestHandler):
+@@ -332,6 +346,10 @@ class Handler(BaseHTTPRequestHandler):
              set_request_profile(cookie_profile)
          try:
              parsed = urlparse(self.path)
@@ -57,7 +57,7 @@ diff --git a/server.py b/server.py
              if not check_auth(self, parsed): return
              result = handle_get(self, parsed)
              if result is False:
-@@ -361,6 +379,10 @@ class Handler(BaseHTTPRequestHandler):
+@@ -363,6 +381,10 @@ class Handler(BaseHTTPRequestHandler):
              set_request_profile(cookie_profile)
          try:
              parsed = urlparse(self.path)

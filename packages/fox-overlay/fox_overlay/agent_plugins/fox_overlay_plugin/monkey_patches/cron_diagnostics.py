@@ -6,10 +6,11 @@ migration (Phase 3). Five substitutions across three modules:
 
 * ``cron.jobs.create_job`` — add ``failure_history`` to the job dict.
 * ``cron.jobs.mark_job_run`` — maintain rolling last-5 failure entries.
-* ``cron.scheduler._run_job_impl`` — enrich the FAILED output with agent
+* ``cron.scheduler.run_job`` — enrich the FAILED output with agent
   diagnostics + traceback + session-log pointer.
-* ``cron.scheduler.tick`` — replace the one-line failure delivery
-  message with a structured multi-line failure notification.
+* ``cron.scheduler.run_one_job`` — augment failure delivery with
+  consecutive failure count + session log path (upstream handles error
+  formatting via ``_summarize_cron_failure_for_delivery``).
 * ``tools.cronjob_tools._format_job`` — surface ``last_error`` +
   ``failure_history`` + ``consecutive_failures`` to the tool API when
   the job has failures.
@@ -46,16 +47,19 @@ def apply() -> None:
     )
 
     # 2) cron.jobs.mark_job_run — maintain rolling failure history
+    # v2026.6.19 added cross-process file locking (fire_claim + _jobs_lock)
+    # between the delivery_error line and the completed-count block.
     substitute_function(
         upstream_module=_u_jobs,
         function_name="mark_job_run",
         substitutions=[
             (
-                '                # Track delivery failures separately — cleared on successful delivery\n'
                 '                job["last_delivery_error"] = delivery_error\n'
+                '                # Clear any external-fire claim so a re-armed recurring job can\n'
+                '                # be claimed again on its next fire (Phase 4C CAS).\n'
+                '                job["fire_claim"] = None\n'
                 '                \n'
                 '                # Increment completed count\n',
-                '                # Track delivery failures separately — cleared on successful delivery\n'
                 '                job["last_delivery_error"] = delivery_error\n'
                 '\n'
                 '                # Maintain rolling failure history (last 5 entries).\n'
@@ -67,6 +71,10 @@ def apply() -> None:
                 '                    job["failure_history"] = _hist[-5:]  # keep last 5\n'
                 '                else:\n'
                 '                    job["failure_history"] = []\n'
+                '\n'
+                '                # Clear any external-fire claim so a re-armed recurring job can\n'
+                '                # be claimed again on its next fire (Phase 4C CAS).\n'
+                '                job["fire_claim"] = None\n'
                 '                \n'
                 '                # Increment completed count\n',
             ),
@@ -74,12 +82,12 @@ def apply() -> None:
         sentinel="_fox_patched_mark_job_run_failure_history",
     )
 
-    # 3) cron.scheduler._run_job_impl — enrich FAILED output with diagnostics + traceback
-    # Upstream refactored run_job into a thin wrapper + _run_job_impl;
-    # the except-Exception error handler we patch lives in _run_job_impl.
+    # 3) cron.scheduler.run_job — enrich FAILED output with diagnostics + traceback
+    # v2026.6.5 split run_job into wrapper + _run_job_impl; v2026.6.19
+    # folded it back into a single run_job. Target run_job directly.
     substitute_function(
         upstream_module=_u_scheduler,
-        function_name="_run_job_impl",
+        function_name="run_job",
         substitutions=[
             (
                 '    except Exception as e:\n'
@@ -160,35 +168,32 @@ def apply() -> None:
         extra_globals={"traceback": traceback},
     )
 
-    # 4) cron.scheduler.tick — structured multi-line failure delivery
+    # 4) cron.scheduler.run_one_job — augment upstream's failure summary
+    # with Fox-specific context (consecutive failure count + session log
+    # path). v2026.6.19 extracted the per-job firing logic from tick()
+    # into run_one_job() and the error formatting into
+    # _summarize_cron_failure_for_delivery.
     substitute_function(
         upstream_module=_u_scheduler,
-        function_name="tick",
+        function_name="run_one_job",
         substitutions=[
             (
-                '                deliver_content = final_response if success else f"⚠️ Cron job \'{job.get(\'name\', job[\'id\'])}\' failed:\\n{error}"\n',
-                '                if success:\n'
-                '                    deliver_content = final_response\n'
-                '                else:\n'
-                '                    # Build a structured failure notification with enough\n'
-                '                    # context to diagnose without opening logs manually.\n'
-                '                    _fail_lines = [\n'
-                '                        f"❌ **Cron job failed:** `{job.get(\'name\', job[\'id\'])}`",\n'
-                '                        f"**Error:** {error}",\n'
-                '                    ]\n'
-                '                    # Surface consecutive failure count if available\n'
-                '                    _history = job.get("failure_history") or []\n'
-                '                    if len(_history) > 1:\n'
-                '                        _fail_lines.append(f"**Consecutive failures:** {len(_history)} (first: {_history[0].get(\'at\', \'?\')[:16]})")\n'
-                '                    # Include session log path for easy debugging\n'
-                '                    _session_files = sorted(\n'
-                '                        (f for f in (Path(_hermes_home) / "sessions").glob(f"session_cron_{job[\'id\']}_*.json") if f.is_file()),\n'
-                '                        key=lambda p: p.stat().st_mtime,\n'
-                '                        reverse=True,\n'
-                '                    )\n'
-                '                    if _session_files:\n'
-                '                        _fail_lines.append(f"**Session log:** `{_session_files[0]}`")\n'
-                '                    deliver_content = "\\n".join(_fail_lines)\n',
+                '        deliver_content = final_response if success else _summarize_cron_failure_for_delivery(job, error)\n',
+                '        if success:\n'
+                '            deliver_content = final_response\n'
+                '        else:\n'
+                '            _fail_lines = [_summarize_cron_failure_for_delivery(job, error)]\n'
+                '            _history = job.get("failure_history") or []\n'
+                '            if len(_history) > 1:\n'
+                '                _fail_lines.append(f"**Consecutive failures:** {len(_history)} (first: {_history[0].get(\'at\', \'?\')[:16]})")\n'
+                '            _session_files = sorted(\n'
+                '                (f for f in (_get_hermes_home() / "sessions").glob(f"session_cron_{job[\'id\']}_*.json") if f.is_file()),\n'
+                '                key=lambda p: p.stat().st_mtime,\n'
+                '                reverse=True,\n'
+                '            )\n'
+                '            if _session_files:\n'
+                '                _fail_lines.append(f"**Session log:** `{_session_files[0]}`")\n'
+                '            deliver_content = "\\n".join(_fail_lines)\n',
             ),
         ],
         sentinel="_fox_patched_tick_structured_failure",
