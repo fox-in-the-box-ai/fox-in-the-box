@@ -9,7 +9,7 @@ const SCRUB_PATTERNS = [
   { re: /sk-[A-Za-z0-9_-]{20,}/g, sub: 'sk-[REDACTED]' },
   { re: /key-[A-Za-z0-9_-]{20,}/g, sub: 'key-[REDACTED]' },
   { re: /Bearer\s+[A-Za-z0-9._-]{20,}/gi, sub: 'Bearer [REDACTED]' },
-  { re: /(OPENROUTER_API_KEY|OPENAI_API_KEY|ANTHROPIC_API_KEY|API_KEY|SECRET|TOKEN|PASSWORD)\s*=\s*(?:"[^"]*"|'[^']*'|\S+)/gi, sub: '$1=[REDACTED]' },
+  { re: /(OPENROUTER_API_KEY|OPENAI_API_KEY|ANTHROPIC_API_KEY|API_KEY|SECRET|TOKEN|PASSWORD|\w+_KEY)\s*=\s*(?:"[^"]*"|'[^']*'|\S+)/gi, sub: '$1=[REDACTED]' },
 ];
 
 function scrubText(text) {
@@ -27,20 +27,22 @@ function scrubText(text) {
   return result;
 }
 
+const fsPromises = fs.promises;
+
 const MAX_LOG_BYTES = 2 * 1024 * 1024;
 
-function readLogTail(logPath, lines) {
+async function readLogTail(logPath, lines) {
   try {
-    const stat = fs.statSync(logPath);
+    const stat = await fsPromises.stat(logPath);
     const start = Math.max(0, stat.size - MAX_LOG_BYTES);
-    const fd = fs.openSync(logPath, 'r');
+    const fh = await fsPromises.open(logPath, 'r');
     try {
-      const buf = Buffer.alloc(Math.min(stat.size, MAX_LOG_BYTES));
-      fs.readSync(fd, buf, 0, buf.length, start);
+      const buf = Buffer.allocUnsafe(Math.min(stat.size, MAX_LOG_BYTES));
+      await fh.read(buf, 0, buf.length, start);
       const allLines = buf.toString('utf8').split('\n');
       return allLines.slice(-lines).join('\n');
     } finally {
-      fs.closeSync(fd);
+      await fh.close();
     }
   } catch (err) {
     return `[Could not read log: ${err.message}]`;
@@ -111,7 +113,7 @@ async function gatherDiagnosticReport({ dockerManager, logPath, foxVersion, plat
   }
 
   if (logPath) {
-    report.log_tail = scrubText(readLogTail(logPath, 500));
+    report.log_tail = scrubText(await readLogTail(logPath, 500));
   }
 
   if (platform === 'win32') {
@@ -119,7 +121,7 @@ async function gatherDiagnosticReport({ dockerManager, logPath, foxVersion, plat
       runSafe('wsl', ['--status'], 5000),
       runSafe('wsl', ['--list', '--verbose'], 5000),
     ]);
-    report.windows = { wsl_status: wslStatus, wsl_list: wslList };
+    report.windows = { wsl_status: scrubText(wslStatus), wsl_list: scrubText(wslList) };
   } else if (platform === 'darwin') {
     const raw = await runSafe('launchctl', ['list'], 5000);
     let filtered = raw;

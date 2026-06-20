@@ -89,16 +89,16 @@ describe('readLogTail', () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  test('returns last N lines', () => {
-    const result = readLogTail(logFile, 5);
+  test('returns last N lines', async () => {
+    const result = await readLogTail(logFile, 5);
     const lines = result.split('\n');
     expect(lines).toContain('line 20');
     expect(lines).toContain('line 16');
     expect(lines).not.toContain('line 1');
   });
 
-  test('returns error message for missing file', () => {
-    const result = readLogTail('/nonexistent/path/log.txt', 10);
+  test('returns error message for missing file', async () => {
+    const result = await readLogTail('/nonexistent/path/log.txt', 10);
     expect(result).toMatch(/\[Could not read log:/);
   });
 });

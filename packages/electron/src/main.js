@@ -330,6 +330,10 @@ function openDiagnosticWindow() {
     return;
   }
 
+  ipcMain.removeHandler('diagnostic:gather');
+  ipcMain.removeAllListeners('diagnostic:copy');
+  ipcMain.removeAllListeners('diagnostic:close');
+
   _diagnosticWin = new BrowserWindow({
     width: 640,
     height: 520,
@@ -348,7 +352,7 @@ function openDiagnosticWindow() {
     },
   });
 
-  ipcMain.handleOnce('diagnostic:gather', async () => {
+  ipcMain.handle('diagnostic:gather', async () => {
     try {
       const report = await diagnosticReport.gatherDiagnosticReport({
         dockerManager: docker,
@@ -691,9 +695,10 @@ async function main() {
     log.info('[startup] Post-reboot resume (--resume-setup)');
   }
 
-  globalShortcut.register('CommandOrControl+Shift+D', () => {
+  const shortcutOk = globalShortcut.register('CommandOrControl+Shift+D', () => {
     openDiagnosticWindow();
   });
+  if (!shortcutOk) log.warn('Failed to register diagnostic shortcut Ctrl+Shift+D');
 
   _setupInProgress = true;
   let _tailnetUrl = null;
