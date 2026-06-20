@@ -9,6 +9,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+- Comparison table vs self-hosted AI alternatives (Open WebUI, AnythingLLM, Jan, LibreChat) in README (#421)
+- `docs/assets/` directory for demo media (#419)
+
 ### Fixed
 - Keep-alive stream corruption on auth rejection: rejected POST requests no longer leave unread body bytes in the socket buffer, preventing HTTP request smuggling on the next keep-alive request (#559)
 - Container `:stable` tag promotion decoupled from Electron build success — a failed desktop build no longer blocks container availability (#550)

@@ -12,7 +12,24 @@
 
 Fox in the Box bundles a full AI assistant — agent, chat UI, persistent memory, and secure remote access — into one app. Bring an OpenRouter API key, run the installer, and start chatting in minutes.
 
-<!-- TODO: add a screenshot or short GIF of the chat UI here -->
+<!-- Demo GIF: see issue #422 -->
+
+---
+
+## Why Fox in the Box?
+
+There are several good self-hosted AI assistants. Here's how Fox compares on the dimensions that matter most for a personal, private setup:
+
+| | **Fox in the Box** | **Open WebUI** | **AnythingLLM** | **Jan** | **LibreChat** |
+|---|---|---|---|---|---|
+| **License** | MIT | Custom (branding clause, 50+ users) | MIT | Apache 2.0 | MIT |
+| **Desktop installer** | Windows, macOS, Linux | Alpha (v0.0.x) | Windows, macOS, Linux | Windows, macOS, Linux | No (Docker / npm) |
+| **No-terminal setup** | Guided wizard in browser | Docker or pip (terminal) | Guided desktop app | Guided desktop app | Docker Compose |
+| **Memory across sessions** | Semantic (mem0 + Qdrant) | Workspace + global memories | Workspace + global memories | Conversation history | Conversation history |
+| **Remote access built-in** | Tailscale (one toggle) | Manual setup | No | No | No |
+| **Local models** | Auto-detects Ollama, one-click switch | Built-in llama.cpp + Ollama | Built-in Ollama support | Native inference (llama.cpp) + model hub | Ollama supported |
+
+**Fox's angle:** a private assistant that just works — install it, paste a key, start talking. Semantic memory that carries across sessions, remote access without port forwarding, and a standard MIT license.
 
 ---
 
