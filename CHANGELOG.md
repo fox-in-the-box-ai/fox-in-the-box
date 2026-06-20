@@ -9,6 +9,12 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+- `TRADEMARK.md` — trademark policy for project name and logo, with fork-renaming requirement (#410)
+
+### Changed
+- README roadmap section updated with current version targets and criteria-based v0.8.0 acceptance gate (#406)
+
 ---
 
 ## [0.7.51] — 2026-06-20

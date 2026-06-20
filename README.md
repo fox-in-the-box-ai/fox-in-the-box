@@ -302,8 +302,8 @@ The app itself is free and open source. You only pay for AI usage at your provid
 
 What we're working on next. No promises on dates — this is a small team — but this is the direction.
 
-**Recently shipped (v0.7.45–v0.7.51)**
-- **Upstream separation** — Fox overlays cleanly separated from upstream Hermes codebase; upstream updates no longer require merge conflicts (v0.6.0 / v0.7.0)
+**Recently shipped**
+- **Upstream separation** — Fox overlays cleanly separated from upstream Hermes codebase; upstream updates no longer require merge conflicts
 - **Supply-chain hardening** — container `:stable` tag promotion decoupled from Electron builds, Fleet container ownership fixes, release workflow reliability (v0.7.49–v0.7.51)
 - **Comparison docs** — feature matrix vs Open WebUI, AnythingLLM, Jan, LibreChat (v0.7.51)
 - **Upstream bump** — hermes-webui v0.51.528, hermes-agent v2026.6.19 (v0.7.51)
@@ -351,4 +351,4 @@ Fox in the Box stands on the shoulders of:
 
 ## License
 
-MIT — see [LICENSE](LICENSE). The name "Fox in the Box" and the fox logo are trademarks of Vulpy Inc. — see [TRADEMARK.md](TRADEMARK.md).
+MIT — see [LICENSE](LICENSE). The name "Fox in the Box" and the fox logo are trademarks of Vulpy Inc. (operating as Fox in the Box) — see [TRADEMARK.md](TRADEMARK.md).

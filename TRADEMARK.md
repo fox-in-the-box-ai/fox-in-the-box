@@ -1,7 +1,7 @@
 # Trademark Policy
 
-The name **Fox in the Box**, the fox avatar, and the associated logos are
-trademarks of Vulpy Inc. (operating as Fox in the Box).
+The name **Fox in the Box**, the fox logo, and the associated branding are
+unregistered trademarks of Vulpy Inc. (operating as Fox in the Box).
 
 ## What the MIT license covers
 
@@ -13,11 +13,11 @@ the trademarks.
 
 | Use case | Allowed? | Condition |
 |----------|----------|-----------|
-| Running unmodified Fox in the Box for yourself or your organization | Yes | No conditions |
+| Running Fox in the Box as distributed | Yes | No conditions |
 | Describing compatibility ("works with Fox in the Box") | Yes | Do not imply endorsement |
 | Writing about Fox in the Box (blog posts, documentation, reviews) | Yes | Use the name accurately |
 | Distributing a modified fork under the Fox in the Box name | No | Rename your fork |
-| Using the fox avatar in your own product branding | No | Create your own branding |
+| Using the fox logo in your own product branding | No | Create your own branding |
 
 ## Forks and derivative works
 
@@ -28,6 +28,7 @@ attribution.
 
 ## Questions
 
-If your use case is not covered above, open an
+If your use case is not covered above, email
+[legal@foxinthebox.ai](mailto:legal@foxinthebox.ai) or open an
 [issue](https://github.com/fox-in-the-box-ai/fox-in-the-box/issues/new)
-or contact the maintainers.
+for non-sensitive questions.
