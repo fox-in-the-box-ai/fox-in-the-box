@@ -133,6 +133,12 @@ COPY forks/hermes-webui /app/hermes-webui
 # (slow) forks+pip layer cache.
 COPY packages/fox-overlay /app/fox-overlay
 
+# ── pip constraints (supply-chain pin) ───────────────────────────────────────
+# Pins every transitive Python dependency to the version resolved in the last
+# verified build. Prevents silent dep drift across builds. Regenerate after
+# upstream bumps: see packages/integration/requirements.lock header.
+COPY packages/integration/requirements.lock /app/requirements.lock
+
 # ── install-core.sh — patches, pip, supervisord.conf ─────────────────────────
 # Single source of truth for all install logic (shared with .deb postinst).
 # Runs in Docker context: repos already COPYd, binaries handled in separate
@@ -148,6 +154,7 @@ RUN set -eux; \
     FITB_OVERLAY_DIR=/app/fox-overlay \
     FITB_DISABLE_WEBUI_OVERLAY=${FITB_DISABLE_WEBUI_OVERLAY} \
     FITB_DISABLE_AGENT_OVERLAY=${FITB_DISABLE_AGENT_OVERLAY} \
+    FITB_PIP_CONSTRAINTS=/app/requirements.lock \
     bash /tmp/install-core.sh; \
     rm /tmp/install-core.sh; \
     chown -R foxinthebox:foxinthebox /app/hermes-agent /app/hermes-webui /app/fox-overlay

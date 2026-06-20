@@ -250,6 +250,7 @@ _install_soul() {
 # ── 8. pip install ────────────────────────────────────────────────────────────
 _pip_install() {
     local pip_cmd
+    local constraints_flag=""
 
     if [ "$FITB_CONTEXT" = "bare-metal" ]; then
         # Create an isolated venv so Fox doesn't pollute system Python
@@ -266,28 +267,34 @@ _pip_install() {
         pip_cmd="pip"
     fi
 
+    if [ -n "${FITB_PIP_CONSTRAINTS:-}" ] && [ -f "$FITB_PIP_CONSTRAINTS" ]; then
+        constraints_flag="-c $FITB_PIP_CONSTRAINTS"
+        _log "Using pip constraints: $FITB_PIP_CONSTRAINTS"
+    fi
+
     _log "Installing hermes-agent[anthropic,bedrock,google]..."
     "$pip_cmd" install -e "$FITB_APP_DIR/hermes-agent[anthropic,bedrock,google]" \
-        --quiet --no-cache-dir
+        $constraints_flag --quiet --no-cache-dir
 
     _log "Installing hermes-webui..."
     if [ -f "$FITB_APP_DIR/hermes-webui/requirements.txt" ]; then
         "$pip_cmd" install -r "$FITB_APP_DIR/hermes-webui/requirements.txt" \
-            --quiet --no-cache-dir
+            $constraints_flag --quiet --no-cache-dir
     elif [ -f "$FITB_APP_DIR/hermes-webui/setup.py" ] || \
          grep -q '^\[build-system\]' "$FITB_APP_DIR/hermes-webui/pyproject.toml" 2>/dev/null; then
-        "$pip_cmd" install -e "$FITB_APP_DIR/hermes-webui" --quiet --no-cache-dir
+        "$pip_cmd" install -e "$FITB_APP_DIR/hermes-webui" \
+            $constraints_flag --quiet --no-cache-dir
     else
         _die "hermes-webui has no requirements.txt, setup.py, or installable pyproject.toml"
     fi
 
     _log "Installing fox-overlay..."
-    "$pip_cmd" install -e "$FITB_OVERLAY_DIR" --quiet --no-cache-dir
+    "$pip_cmd" install -e "$FITB_OVERLAY_DIR" $constraints_flag --quiet --no-cache-dir
 
     # supervisor: needed in bare-metal (Docker installs it separately)
     if [ "$FITB_CONTEXT" = "bare-metal" ]; then
         _log "Installing supervisor..."
-        "$pip_cmd" install supervisor --quiet --no-cache-dir
+        "$pip_cmd" install supervisor $constraints_flag --quiet --no-cache-dir
     fi
 }
 
