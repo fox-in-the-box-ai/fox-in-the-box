@@ -9,6 +9,9 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Fixed
+- macOS notarization config updated for electron-builder 26 (team ID read from environment variable instead of inline config) (#574)
+
 ---
 
 ## [0.7.52] — 2026-06-20
