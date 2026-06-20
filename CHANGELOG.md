@@ -9,6 +9,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+---
+
+## [0.7.51] — 2026-06-20
+
 ### Added
 - Comparison table vs self-hosted AI alternatives (Open WebUI, AnythingLLM, Jan, LibreChat) in README (#421)
 - `docs/assets/` directory for demo media (#419)
