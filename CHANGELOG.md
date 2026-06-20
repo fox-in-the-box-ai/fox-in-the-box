@@ -11,6 +11,18 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.7.58] — 2026-06-20
+
+### Security
+- Closed Dependabot #60: added npm override for js-yaml ^4.1.0 in packages/electron (eliminates js-yaml@3.14.2 from npm lockfile — quadratic DoS via untrusted YAML input)
+
+### Changed
+- Bumped electron-log 5.4.3 → 5.4.4, electron-updater 6.8.3 → 6.8.9 (patch updates)
+- Bumped @types/node 25.9.3 → 26.0.0 (devDependency)
+- Bumped CI actions: actions/checkout v6 → v7, softprops/action-gh-release v3.0.0 → v3.0.1
+
+---
+
 ## [0.7.57] — 2026-06-20
 
 ### Security
