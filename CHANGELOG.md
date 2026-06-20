@@ -11,6 +11,14 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.7.57] — 2026-06-20
+
+### Security
+- Resolved 17 Dependabot alerts via pnpm overrides: tar (7 alerts — path traversal), protobufjs (3 — DoS), @grpc/grpc-js (2 — crash on malformed input), form-data (1 — CRLF injection), js-yaml (2 — quadratic DoS), tmp (1 — path traversal), @babel/core (1 — file read via source maps)
+- Upgraded Python build tools in container image: pip 24.0 → latest, wheel 0.45.1 → latest, setuptools jaraco.context 5.3.0 → latest (7 Trivy alerts)
+
+---
+
 ## [0.7.56] — 2026-06-20
 
 ### Changed

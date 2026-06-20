@@ -61,7 +61,8 @@ RUN curl -fsSL "https://pkgs.tailscale.com/stable/debian/$(lsb_release -cs).noar
     && rm -rf /var/lib/apt/lists/*
 
 # ── Python packages (supervisor + Hermes apps from monorepo forks) ────────────
-RUN pip install --no-cache-dir supervisor
+RUN pip install --no-cache-dir --upgrade pip wheel setuptools \
+    && pip install --no-cache-dir supervisor
 
 # ── Qdrant binary ─────────────────────────────────────────────────────────────
 RUN set -eux; \
