@@ -11,6 +11,7 @@ PUBLIC_PATHS expansion.
 from __future__ import annotations
 
 import logging
+import os
 import shutil
 
 logger = logging.getLogger(__name__)
@@ -27,6 +28,13 @@ def _has_module(name: str) -> bool:
         return False
 
 
+def _check_data_plane_access() -> bool:
+    return bool(
+        os.environ.get("FOX_PLANE_AUTH_SECRET")
+        and os.environ.get("FOX_DATA_PLANE_URL")
+    )
+
+
 def get_capabilities() -> dict:
     return {
         "contract_version": CONTRACT_VERSION,
@@ -38,7 +46,7 @@ def get_capabilities() -> dict:
             "file_upload": True,
             "cron_jobs": True,
             "model_download": _has_module("fox_overlay.webui_modules.models_download"),
-            "data_plane_access": False,
+            "data_plane_access": _check_data_plane_access(),
         },
     }
 

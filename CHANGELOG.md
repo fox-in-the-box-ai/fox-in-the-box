@@ -9,6 +9,12 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+- `GET /skillset` contract endpoint — returns active skillset manifest summary (name, version, data sources, declared capabilities); 404 when no skillset loaded (#477)
+
+### Changed
+- `data_plane_access` capability is now dynamic — reports `true` when instance is managed with a data plane URL configured, instead of always `false` (#478)
+
 ---
 
 ## [0.7.54] — 2026-06-20

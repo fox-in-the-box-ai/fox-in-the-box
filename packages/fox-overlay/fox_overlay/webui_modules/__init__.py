@@ -21,6 +21,7 @@ from . import hostname  # noqa: F401  -- registers /api/settings/hostname (bare)
 from . import readyz  # noqa: F401  -- registers GET /readyz (bare); always auth-exempt per INSTANCE_CONTRACT §4.5
 from . import version  # noqa: F401  -- registers GET /version (bare); auth-gated in managed mode per INSTANCE_CONTRACT §4.5
 from . import capabilities  # noqa: F401  -- registers GET /capabilities (bare); auth-gated in managed mode per INSTANCE_CONTRACT §4.5
+from . import skillset  # noqa: F401  -- registers GET /skillset (bare); 404 when no skillset loaded per INSTANCE_CONTRACT §4.6
 from . import approval_explain  # noqa: F401  -- registers POST /api/approval-explain/ at import
 from . import custom_providers  # noqa: F401  -- registers /api/settings/custom-providers (bare + sub-paths); CRUD for OpenAI-compat providers (#144)
 from . import test_hooks  # noqa: F401  -- (v0.7.7 #264) registers POST /test/* ONLY when FITB_TEST_MODE=1; production builds = no-op
