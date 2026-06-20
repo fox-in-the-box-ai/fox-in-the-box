@@ -116,7 +116,7 @@ git push --force-with-lease
 
 ## Coding standards
 
-- Python: match the style of the existing codebase in `forks/hermes-webui/`
+- Python: match the style of the existing codebase in `packages/fox-overlay/` (the Fox overlay layer). Files under `forks/` are upstream-tracked and should not be edited directly — see `docs/architecture/upstream-overlay.md`.
 - JavaScript: plain ES2020 modules, no TypeScript, no bundler
 - Shell scripts: `set -euo pipefail` at the top of every script
 - Commit messages: use [Conventional Commits](https://www.conventionalcommits.org/) format (`feat:`, `fix:`, `docs:`, `chore:`, etc.)

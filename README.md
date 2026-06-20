@@ -256,7 +256,7 @@ Most users start with **OpenRouter** — one key, hundreds of models. Add more f
 
 **Container vs. data:** the published Docker image bundles Hermes agent and webui source (from `forks/` submodules) at **build** time. The container's `/data` volume holds your config, databases, logs, and Tailscale state. Updating Hermes for end users means pulling a newer image, not re-cloning at runtime.
 
-**Tech stack:** Electron 28 (desktop wrapper) · Python 3.11 (Hermes Agent + WebUI) · Qdrant (vector DB) · mem0 (memory layer) · supervisord (process management) · Tailscale (remote access) · Docker (packaging). Hermes WebUI is intentionally vanilla — Python `http.server` + plain JavaScript, no SPA framework — so the chat UI loads instantly on any device.
+**Tech stack:** Electron 42 (desktop wrapper) · Python 3.11 (Hermes Agent + WebUI) · Qdrant (vector DB) · mem0 (memory layer) · supervisord (process management) · Tailscale (remote access) · Docker (packaging). Hermes WebUI is intentionally vanilla — Python `http.server` + plain JavaScript, no SPA framework — so the chat UI loads instantly on any device.
 
 ---
 
@@ -303,15 +303,14 @@ The app itself is free and open source. You only pay for AI usage at your provid
 What we're working on next. No promises on dates — this is a small team — but this is the direction.
 
 **Recently shipped**
-- **Upstream separation** — Fox overlays cleanly separated from upstream Hermes codebase; upstream updates no longer require merge conflicts
-- **Supply-chain hardening** — container `:stable` tag promotion decoupled from Electron builds, Fleet container ownership fixes, release workflow reliability (v0.7.49–v0.7.51)
-- **Comparison docs** — feature matrix vs Open WebUI, AnythingLLM, Jan, LibreChat (v0.7.51)
+- **Electron 42 + supply-chain hardening** — Electron 28→42, Python dependency lock, unsigned artifact labeling (v0.7.52)
+- **Custom provider UI** — add, edit, test, and delete OpenAI-compatible providers (llama.cpp, LM Studio, vLLM) from Settings → Providers (v0.7.53)
+- **Diagnostic report** — one-click "Send diagnostic report" in the launcher and via Ctrl+Shift+D (v0.7.53)
+- **Approval card explanations** — plain-English explanation of flagged commands before approval (v0.7.53)
+- **CI quality gates** — test coverage threshold (45% minimum) and container startup time regression gate (v0.7.54)
+- **Playwright smoke suite** — 29 automated test cases covering contract endpoints, onboarding, provider settings, hostname overlay (v0.7.54+)
+- **Upstream separation** — Fox overlays cleanly separated from upstream Hermes codebase (v0.7.49)
 - **Upstream bump** — hermes-webui v0.51.528, hermes-agent v2026.6.19 (v0.7.51)
-
-**v0.7.x stabilization (in flight)**
-- Supply-chain hardening — Python dependency lock, Electron major bump, Windows artifact labeling
-- Custom provider UI — add OpenAI-compatible providers (llama.cpp, vLLM, LM Studio) from the settings panel
-- Diagnostic report — one-click "Send diagnostic report" in the launcher for support
 
 **v0.8.0 — ships when these criteria are met:**
 - Playwright E2E covers all critical user paths (provider setup, chat, model switching, failover)
