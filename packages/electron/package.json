@@ -14,7 +14,7 @@
     "build:publish": "electron-builder",
     "build:win": "electron-builder --win --publish never",
     "build:mac": "electron-builder --mac",
-    "test": "jest --testPathPattern=tests/electron"
+    "test": "jest --testPathPatterns=tests/electron"
   },
   "dependencies": {
     "docker-modem": "^5.0.7",
