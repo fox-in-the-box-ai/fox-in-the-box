@@ -25,6 +25,12 @@ Skipped sections are OK as long as they're explicitly noted with reason. Empty e
 
 ---
 
+## v0.7.56 — 2026-06-20 (DV — upstream bump)
+
+Bypass reason: Pure upstream submodule bump (hermes-webui v0.51.528 → v0.51.537, 9 patch releases). No Fox overlay changes — `check-overlay-basis.sh` returned 0. hermes-agent unchanged. CI: Playwright + validate-overlay + CodeQL + Trivy + Build & Push must pass on PR before merge.
+
+---
+
 ## v0.7.55 — 2026-06-20 (DV — contract endpoints + Playwright)
 
 Bypass reason: This release adds contract surface endpoints (`/skillset`, dynamic `data_plane_access`), Playwright smoke specs (29 test cases), GitHub issue/PR templates, and docs reconciliation (README Electron version fix, roadmap refresh, CONTRIBUTING Python style update). No runtime behavior changes beyond the `/skillset` endpoint and dynamic capability flag. All changes were smoke-tested during their PR review cycles (PRs #599, #600, #601). CI: all checks green across PRs #599, #600, #601, #602 — including Playwright smoke suite, CodeQL, Trivy, validate-overlay, Electron smoke (macOS + Windows), Build & Push (amd64 + arm64).
