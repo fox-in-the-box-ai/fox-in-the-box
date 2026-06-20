@@ -11,6 +11,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 - Approval card shows a plain-English explanation of flagged commands — helps users understand what a command does before approving (#150)
+- Diagnostic report button in the error window and via Ctrl+Shift+D — collects system, Docker, and log data in one click for support (#293)
 
 ### Fixed
 - macOS notarization config updated for electron-builder 26 (team ID read from environment variable instead of inline config) (#574)

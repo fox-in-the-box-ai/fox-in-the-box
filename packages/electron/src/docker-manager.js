@@ -649,6 +649,27 @@ async function getDiagnostics() {
   return diagnostics;
 }
 
+const _SYSTEM_INFO_ALLOWLIST = [
+  'ServerVersion', 'OSType', 'OperatingSystem', 'KernelVersion',
+  'Architecture', 'NCPU', 'MemTotal', 'DockerRootDir',
+];
+
+async function getDockerSystemInfo() {
+  if (!docker) return null;
+  try {
+    const reachable = await isDaemonRunning();
+    if (!reachable) return null;
+    const info = await docker.info();
+    const result = {};
+    for (const key of _SYSTEM_INFO_ALLOWLIST) {
+      if (key in info) result[key] = info[key];
+    }
+    return result;
+  } catch (err) {
+    return { error: err.message };
+  }
+}
+
 function monitorContainerSetupLogs(showProgress, {
   pollIntervalMs = 1_000,
   tailLines = 400,
@@ -722,4 +743,5 @@ module.exports = {
   restartContainer,
   removeContainerAndImage,
   getDiagnostics,
+  getDockerSystemInfo,
 };
