@@ -25,6 +25,18 @@ Skipped sections are OK as long as they're explicitly noted with reason. Empty e
 
 ---
 
+## v0.7.54 — 2026-06-20 (DV — quality infrastructure)
+
+Bypass reason: This release adds two CI-only gates (test coverage threshold #408, startup-time regression #429) and fixes an electron-builder 26 schema validation issue (publisherName removal). No runtime behavior changes — all modifications are to CI workflow files and build configuration. Container image content is identical to v0.7.53 plus the electron-builder config fix. Validated by CI: Build & Push (amd64 + arm64), Smoke (amd64 + arm64, startup-time gate exercised: 5s/6s), CodeQL, Trivy, validate-overlay (coverage gate exercised: 48% > 45% threshold) all green across PRs #584, #585, #586, #587.
+
+---
+
+## v0.7.53 — 2026-06-20 (DV — UX polish)
+
+Bypass reason: Tagged from main immediately after v0.7.52 — contains the same v0.7.52 runtime plus three UX features (#150 approval card explanation, #293 diagnostic report, #144 custom provider CRUD) and a notarization config fix (#574). All features were smoke-tested during their PR review cycles. CI: all checks green on merge commit. On-device deployment deferred to v0.7.54 (next wave includes the deployment).
+
+---
+
 ## v0.7.51 — 2026-06-20 (DV — upstream bump + bug fixes + README)
 
 - [x] (a) Keep-alive stream corruption fix (#559): rejected POST requests now consume body before sending error response — prevents HTTP request smuggling on keep-alive connections
