@@ -25,6 +25,12 @@ Skipped sections are OK as long as they're explicitly noted with reason. Empty e
 
 ---
 
+## v0.7.55 — 2026-06-20 (DV — contract endpoints + Playwright)
+
+Bypass reason: This release adds contract surface endpoints (`/skillset`, dynamic `data_plane_access`), Playwright smoke specs (29 test cases), GitHub issue/PR templates, and docs reconciliation (README Electron version fix, roadmap refresh, CONTRIBUTING Python style update). No runtime behavior changes beyond the `/skillset` endpoint and dynamic capability flag. All changes were smoke-tested during their PR review cycles (PRs #599, #600, #601). CI: all checks green across PRs #599, #600, #601, #602 — including Playwright smoke suite, CodeQL, Trivy, validate-overlay, Electron smoke (macOS + Windows), Build & Push (amd64 + arm64).
+
+---
+
 ## v0.7.54 — 2026-06-20 (DV — quality infrastructure)
 
 Bypass reason: This release adds two CI-only gates (test coverage threshold #408, startup-time regression #429) and fixes an electron-builder 26 schema validation issue (publisherName removal). No runtime behavior changes — all modifications are to CI workflow files and build configuration. Container image content is identical to v0.7.53 plus the electron-builder config fix. Validated by CI: Build & Push (amd64 + arm64), Smoke (amd64 + arm64, startup-time gate exercised: 5s/6s), CodeQL, Trivy, validate-overlay (coverage gate exercised: 48% > 45% threshold) all green across PRs #584, #585, #586, #587.
