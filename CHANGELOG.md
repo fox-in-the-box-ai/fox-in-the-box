@@ -11,9 +11,11 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 - `TRADEMARK.md` — trademark policy for project name and logo, with fork-renaming requirement (#410)
+- Python dependency lock file (`packages/integration/requirements.lock`) pins all transitive dependencies in container builds (#418)
 
 ### Changed
 - README roadmap section updated with current version targets and criteria-based v0.8.0 acceptance gate (#406)
+- Container builds use pip constraints to prevent silent dependency drift (#418)
 
 ---
 

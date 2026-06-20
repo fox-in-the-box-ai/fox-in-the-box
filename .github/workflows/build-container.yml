@@ -366,6 +366,22 @@ jobs:
           docker logs test-fox
           exit 1
 
+      - name: Verify pip lock consistency
+        if: matrix.platform.short == 'amd64'
+        run: |
+          set -euo pipefail
+          # Compare the committed lock file (baked into the image at build time)
+          # against the live pip freeze. Uses docker cp to avoid network fetch
+          # issues on fork PRs.
+          docker cp test-fox:/app/requirements.lock /tmp/lock-from-image.txt
+          grep -v '^#' /tmp/lock-from-image.txt | grep -v '^$' | sort > /tmp/lock.txt
+          docker exec test-fox pip freeze --exclude-editable 2>/dev/null | sort > /tmp/freeze.txt
+          if ! diff -u /tmp/lock.txt /tmp/freeze.txt; then
+            echo "::warning::pip freeze differs from requirements.lock — regenerate with: docker run --rm --entrypoint pip <image> freeze --exclude-editable | sort > packages/integration/requirements.lock"
+          else
+            echo "pip freeze matches requirements.lock"
+          fi
+
       - name: Container logs (always — debug)
         if: always()
         run: docker logs test-fox 2>&1 || true
