@@ -105,9 +105,74 @@ jobs:
           R2_SECRET_KEY:   ${{ secrets.R2_SECRET_KEY }}
         run: bash packages/deb/publish-apt.sh
 
+  # ── Container :stable + :vX.Y.Z promotion ──────────────────────────────────
+  # Decoupled from the GitHub Release job (#550) so that a failing Electron
+  # build does not block :stable advancement. Operators using :stable get
+  # critical container fixes immediately; the GitHub Release (with desktop
+  # artifacts) follows once all platform builds succeed.
+  promote-container:
+    name: Promote container image
+    needs: [wait-for-container]
+    runs-on: ubuntu-latest
+
+    permissions:
+      packages: write
+
+    steps:
+      - name: Log in to GHCR
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract version tag
+        id: tag
+        run: echo "version=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
+
+      # Pin the released image to the exact bytes wait-for-container pushed,
+      # while preserving the multi-arch manifest list (#82). The previous
+      # implementation used `docker pull && docker tag && docker push` —
+      # that pattern collapses a manifest list to a single-platform image
+      # because `docker pull` on the (amd64) runner only fetches the amd64
+      # child manifest, then the `tag` and `push` rewrite the new tag with
+      # just amd64. Switching to `docker buildx imagetools create` keeps
+      # the operation registry-side: it constructs the new tag pointing at
+      # the same manifest list, so `:vX.Y.Z` and `:stable` are multi-arch.
+      # The digest pinning rationale from #41 still holds — using
+      # `name@<index-digest>` as the source means a concurrent push to
+      # main can't mutate :latest between build and release.
+      - name: Re-tag Docker image as versioned and :stable
+        env:
+          DIGEST: ${{ needs.wait-for-container.outputs.digest }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$DIGEST" ]]; then
+            echo "::error::wait-for-container did not produce a digest output."
+            exit 1
+          fi
+          IMG="ghcr.io/fox-in-the-box-ai/cloud"
+          VERSION="${{ steps.tag.outputs.version }}"
+          docker buildx imagetools create -t "$IMG:$VERSION" "$IMG@$DIGEST"
+          docker buildx imagetools create -t "$IMG:stable"   "$IMG@$DIGEST"
+          # Verify the released tags are multi-arch — fail loudly if either
+          # has somehow become single-platform (ships a broken release
+          # before users find out).
+          for TAG in "$VERSION" "stable"; do
+            PLATFORMS=$(docker buildx imagetools inspect "$IMG:$TAG" \
+              --format '{{range .Manifest.Manifests}}{{.Platform.OS}}/{{.Platform.Architecture}}{{"\n"}}{{end}}')
+            echo "$IMG:$TAG platforms:"; echo "$PLATFORMS"
+            grep -qx 'linux/amd64' <<<"$PLATFORMS" || { echo "::error::$IMG:$TAG missing linux/amd64"; exit 1; }
+            grep -qx 'linux/arm64' <<<"$PLATFORMS" || { echo "::error::$IMG:$TAG missing linux/arm64"; exit 1; }
+          done
+          echo "✅ Both $IMG:$VERSION and $IMG:stable are multi-arch (linux/amd64, linux/arm64)"
+
   release:
     name: Create GitHub Release
-    needs: [wait-for-container, wait-for-electron, deb-smoke-test]
+    needs: [wait-for-electron, deb-smoke-test, promote-container]
     runs-on: ubuntu-latest
 
     permissions:
@@ -164,56 +229,9 @@ jobs:
           fi
           echo "✅ SMOKE_LOG.md entry for ${TAG} present + body is non-empty (has checked boxes or explicit bypass)"
 
-      - name: Log in to GHCR
-        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Extract version tag
         id: tag
         run: echo "version=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
-
-      # Pin the released image to the exact bytes wait-for-container pushed,
-      # while preserving the multi-arch manifest list (#82). The previous
-      # implementation used `docker pull && docker tag && docker push` —
-      # that pattern collapses a manifest list to a single-platform image
-      # because `docker pull` on the (amd64) runner only fetches the amd64
-      # child manifest, then the `tag` and `push` rewrite the new tag with
-      # just amd64. Switching to `docker buildx imagetools create` keeps
-      # the operation registry-side: it constructs the new tag pointing at
-      # the same manifest list, so `:vX.Y.Z` and `:stable` are multi-arch.
-      # The digest pinning rationale from #41 still holds — using
-      # `name@<index-digest>` as the source means a concurrent push to
-      # main can't mutate :latest between build and release.
-      - name: Re-tag Docker image as versioned and :stable
-        env:
-          DIGEST: ${{ needs.wait-for-container.outputs.digest }}
-        run: |
-          set -euo pipefail
-          if [[ -z "$DIGEST" ]]; then
-            echo "::error::wait-for-container did not produce a digest output."
-            exit 1
-          fi
-          IMG="ghcr.io/fox-in-the-box-ai/cloud"
-          VERSION="${{ steps.tag.outputs.version }}"
-          docker buildx imagetools create -t "$IMG:$VERSION" "$IMG@$DIGEST"
-          docker buildx imagetools create -t "$IMG:stable"   "$IMG@$DIGEST"
-          # Verify the released tags are multi-arch — fail loudly if either
-          # has somehow become single-platform (ships a broken release
-          # before users find out).
-          for TAG in "$VERSION" "stable"; do
-            PLATFORMS=$(docker buildx imagetools inspect "$IMG:$TAG" \
-              --format '{{range .Manifest.Manifests}}{{.Platform.OS}}/{{.Platform.Architecture}}{{"\n"}}{{end}}')
-            echo "$IMG:$TAG platforms:"; echo "$PLATFORMS"
-            grep -qx 'linux/amd64' <<<"$PLATFORMS" || { echo "::error::$IMG:$TAG missing linux/amd64"; exit 1; }
-            grep -qx 'linux/arm64' <<<"$PLATFORMS" || { echo "::error::$IMG:$TAG missing linux/arm64"; exit 1; }
-          done
-          echo "✅ Both $IMG:$VERSION and $IMG:stable are multi-arch (linux/amd64, linux/arm64)"
 
       - name: Download Windows artifact
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
