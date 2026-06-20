@@ -68,7 +68,7 @@ Open [http://localhost:8787](http://localhost:8787) and complete the setup wizar
 
 ```bash
 # Fox overlay tests (with coverage — CI enforces 45% minimum)
-cd packages/fox-overlay && pytest tests/ -v --cov=. --cov-report=term-missing
+cd packages/fox-overlay && pytest tests/ -v --cov=fox_overlay --cov-report=term-missing
 
 # Electron unit tests
 cd packages/electron && pnpm test

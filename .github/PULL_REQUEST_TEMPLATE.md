@@ -8,7 +8,7 @@
 
 ## Checklist
 
-- [ ] CI green: all required status checks pass (Build & Push, Smoke, validate, CodeQL, Trivy)
+- [ ] CI green: all required status checks pass (Build & Push, Merge into manifest list, Smoke, validate)
 - [ ] Tests: coverage stays above 45% threshold (enforced by CI via pytest-cov)
 - [ ] Startup time: container starts within 45s warn / 90s fail threshold (enforced by CI smoke)
 - [ ] CHANGELOG entry added for any user-visible change

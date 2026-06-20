@@ -63,7 +63,7 @@ body:
         - Windows desktop app
         - macOS desktop app (Apple Silicon)
         - macOS desktop app (Intel)
-        - Linux (.deb)
+        - Linux (install script / .deb)
         - Docker (manual)
         - Not platform-specific
     validations:
