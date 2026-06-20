@@ -9,7 +9,7 @@
 import { test, expect, request } from '@playwright/test';
 
 test.describe('Onboarding API', () => {
-  test('GET /api/setup/welcome returns welcome data', async ({ baseURL }) => {
+  test('GET /api/setup/welcome returns welcome text', async ({ baseURL }) => {
     const api = await request.newContext({ baseURL });
     const resetRes = await api.post('/test/reset');
     expect(resetRes.status(), '/test/reset must return 200 — test infra broken otherwise').toBe(200);
@@ -17,7 +17,8 @@ test.describe('Onboarding API', () => {
     const res = await api.get('/api/setup/welcome');
     expect(res.status(), '/api/setup/welcome must return 200').toBe(200);
     const body = await res.json();
-    expect(body, 'welcome response must have a status field').toHaveProperty('status');
+    expect(body, 'welcome response must have a text field').toHaveProperty('text');
+    expect(typeof body.text, 'text must be a string').toBe('string');
   });
 
   test('POST /api/setup/skip marks onboarding skipped', async ({ baseURL }) => {

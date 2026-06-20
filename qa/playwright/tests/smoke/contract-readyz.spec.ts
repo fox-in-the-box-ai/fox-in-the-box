@@ -17,35 +17,35 @@ test.describe('Contract — /readyz', () => {
     expect(ct, '/readyz must return JSON').toContain('application/json');
   });
 
-  test('response has ready flag and checks array', async ({ baseURL }) => {
+  test('response has ready flag and checks object', async ({ baseURL }) => {
     const api = await request.newContext({ baseURL });
     const body = await (await api.get('/readyz')).json();
     expect(body, 'missing ready flag').toHaveProperty('ready');
     expect(typeof body.ready, 'ready must be boolean').toBe('boolean');
-    expect(body, 'missing checks array').toHaveProperty('checks');
-    expect(Array.isArray(body.checks), 'checks must be an array').toBe(true);
+    expect(body, 'missing checks object').toHaveProperty('checks');
+    expect(
+      typeof body.checks,
+      'checks must be an object (keyed by check name)',
+    ).toBe('object');
   });
 
-  test('each check has name, ok, and detail fields', async ({ baseURL }) => {
+  test('each check entry has an ok boolean', async ({ baseURL }) => {
     const api = await request.newContext({ baseURL });
     const body = await (await api.get('/readyz')).json();
-    for (const check of body.checks) {
-      expect(check, `check missing "name": ${JSON.stringify(check)}`).toHaveProperty('name');
-      expect(check, `check missing "ok": ${JSON.stringify(check)}`).toHaveProperty('ok');
-      expect(check, `check missing "detail": ${JSON.stringify(check)}`).toHaveProperty('detail');
-      expect(typeof check.ok, `check "${check.name}" ok must be boolean`).toBe('boolean');
+    for (const [name, check] of Object.entries(body.checks) as [string, any][]) {
+      expect(check, `check "${name}" missing "ok" field`).toHaveProperty('ok');
+      expect(typeof check.ok, `check "${name}" ok must be boolean`).toBe('boolean');
     }
   });
 
   test('http_server check is always ok', async ({ baseURL }) => {
     const api = await request.newContext({ baseURL });
     const body = await (await api.get('/readyz')).json();
-    const httpCheck = body.checks.find((c: { name: string }) => c.name === 'http_server');
     expect(
-      httpCheck,
+      body.checks,
       '/readyz must include an http_server check — if we got a 200 from /readyz, ' +
         'HTTP is obviously working, so this check validates self-consistency',
-    ).toBeTruthy();
-    expect(httpCheck.ok, 'http_server check must be true').toBe(true);
+    ).toHaveProperty('http_server');
+    expect(body.checks.http_server.ok, 'http_server check must be true').toBe(true);
   });
 });

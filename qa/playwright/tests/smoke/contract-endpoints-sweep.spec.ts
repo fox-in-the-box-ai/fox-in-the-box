@@ -19,7 +19,7 @@ const CONTRACT_ENDPOINTS: Array<{ path: string; ok: number[] }> = [
   { path: '/readyz', ok: [200, 503] },
   { path: '/skillset', ok: [200, 404] },
   { path: '/health', ok: [200] },
-  { path: '/hostname', ok: [200, 404, 503] },
+  { path: '/api/settings/hostname', ok: [200] },
   { path: '/api/providers', ok: [200] },
   { path: '/api/setup/welcome', ok: [200] },
 ];
