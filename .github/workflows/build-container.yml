@@ -334,7 +334,6 @@ jobs:
         env:
           DIGEST: ${{ needs.merge.outputs.digest }}
         run: |
-          echo "start_epoch=$(date +%s)" >> "$GITHUB_OUTPUT"
           docker run -d \
             --name test-fox \
             --cap-add=NET_ADMIN \
@@ -342,8 +341,12 @@ jobs:
             --sysctl net.ipv4.ip_forward=1 \
             -p 127.0.0.1:8787:8787 \
             "${IMAGE}@${DIGEST}"
+          echo "start_epoch=$(date +%s)" >> "$GITHUB_OUTPUT"
 
       - name: Wait for /health to return 200 with healthy body
+        # Validates BOTH the HTTP status AND that the body contains
+        # `"status": "ok"`. v0.2.0 (#57) showed status-code-only checks
+        # can mask body-shape divergence — don't repeat that.
         id: health
         env:
           START_EPOCH: ${{ steps.start.outputs.start_epoch }}
@@ -382,6 +385,10 @@ jobs:
           STARTUP_FAIL_THRESHOLD: '90'
         run: |
           set -euo pipefail
+          if [[ -z "$STARTUP_SECONDS" ]]; then
+            echo "::error::No startup time recorded — health step may have failed"
+            exit 1
+          fi
           echo "Startup time on ${ARCH}: ${STARTUP_SECONDS}s (warn=${STARTUP_WARN_THRESHOLD}s, fail=${STARTUP_FAIL_THRESHOLD}s)"
 
           if (( STARTUP_SECONDS <= STARTUP_WARN_THRESHOLD )); then
@@ -395,9 +402,12 @@ jobs:
           fi
 
           # Over hard threshold — retry once (flake resistance).
+          # Downstream steps (pip lock, container logs, stop) operate on
+          # whichever test-fox instance is running — the retry container
+          # if this path fires.
           echo "::warning title=startup-time-${ARCH}::First attempt: ${STARTUP_SECONDS}s exceeds ${STARTUP_FAIL_THRESHOLD}s hard threshold — retrying"
-          docker stop test-fox || true
-          docker rm test-fox || true
+          docker rm -f test-fox || true
+          sleep 1
 
           RETRY_START=$(date +%s)
           docker run -d \
