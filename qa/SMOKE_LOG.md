@@ -25,6 +25,12 @@ Skipped sections are OK as long as they're explicitly noted with reason. Empty e
 
 ---
 
+## v0.7.58 — 2026-06-20 (DV — cleanup patch)
+
+Bypass reason: Dependency-only release — npm override for js-yaml (closes Dependabot #60), electron-log/electron-updater patch bumps, @types/node major (devDep), CI action bumps (checkout v7, gh-release v3.0.1). No Fox overlay changes, no runtime behavior changes. All PRs CI-green before merge (#609, #610, #611).
+
+---
+
 ## v0.7.57 — 2026-06-20 (DV — supply-chain hardening)
 
 Bypass reason: Supply-chain-only release — pnpm overrides for 7 transitive npm packages (tar, protobufjs, @grpc/grpc-js, form-data, js-yaml, tmp, @babel/core) and Dockerfile pip/wheel/setuptools upgrade. No Fox overlay changes, no runtime behavior changes. Electron build verified locally. CI: Build & Push + Trivy + CodeQL + Playwright must pass on PR before merge.
