@@ -57,6 +57,38 @@ tripwire_fire() {
         "${label_args[@]}"
 }
 
+# Close an existing tripwire issue when the condition clears.
+#
+# Usage:
+#   tripwire_clear "<exact-title>" "<reason>"
+#
+# If an open issue with the same title exists, comment with the reason
+# and close it. Otherwise no-op.
+tripwire_clear() {
+    local title="$1"
+    local reason="$2"
+
+    local numbers
+    numbers=$(gh issue list --repo "$REPO" --state open \
+                 --search "in:title \"$title\"" \
+                 --json number,title \
+                 -q ".[] | select(.title == \"$title\") | .number" \
+                 2>/dev/null)
+
+    if [ -z "$numbers" ]; then
+        return 0
+    fi
+
+    echo "$numbers" | while read -r num; do
+        gh issue comment "$num" --repo "$REPO" \
+            --body "$(printf 'Condition cleared: %s\n\n_Auto-closed by upstream-tripwires.yml run %s_' "$reason" "$RUN_URL")" \
+            || echo "[tripwire] warning: failed to comment on #$num"
+        gh issue close "$num" --repo "$REPO" --reason "completed" \
+            || echo "[tripwire] warning: failed to close #$num"
+        echo "[tripwire] auto-closed issue #$num — condition cleared"
+    done
+}
+
 # Stable colour per label family so the issue list reads at a glance.
 tripwire_label_color() {
     case "$1" in
