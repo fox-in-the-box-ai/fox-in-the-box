@@ -19,6 +19,10 @@ if (window.fitbError) {
   });
 }
 
+document.getElementById('btn-diag').addEventListener('click', () => {
+  if (window.fitbError) window.fitbError.openDiagnosticReport();
+});
+
 document.getElementById('btn-copy').addEventListener('click', () => {
   if (window.fitbError) window.fitbError.copyDiagnostics();
 });

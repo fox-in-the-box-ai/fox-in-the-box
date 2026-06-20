@@ -5,4 +5,5 @@ contextBridge.exposeInMainWorld('fitbError', {
   getData: () => ipcRenderer.invoke('error:get-data'),
   copyDiagnostics: () => ipcRenderer.send('error:copy'),
   close: () => ipcRenderer.send('error:close'),
+  openDiagnosticReport: () => ipcRenderer.send('error:open-diagnostic'),
 });

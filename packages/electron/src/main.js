@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, dialog, shell, clipboard, ipcMain } = require('electron');
+const { app, BrowserWindow, dialog, shell, clipboard, ipcMain, globalShortcut } = require('electron');
 const { spawn, exec } = require('child_process');
 const path = require('path');
 const fs = require('fs');
@@ -19,6 +19,7 @@ const {
 const { runStartup, ensureContainerHealthy, StartupPhaseError } = require('./startup-orchestrator');
 const { registerWindowsRunOnceResume } = require('./windows-run-once');
 const { APP_HOME_URL } = require('./app-urls');
+const diagnosticReport = require('./diagnostic-report');
 const APP_ICON = process.platform === 'win32'
   ? path.join(__dirname, '..', 'assets', 'icon.ico')
   : path.join(__dirname, '..', 'assets', 'icon.png');
@@ -83,6 +84,7 @@ function migrateLegacyUserData() {
 migrateLegacyUserData();
 
 app.whenReady().then(main).catch(handleStartupError);
+app.on('will-quit', () => { globalShortcut.unregisterAll(); });
 app.setAppUserModelId('io.foxinthebox.desktop');
 // v0.7.19: `app.setName('Fox in the box')` removed — `productName: fox-in-the-box`
 // in package.json now drives the userData path, which is what we want
@@ -306,13 +308,87 @@ function showError(details) {
     });
   });
   ipcMain.once('error:close', () => win.close());
+  ipcMain.once('error:open-diagnostic', () => openDiagnosticWindow());
 
   win.loadFile(path.join(__dirname, '..', 'assets', 'error.html'));
   win.setMenu(null);
 
   win.on('closed', () => {
+    ipcMain.removeAllListeners('error:open-diagnostic');
     _errorData = null;
     if (_fatalStartup) app.exit(1);
+  });
+}
+
+// ─── Diagnostic report (#293) ────────────────────────────────────────────────
+
+let _diagnosticWin = null;
+
+function openDiagnosticWindow() {
+  if (_diagnosticWin && !_diagnosticWin.isDestroyed()) {
+    _diagnosticWin.focus();
+    return;
+  }
+
+  ipcMain.removeHandler('diagnostic:gather');
+  ipcMain.removeAllListeners('diagnostic:copy');
+  ipcMain.removeAllListeners('diagnostic:close');
+
+  _diagnosticWin = new BrowserWindow({
+    width: 640,
+    height: 520,
+    resizable: true,
+    minimizable: false,
+    maximizable: false,
+    closable: true,
+    alwaysOnTop: true,
+    frame: true,
+    title: 'Fox in the Box — Diagnostic Report',
+    icon: APP_ICON,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, 'preload-diagnostic.js'),
+    },
+  });
+
+  ipcMain.handle('diagnostic:gather', async () => {
+    try {
+      const report = await diagnosticReport.gatherDiagnosticReport({
+        dockerManager: docker,
+        logPath: path.join(app.getPath('logs'), 'main.log'),
+        foxVersion: app.getVersion(),
+      });
+      return diagnosticReport.formatAsMarkdown(report);
+    } catch (err) {
+      log.error('Diagnostic report gather failed:', err);
+      return null;
+    }
+  });
+
+  ipcMain.once('diagnostic:copy', (_event, text) => {
+    clipboard.writeText(text);
+    if (_diagnosticWin && !_diagnosticWin.isDestroyed()) {
+      dialog.showMessageBox(_diagnosticWin, {
+        type: 'info',
+        message: 'Diagnostic report copied to clipboard.',
+        buttons: ['OK'],
+      });
+    }
+  });
+
+  ipcMain.once('diagnostic:close', () => {
+    if (_diagnosticWin && !_diagnosticWin.isDestroyed()) _diagnosticWin.close();
+  });
+
+  _diagnosticWin.loadFile(path.join(__dirname, '..', 'assets', 'diagnostic.html'));
+  _diagnosticWin.setMenu(null);
+
+  _diagnosticWin.on('closed', () => {
+    ipcMain.removeHandler('diagnostic:gather');
+    ipcMain.removeAllListeners('diagnostic:copy');
+    ipcMain.removeAllListeners('diagnostic:close');
+    _diagnosticWin = null;
   });
 }
 
@@ -618,6 +694,11 @@ async function main() {
   if (resumeAfterReboot) {
     log.info('[startup] Post-reboot resume (--resume-setup)');
   }
+
+  const shortcutOk = globalShortcut.register('CommandOrControl+Shift+D', () => {
+    openDiagnosticWindow();
+  });
+  if (!shortcutOk) log.warn('Failed to register diagnostic shortcut Ctrl+Shift+D');
 
   _setupInProgress = true;
   let _tailnetUrl = null;

@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self';">
+<style>
+@font-face {
+  font-family: "Sora";
+  src: url("fonts/Sora.woff2") format("woff2-variations");
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: "Sora", "Segoe UI", system-ui, sans-serif;
+  background: #0D0D1A;
+  color: #FFF8DC;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  padding: 28px 32px;
+  overflow: hidden;
+}
+
+.header {
+  flex-shrink: 0;
+  margin-bottom: 16px;
+}
+
+.brand-name {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: rgba(255,248,220,0.5);
+  margin-bottom: 4px;
+}
+
+.accent-bar {
+  height: 2px;
+  background: linear-gradient(90deg, #26A69A 0%, rgba(38,166,154,0.2) 100%);
+  border-radius: 1px;
+  margin: 10px 0 14px;
+}
+
+.heading {
+  font-size: 16px;
+  font-weight: 600;
+  color: #26A69A;
+  letter-spacing: -0.01em;
+  margin-bottom: 6px;
+}
+
+.subtitle {
+  font-size: 12px;
+  color: rgba(255,248,220,0.45);
+  line-height: 1.5;
+}
+
+.loading {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  color: rgba(255,248,220,0.4);
+}
+
+.loading-dot {
+  display: inline-block;
+  animation: pulse 1.4s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%, 80%, 100% { opacity: 0.3; }
+  40% { opacity: 1; }
+}
+
+.report-body {
+  flex: 1;
+  overflow-y: auto;
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  font-size: 11px;
+  color: rgba(255,248,220,0.65);
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  padding: 12px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 8px;
+  display: none;
+}
+
+.report-body::-webkit-scrollbar { width: 4px; }
+.report-body::-webkit-scrollbar-track { background: transparent; }
+.report-body::-webkit-scrollbar-thumb { background: rgba(38,166,154,0.3); border-radius: 2px; }
+
+.error-text {
+  flex: 1;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  color: #EF5350;
+}
+
+.actions {
+  flex-shrink: 0;
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 14px;
+}
+
+.btn {
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 8px 16px;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.btn:hover { opacity: 0.85; }
+.btn:disabled { opacity: 0.4; cursor: default; }
+
+.btn-copy {
+  background: rgba(38,166,154,0.15);
+  color: #26A69A;
+  border: 1px solid rgba(38,166,154,0.35);
+}
+.btn-close {
+  background: rgba(255,255,255,0.08);
+  color: rgba(255,248,220,0.7);
+  border: 1px solid rgba(255,255,255,0.1);
+}
+</style>
+</head>
+<body>
+<div class="header">
+  <div class="brand-name">Fox in the Box</div>
+  <div class="accent-bar"></div>
+  <div class="heading">Diagnostic Report</div>
+  <div class="subtitle">Review the report below, then copy to clipboard to share with support.</div>
+</div>
+
+<div class="loading" id="loading">
+  Gathering diagnostics<span class="loading-dot">...</span>
+</div>
+
+<pre class="report-body" id="report-body"></pre>
+
+<div class="error-text" id="error-text"></div>
+
+<div class="actions">
+  <button class="btn btn-copy" id="btn-copy" disabled>Copy to clipboard</button>
+  <button class="btn btn-close" id="btn-close">Close</button>
+</div>
+
+<script src="diagnostic.js"></script>
+</body>
+</html>
