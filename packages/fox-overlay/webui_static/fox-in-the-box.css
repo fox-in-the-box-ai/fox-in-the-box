@@ -1048,6 +1048,35 @@ pre[class*=language-] {
   opacity: 1;
 }
 
+/* ── Approval explanation overlay (#150) ─────────────────────────────── */
+
+.approval-explain {
+  font-size: 13px;
+  line-height: 1.45;
+  padding: 6px 10px;
+  margin: 6px 0 2px;
+  border-radius: 6px;
+  min-height: 0;
+  transition: opacity 0.15s ease;
+}
+
+.approval-explain:empty,
+.approval-explain.loading:empty {
+  display: none;
+}
+
+.approval-explain.loading {
+  opacity: 0.5;
+  font-style: italic;
+}
+
+.approval-explain.loaded {
+  background: rgba(45, 212, 191, 0.08);
+  border: 1px solid rgba(45, 212, 191, 0.25);
+  color: inherit;
+  opacity: 0.9;
+}
+
 /* Stream-error retry panel (v0.6.1, FITB #254 + #255).
  * Renders inline at the bottom of #chat after an apperror SSE event.
  * Visual treatment: subdued surface, no modal-style backdrop — the
