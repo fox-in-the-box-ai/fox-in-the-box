@@ -13,7 +13,6 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - Keep-alive stream corruption on auth rejection: rejected POST requests no longer leave unread body bytes in the socket buffer, preventing HTTP request smuggling on the next keep-alive request (#559)
 - Container `:stable` tag promotion decoupled from Electron build success — a failed desktop build no longer blocks container availability (#550)
 - Fleet-provisioned containers: `/data` directory ownership corrected so the application user can create files directly under the mount point (#549)
-- Cron failure diagnostics patch retargeted to `_run_job_impl` after upstream refactored `run_job` into a thin wrapper (#557)
 - Upstream's `onboarding.js` script tag removed via static patch to prevent interference with Fox's own onboarding wizard (#564)
 
 ### Changed

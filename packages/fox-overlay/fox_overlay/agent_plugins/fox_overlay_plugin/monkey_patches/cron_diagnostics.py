@@ -47,8 +47,8 @@ def apply() -> None:
     )
 
     # 2) cron.jobs.mark_job_run — maintain rolling failure history
-    # v2026.6.19 added cross-process file locking (fire_claim + _jobs_lock)
-    # between the delivery_error line and the completed-count block.
+    # v2026.6.19 added cross-process file locking via _jobs_lock and
+    # fire-claim clearing between the delivery_error and completed-count lines.
     substitute_function(
         upstream_module=_u_jobs,
         function_name="mark_job_run",
@@ -196,7 +196,7 @@ def apply() -> None:
                 '            deliver_content = "\\n".join(_fail_lines)\n',
             ),
         ],
-        sentinel="_fox_patched_tick_structured_failure",
+        sentinel="_fox_patched_run_one_job_structured_failure",
     )
 
     # 5) tools.cronjob_tools._format_job — surface failure history when present
