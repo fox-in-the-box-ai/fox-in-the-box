@@ -13,10 +13,12 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - Keep-alive stream corruption on auth rejection: rejected POST requests no longer leave unread body bytes in the socket buffer, preventing HTTP request smuggling on the next keep-alive request (#559)
 - Container `:stable` tag promotion decoupled from Electron build success — a failed desktop build no longer blocks container availability (#550)
 - Fleet-provisioned containers: `/data` directory ownership corrected so the application user can create files directly under the mount point (#549)
-- Cron failure diagnostics patch retargeted to `_run_job_impl` after upstream refactored `run_job` into a thin wrapper (#557)
 - Upstream's `onboarding.js` script tag removed via static patch to prevent interference with Fox's own onboarding wizard (#564)
 
 ### Changed
+- Upstream bump: hermes-webui v0.51.475 → v0.51.528 (53 upstream releases), hermes-agent v2026.6.5 → v2026.6.19
+- Overlay patches 003/006 refreshed for upstream structural changes (new `outlineToggleBtn` shifted empty-state block)
+- Cron diagnostics monkey-patches updated for upstream refactoring: `run_job` reverted from `_run_job_impl` wrapper, delivery logic extracted from `tick()` to `run_one_job()`, error formatting extracted to `_summarize_cron_failure_for_delivery()`, `mark_job_run` gained cross-process file locking
 - Release workflow: `promote-container` extracted into its own job with multi-arch verification, independent of Electron and `.deb` pipelines (#550)
 - Release workflow: `release` job permissions narrowed — removed unused `packages: write` (container ops moved to `promote-container`)
 

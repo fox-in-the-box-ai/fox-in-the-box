@@ -40,7 +40,7 @@ SENTINELS = [
     (jobs, "create_job", "_fox_patched_create_job_failure_history"),
     (jobs, "mark_job_run", "_fox_patched_mark_job_run_failure_history"),
     (scheduler, "run_job", "_fox_patched_run_job_diagnostics"),
-    (scheduler, "tick", "_fox_patched_tick_structured_failure"),
+    (scheduler, "run_one_job", "_fox_patched_run_one_job_structured_failure"),
     (cronjob_tools, "_format_job", "_fox_patched_format_job_failure_history"),
 ]
 
