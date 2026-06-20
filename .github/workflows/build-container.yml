@@ -330,9 +330,11 @@ jobs:
           echo "✅ Index-digest pull resolved to $ARCH on ${{ matrix.platform.short }} runner"
 
       - name: Start container
+        id: start
         env:
           DIGEST: ${{ needs.merge.outputs.digest }}
         run: |
+          echo "start_epoch=$(date +%s)" >> "$GITHUB_OUTPUT"
           docker run -d \
             --name test-fox \
             --cap-add=NET_ADMIN \
@@ -342,15 +344,17 @@ jobs:
             "${IMAGE}@${DIGEST}"
 
       - name: Wait for /health to return 200 with healthy body
-        # Validates BOTH the HTTP status AND that the body contains
-        # `"status": "ok"`. v0.2.0 (#57) showed status-code-only checks
-        # can mask body-shape divergence — don't repeat that.
+        id: health
+        env:
+          START_EPOCH: ${{ steps.start.outputs.start_epoch }}
         run: |
           set -euo pipefail
           for i in $(seq 1 36); do
             RESP=$(curl -fsS http://localhost:8787/health 2>/dev/null) || RESP=""
             if [[ -n "$RESP" ]] && echo "$RESP" | grep -q '"status": "ok"'; then
-              echo "✅ /health returned 200 with healthy body on attempt $i"
+              ELAPSED=$(( $(date +%s) - START_EPOCH ))
+              echo "startup_seconds=$ELAPSED" >> "$GITHUB_OUTPUT"
+              echo "✅ /health returned 200 with healthy body on attempt $i (${ELAPSED}s)"
               echo "Body: $RESP"
               exit 0
             fi
@@ -363,6 +367,67 @@ jobs:
             sleep 5
           done
           echo "::error::Container did not return a healthy /health body within 3 minutes on ${{ matrix.platform.short }}"
+          docker logs test-fox
+          exit 1
+
+      - name: Startup time regression gate (#429)
+        env:
+          STARTUP_SECONDS: ${{ steps.health.outputs.startup_seconds }}
+          ARCH: ${{ matrix.platform.short }}
+          DIGEST: ${{ needs.merge.outputs.digest }}
+          # Thresholds in seconds. Set conservatively until baseline data
+          # from ~10 CI runs establishes p50/p95. Then tighten to
+          # p95 * 1.20 per the SLO definition.
+          STARTUP_WARN_THRESHOLD: '45'
+          STARTUP_FAIL_THRESHOLD: '90'
+        run: |
+          set -euo pipefail
+          echo "Startup time on ${ARCH}: ${STARTUP_SECONDS}s (warn=${STARTUP_WARN_THRESHOLD}s, fail=${STARTUP_FAIL_THRESHOLD}s)"
+
+          if (( STARTUP_SECONDS <= STARTUP_WARN_THRESHOLD )); then
+            echo "::notice title=startup-time-${ARCH}::Container started in ${STARTUP_SECONDS}s on ${ARCH} (within ${STARTUP_WARN_THRESHOLD}s warn threshold)"
+            exit 0
+          fi
+
+          if (( STARTUP_SECONDS <= STARTUP_FAIL_THRESHOLD )); then
+            echo "::warning title=startup-time-${ARCH}::Container started in ${STARTUP_SECONDS}s on ${ARCH} — above ${STARTUP_WARN_THRESHOLD}s warn threshold (hard limit: ${STARTUP_FAIL_THRESHOLD}s)"
+            exit 0
+          fi
+
+          # Over hard threshold — retry once (flake resistance).
+          echo "::warning title=startup-time-${ARCH}::First attempt: ${STARTUP_SECONDS}s exceeds ${STARTUP_FAIL_THRESHOLD}s hard threshold — retrying"
+          docker stop test-fox || true
+          docker rm test-fox || true
+
+          RETRY_START=$(date +%s)
+          docker run -d \
+            --name test-fox \
+            --cap-add=NET_ADMIN \
+            --device /dev/net/tun \
+            --sysctl net.ipv4.ip_forward=1 \
+            -p 127.0.0.1:8787:8787 \
+            "${IMAGE}@${DIGEST}"
+
+          for i in $(seq 1 36); do
+            RESP=$(curl -fsS http://localhost:8787/health 2>/dev/null) || RESP=""
+            if [[ -n "$RESP" ]] && echo "$RESP" | grep -q '"status": "ok"'; then
+              RETRY_ELAPSED=$(( $(date +%s) - RETRY_START ))
+              echo "Retry startup time on ${ARCH}: ${RETRY_ELAPSED}s"
+              if (( RETRY_ELAPSED <= STARTUP_FAIL_THRESHOLD )); then
+                echo "::warning title=startup-time-${ARCH}::Retry passed: ${RETRY_ELAPSED}s (first attempt was ${STARTUP_SECONDS}s — likely cold-cache flake)"
+                exit 0
+              fi
+              echo "::error title=startup-time-${ARCH}::Startup regression on ${ARCH}: both attempts exceeded ${STARTUP_FAIL_THRESHOLD}s (first: ${STARTUP_SECONDS}s, retry: ${RETRY_ELAPSED}s)"
+              exit 1
+            fi
+            if ! docker inspect test-fox --format '{{.State.Running}}' | grep -q true; then
+              echo "::error::Container exited during retry on ${ARCH}"
+              docker logs test-fox
+              exit 1
+            fi
+            sleep 5
+          done
+          echo "::error::Container did not become healthy during retry on ${ARCH}"
           docker logs test-fox
           exit 1
 

@@ -11,6 +11,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 - Test coverage gate in CI — fox-overlay tests enforce 45% minimum line coverage via pytest-cov, fails the PR if coverage drops below threshold (#408)
+- Startup time regression gate in CI — smoke job measures wall-clock time from container start to first healthy `/health` response per architecture, warns above 45s, fails above 90s with single-retry flake resistance (#429)
 
 ### Fixed
 - Electron build failure on electron-builder 26 — removed deprecated `publisherName` from win config (publisher name now derived from signing certificate)
