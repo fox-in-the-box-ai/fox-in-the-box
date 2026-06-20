@@ -300,26 +300,32 @@ The app itself is free and open source. You only pay for AI usage at your provid
 
 ## Roadmap
 
-What we're working on next. No promises on dates — this is a small team — but this is the direction. v0.7.x is the stabilization cycle: v0.8.0 only ships once the verification rebuild is complete and the project is genuinely solid.
+What we're working on next. No promises on dates — this is a small team — but this is the direction.
 
-**Just shipped (v0.7.33–v0.7.44)**
-- **7-step progress window** — real-time install progress with diagnostics pane, post-reboot Docker resume, smooth animations (v0.7.33–v0.7.40)
-- **Fox branding in WebUI** — custom bot name, avatar, and empty-state branding via build-time patches (v0.7.23)
-- **Ollama local model routing** — correct provider routing, colon-split fixes across frontend and backend, picker dedup (v0.7.42–v0.7.44)
-- **Windows installer overhaul** — install-mode selection, HyperV/WSL2 detection, uninstaller data cleanup, Docker Desktop uninstall integration (v0.7.22–v0.7.27)
+**Recently shipped (v0.7.45–v0.7.51)**
+- **Upstream separation** — Fox overlays cleanly separated from upstream Hermes codebase; upstream updates no longer require merge conflicts (v0.6.0 / v0.7.0)
+- **Supply-chain hardening** — container `:stable` tag promotion decoupled from Electron builds, Fleet container ownership fixes, release workflow reliability (v0.7.49–v0.7.51)
+- **Comparison docs** — feature matrix vs Open WebUI, AnythingLLM, Jan, LibreChat (v0.7.51)
+- **Upstream bump** — hermes-webui v0.51.528, hermes-agent v2026.6.19 (v0.7.51)
 
-**v0.7.x stabilization in flight**
-- **#336 — Wizard local-fallback error on Windows** — needs Win11 Docker logs for diagnosis
-- **On-device smoke backlog** — 14 POST-RELEASE items unchecked since v0.7.17
-- **Upstream anchor drift (#439)** — blocks the next upstream bump
+**v0.7.x stabilization (in flight)**
+- Supply-chain hardening — Python dependency lock, Electron major bump, Windows artifact labeling
+- Custom provider UI — add OpenAI-compatible providers (llama.cpp, vLLM, LM Studio) from the settings panel
+- Diagnostic report — one-click "Send diagnostic report" in the launcher for support
 
-**Eventually (v0.8.0 and beyond)**
-- UI overhaul — a clean, professional design system replacing the current developer-tool look
+**v0.8.0 — ships when these criteria are met:**
+- Playwright E2E covers all critical user paths (provider setup, chat, model switching, failover)
+- Zero open P0 bugs
+- Container image passes clean Trivy scan
+- On-device smoke checklist fully green for two consecutive releases
+
+**Beyond v0.8.0**
 - Network isolation mode for enterprise — air-gapped Docker deployment
 - Routines — teach Fox multi-step workflows via conversation, runs on a schedule
-- Content-safety classifier (Llama Guard 3 1B), guardrail plugins, business-rule validators — opt-in safety layer for users who want it
+- Knowledge RAG — batch-ingest document collections for semantic retrieval
+- Content-safety classifier and guardrail plugins — opt-in safety layer
 
-**Have an idea?** [Open a discussion](https://github.com/fox-in-the-box-ai/fox-in-the-box/discussions) or [file a feature request](https://github.com/fox-in-the-box-ai/fox-in-the-box/issues/new).
+Track progress on the [issue board](https://github.com/fox-in-the-box-ai/fox-in-the-box/issues) or [open a discussion](https://github.com/fox-in-the-box-ai/fox-in-the-box/discussions).
 
 ---
 
@@ -345,4 +351,4 @@ Fox in the Box stands on the shoulders of:
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT — see [LICENSE](LICENSE). The name "Fox in the Box" and the fox logo are trademarks of Vulpy Inc. — see [TRADEMARK.md](TRADEMARK.md).
