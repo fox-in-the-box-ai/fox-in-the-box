@@ -11,6 +11,13 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.7.56] — 2026-06-20
+
+### Changed
+- Upstream bump: hermes-webui v0.51.528 → v0.51.537 (9 patch releases); hermes-agent unchanged at v2026.6.19 (#580)
+
+---
+
 ## [0.7.55] — 2026-06-20
 
 ### Added
