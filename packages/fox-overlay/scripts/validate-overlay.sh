@@ -60,8 +60,12 @@ done
 
 if [ -n "$PYTHON_BIN_EARLY" ]; then
     if "$PYTHON_BIN_EARLY" -m pytest --version >/dev/null 2>&1; then
+        COV_ARGS=""
+        if "$PYTHON_BIN_EARLY" -c "import pytest_cov" 2>/dev/null; then
+            COV_ARGS="--cov=fox_overlay --cov-report=term-missing --cov-config=packages/fox-overlay/pyproject.toml"
+        fi
         PYTHONPATH="packages/fox-overlay:forks/hermes-webui" \
-        "$PYTHON_BIN_EARLY" -m pytest packages/fox-overlay/tests/ -q --tb=short 2>&1 \
+        "$PYTHON_BIN_EARLY" -m pytest packages/fox-overlay/tests/ -q --tb=short $COV_ARGS 2>&1 \
             || fail "Python unit tests failed — see output above"
         ok "Python unit tests passed"
     else

@@ -12,6 +12,17 @@ dependencies = []
 # that hermes-agent invokes once per process at plugin-load time.
 fox_overlay = "fox_overlay.agent_plugins:register"
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.coverage.run]
+source = ["fox_overlay"]
+
+[tool.coverage.report]
+fail_under = 45
+show_missing = true
+skip_empty = true
+
 [build-system]
 requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
