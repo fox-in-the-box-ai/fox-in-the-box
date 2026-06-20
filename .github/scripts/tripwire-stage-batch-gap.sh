@@ -38,13 +38,17 @@ unreleased=$(gh api -X GET "repos/$WEBUI_REPO/commits" \
 unreleased=$((unreleased - 1))
 [ "$unreleased" -lt 0 ] && unreleased=0
 
+CLEAR_TITLE="[tripwire/stage-batch] $WEBUI_REPO release stamp gap >${THRESHOLD_HOURS}h"
+
 if [ "$gap_hours" -lt "$THRESHOLD_HOURS" ]; then
-    echo "[tripwire/stage-batch] last stamp $gap_hours h ago (< $THRESHOLD_HOURS h); no-op"
+    echo "[tripwire/stage-batch] last stamp $gap_hours h ago (< $THRESHOLD_HOURS h); condition clear"
+    tripwire_clear "$CLEAR_TITLE" "Last stamp was $gap_hours h ago (under ${THRESHOLD_HOURS}h threshold)."
     exit 0
 fi
 
 if [ "$unreleased" -eq 0 ]; then
-    echo "[tripwire/stage-batch] $gap_hours h since last stamp BUT no unreleased commits; no-op (quiet period, not a stall)"
+    echo "[tripwire/stage-batch] $gap_hours h since last stamp BUT no unreleased commits; condition clear (quiet period)"
+    tripwire_clear "$CLEAR_TITLE" "No unreleased commits — quiet period, not a stall."
     exit 0
 fi
 

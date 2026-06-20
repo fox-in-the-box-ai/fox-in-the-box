@@ -60,11 +60,14 @@ webui_conf_md=$(echo "$webui_conf_full" | tail -n +2)
 webui_count=$(echo "$webui" | grep -c '^-' || true)
 agent_count=$(echo "$agent" | grep -c '^-' || true)
 
+CLEAR_TITLE="[tripwire/digest] upstream-commit digest (rolling)"
+
 # No-op if zero activity AND zero keyword hits AND zero conflict-file fires.
 if [ "$webui_count" = "0" ] && [ "$agent_count" = "0" ] \
    && [ -z "$webui_kw" ] && [ -z "$agent_kw" ] \
    && [ "$webui_conf_count" = "0" ]; then
-    echo "[tripwire/digest] no upstream activity in last 24h; no-op"
+    echo "[tripwire/digest] no upstream activity in last 24h; condition clear"
+    tripwire_clear "$CLEAR_TITLE" "No upstream activity in the last 24h."
     exit 0
 fi
 
@@ -72,6 +75,7 @@ fi
 # Plain commit counts go to log only, not an issue.
 if [ -z "$webui_kw" ] && [ -z "$agent_kw" ] && [ "$webui_conf_count" = "0" ]; then
     echo "[tripwire/digest] $webui_count webui + $agent_count agent commits in last 24h; nothing noteworthy"
+    tripwire_clear "$CLEAR_TITLE" "Activity present but no keyword or conflict-file hits."
     exit 0
 fi
 

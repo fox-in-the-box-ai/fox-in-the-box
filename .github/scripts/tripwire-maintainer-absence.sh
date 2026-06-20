@@ -19,7 +19,10 @@ count=$(gh api -X GET "repos/$WEBUI_REPO/commits" \
           | jq -r '.[].sha' | wc -l | tr -d ' ')
 
 if [ "$count" -gt 0 ]; then
-    echo "[tripwire/absence] $MAINTAINER: $count commits in last $WINDOW_DAYS days; no-op"
+    echo "[tripwire/absence] $MAINTAINER: $count commits in last $WINDOW_DAYS days; condition clear"
+    tripwire_clear \
+        "[tripwire/absence] $MAINTAINER silent for $WINDOW_DAYS+ days on $WEBUI_REPO" \
+        "$MAINTAINER has $count commits in the last $WINDOW_DAYS days."
     exit 0
 fi
 
