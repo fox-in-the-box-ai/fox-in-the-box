@@ -9,12 +9,19 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+---
+
+## [0.7.55] — 2026-06-20
+
 ### Added
 - `GET /skillset` contract endpoint — returns active skillset manifest summary (name, version, data sources, declared capabilities); 404 when no skillset loaded (#477)
 - Playwright smoke specs for critical Fox surfaces — 8 new spec files covering contract endpoints (`/version`, `/capabilities`, `/readyz`, `/skillset`), hostname overlay, onboarding API, provider settings, and a parametrized contract-endpoints sweep (29 test cases total) (#266)
+- GitHub issue templates split into separate forms (bug, feature, question) with PR template checklist (#431)
 
 ### Changed
 - `data_plane_access` capability is now dynamic — reports `true` when instance is managed with a data plane URL configured, instead of always `false` (#478)
+- README: corrected Electron version (28→42), refreshed roadmap "Recently shipped" section through v0.7.54
+- CONTRIBUTING.md: Python style reference redirected from upstream `forks/` to `packages/fox-overlay/`
 
 ---
 
