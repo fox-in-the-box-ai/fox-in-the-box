@@ -39,8 +39,8 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install pytest
-        run: pip install pytest --quiet
+      - name: Install pytest + coverage
+        run: pip install pytest pytest-cov --quiet
 
       - name: Run validate-overlay
         run: bash packages/fox-overlay/scripts/validate-overlay.sh
