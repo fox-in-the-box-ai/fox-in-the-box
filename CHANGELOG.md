@@ -11,7 +11,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 - `GET /skillset` contract endpoint — returns active skillset manifest summary (name, version, data sources, declared capabilities); 404 when no skillset loaded (#477)
-- Playwright smoke specs for critical Fox surfaces — 8 new spec files covering contract endpoints (`/version`, `/capabilities`, `/readyz`, `/skillset`), hostname overlay, onboarding API, provider settings, and a parametrized contract-endpoints sweep (36 test cases total) (#266)
+- Playwright smoke specs for critical Fox surfaces — 8 new spec files covering contract endpoints (`/version`, `/capabilities`, `/readyz`, `/skillset`), hostname overlay, onboarding API, provider settings, and a parametrized contract-endpoints sweep (33 test cases total) (#266)
 
 ### Changed
 - `data_plane_access` capability is now dynamic — reports `true` when instance is managed with a data plane URL configured, instead of always `false` (#478)
