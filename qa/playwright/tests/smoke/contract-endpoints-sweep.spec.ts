@@ -1,9 +1,10 @@
 /**
- * Contract endpoints sweep — all INSTANCE_CONTRACT endpoints respond.
+ * Contract endpoints sweep — INSTANCE_CONTRACT + overlay endpoints respond.
  *
- * Extends the Phase 1 endpoints-sweep with the v0.7.55 contract
- * endpoints. Parametrized to catch dispatcher registration regressions
- * across the full Fox surface area.
+ * Complements the Phase 1 endpoints-sweep (which covers the 5 original
+ * Fox-overlay prefixes) with the v0.7.55 contract endpoints and new
+ * overlay surfaces. No overlap — paths covered by endpoints-sweep.spec.ts
+ * are excluded here.
  *
  * Unlike the per-endpoint specs (contract-version, contract-capabilities,
  * etc.) which validate response shapes, this sweep only checks that
@@ -19,13 +20,8 @@ const CONTRACT_ENDPOINTS: Array<{ path: string; ok: number[] }> = [
   { path: '/skillset', ok: [200, 404] },
   { path: '/health', ok: [200] },
   { path: '/hostname', ok: [200, 404, 503] },
-  { path: '/api/ollama/status', ok: [200, 503] },
-  { path: '/api/tailscale/status', ok: [200, 503] },
-  { path: '/api/local-fallback/status', ok: [200, 503] },
-  { path: '/api/local-models', ok: [200, 404, 503] },
   { path: '/api/providers', ok: [200] },
   { path: '/api/setup/welcome', ok: [200] },
-  { path: '/setup', ok: [200, 302] },
 ];
 
 test.describe('Contract + Fox endpoints sweep', () => {

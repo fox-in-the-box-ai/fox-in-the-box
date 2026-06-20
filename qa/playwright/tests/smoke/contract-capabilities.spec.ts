@@ -8,6 +8,7 @@
  */
 import { test, expect, request } from '@playwright/test';
 
+// Canonical source: INSTANCE_CONTRACT §4.3 — update when the contract adds a capability.
 const EXPECTED_KEYS = [
   'local_fallback',
   'tailscale',

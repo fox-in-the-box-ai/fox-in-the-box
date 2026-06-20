@@ -11,6 +11,7 @@ import { test, expect, request } from '@playwright/test';
 test.describe('Provider settings', () => {
   test('GET /api/providers returns a list', async ({ baseURL }) => {
     const api = await request.newContext({ baseURL });
+    await api.post('/test/reset');
     const res = await api.get('/api/providers');
     expect(res.status(), '/api/providers must return 200').toBe(200);
     const body = await res.json();

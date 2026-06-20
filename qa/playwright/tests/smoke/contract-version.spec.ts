@@ -37,6 +37,7 @@ test.describe('Contract — /version', () => {
   test('runtime is "hermes"', async ({ baseURL }) => {
     const api = await request.newContext({ baseURL });
     const body = await (await api.get('/version')).json();
+    // Pinned to 'hermes' — single-runtime config. Update if a second runtime ships.
     expect(body.runtime, 'Fox instances must report runtime=hermes').toBe('hermes');
   });
 });
