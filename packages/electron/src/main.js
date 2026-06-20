@@ -84,6 +84,7 @@ function migrateLegacyUserData() {
 migrateLegacyUserData();
 
 app.whenReady().then(main).catch(handleStartupError);
+app.on('will-quit', () => { globalShortcut.unregisterAll(); });
 app.setAppUserModelId('io.foxinthebox.desktop');
 // v0.7.19: `app.setName('Fox in the box')` removed — `productName: fox-in-the-box`
 // in package.json now drives the userData path, which is what we want
@@ -313,6 +314,7 @@ function showError(details) {
   win.setMenu(null);
 
   win.on('closed', () => {
+    ipcMain.removeAllListeners('error:open-diagnostic');
     _errorData = null;
     if (_fatalStartup) app.exit(1);
   });
@@ -379,6 +381,9 @@ function openDiagnosticWindow() {
   _diagnosticWin.setMenu(null);
 
   _diagnosticWin.on('closed', () => {
+    ipcMain.removeHandler('diagnostic:gather');
+    ipcMain.removeAllListeners('diagnostic:copy');
+    ipcMain.removeAllListeners('diagnostic:close');
     _diagnosticWin = null;
   });
 }

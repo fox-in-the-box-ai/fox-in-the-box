@@ -651,7 +651,7 @@ async function getDiagnostics() {
 
 const _SYSTEM_INFO_ALLOWLIST = [
   'ServerVersion', 'OSType', 'OperatingSystem', 'KernelVersion',
-  'Architecture', 'NCPU', 'MemTotal', 'DockerRootDir',
+  'Architecture', 'NCPU', 'MemTotal',
 ];
 
 async function getDockerSystemInfo() {

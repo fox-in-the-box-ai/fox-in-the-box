@@ -5,7 +5,7 @@ jest.mock('electron-log', () => ({ info: jest.fn(), warn: jest.fn(), debug: jest
 const os = require('os');
 const fs = require('fs');
 const path = require('path');
-const { scrubText, readLogTail, formatAsMarkdown, gatherDiagnosticReport } = require('../../packages/electron/src/diagnostic-report');
+const { scrubText, readLogTail, runSafe, formatAsMarkdown, gatherDiagnosticReport, MAX_LOG_BYTES } = require('../../packages/electron/src/diagnostic-report');
 
 // ─── scrubText ──────────────────────────────────────────────────────────────
 
@@ -62,6 +62,11 @@ describe('scrubText', () => {
     expect(scrubText('')).toBe('');
   });
 
+  test('redacts quoted values in env var assignments', () => {
+    expect(scrubText('API_KEY="my secret value"')).toBe('API_KEY=[REDACTED]');
+    expect(scrubText("TOKEN='single-quoted-secret'")).toBe('TOKEN=[REDACTED]');
+  });
+
   test('leaves safe text unchanged', () => {
     const input = 'Fox in the box v0.7.52 starting up';
     expect(scrubText(input)).toBe(input);
@@ -95,6 +100,25 @@ describe('readLogTail', () => {
   test('returns error message for missing file', () => {
     const result = readLogTail('/nonexistent/path/log.txt', 10);
     expect(result).toMatch(/\[Could not read log:/);
+  });
+});
+
+// ─── runSafe ────────────────────────────────────────────────────────────────
+
+describe('runSafe', () => {
+  test('returns stdout of a successful command', async () => {
+    const result = await runSafe('echo', ['hello'], 5000);
+    expect(result.trim()).toBe('hello');
+  });
+
+  test('returns error message for a missing command', async () => {
+    const result = await runSafe('nonexistent_cmd_12345', [], 5000);
+    expect(result).toMatch(/\[Error:|Failed to run:/);
+  });
+
+  test('returns error message on timeout', async () => {
+    const result = await runSafe('sleep', ['30'], 100);
+    expect(result).toMatch(/\[Error:/);
   });
 });
 
@@ -269,5 +293,31 @@ describe('gatherDiagnosticReport', () => {
 
     const report = await gatherDiagnosticReport({ dockerManager: mockDocker });
     expect(report.docker.container.id).toBe('abcdef123456');
+  });
+
+  test('gathers darwin-specific info when platform is darwin', async () => {
+    const report = await gatherDiagnosticReport({ platform: 'darwin' });
+    expect(report.os.platform).toBe('darwin');
+    if (process.platform === 'darwin') {
+      expect(report.darwin).toBeDefined();
+      expect(report.darwin.docker_daemon).toBeDefined();
+    }
+    expect(report.windows).toBeUndefined();
+  });
+
+  test('gathers windows-specific info when platform is win32', async () => {
+    const report = await gatherDiagnosticReport({ platform: 'win32' });
+    expect(report.os.platform).toBe('win32');
+    expect(report.windows).toBeDefined();
+    expect(report.windows.wsl_status).toBeDefined();
+    expect(report.windows.wsl_list).toBeDefined();
+    expect(report.darwin).toBeUndefined();
+  });
+
+  test('skips platform sections for linux', async () => {
+    const report = await gatherDiagnosticReport({ platform: 'linux' });
+    expect(report.os.platform).toBe('linux');
+    expect(report.windows).toBeUndefined();
+    expect(report.darwin).toBeUndefined();
   });
 });

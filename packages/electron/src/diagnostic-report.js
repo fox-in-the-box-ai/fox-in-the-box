@@ -9,7 +9,7 @@ const SCRUB_PATTERNS = [
   { re: /sk-[A-Za-z0-9_-]{20,}/g, sub: 'sk-[REDACTED]' },
   { re: /key-[A-Za-z0-9_-]{20,}/g, sub: 'key-[REDACTED]' },
   { re: /Bearer\s+[A-Za-z0-9._-]{20,}/gi, sub: 'Bearer [REDACTED]' },
-  { re: /(OPENROUTER_API_KEY|OPENAI_API_KEY|ANTHROPIC_API_KEY|API_KEY|SECRET|TOKEN|PASSWORD)\s*=\s*\S+/gi, sub: '$1=[REDACTED]' },
+  { re: /(OPENROUTER_API_KEY|OPENAI_API_KEY|ANTHROPIC_API_KEY|API_KEY|SECRET|TOKEN|PASSWORD)\s*=\s*(?:"[^"]*"|'[^']*'|\S+)/gi, sub: '$1=[REDACTED]' },
 ];
 
 function scrubText(text) {
@@ -27,11 +27,21 @@ function scrubText(text) {
   return result;
 }
 
+const MAX_LOG_BYTES = 2 * 1024 * 1024;
+
 function readLogTail(logPath, lines) {
   try {
-    const content = fs.readFileSync(logPath, 'utf8');
-    const allLines = content.split('\n');
-    return allLines.slice(-lines).join('\n');
+    const stat = fs.statSync(logPath);
+    const start = Math.max(0, stat.size - MAX_LOG_BYTES);
+    const fd = fs.openSync(logPath, 'r');
+    try {
+      const buf = Buffer.alloc(Math.min(stat.size, MAX_LOG_BYTES));
+      fs.readSync(fd, buf, 0, buf.length, start);
+      const allLines = buf.toString('utf8').split('\n');
+      return allLines.slice(-lines).join('\n');
+    } finally {
+      fs.closeSync(fd);
+    }
   } catch (err) {
     return `[Could not read log: ${err.message}]`;
   }
@@ -53,8 +63,7 @@ function runSafe(command, args, timeoutMs) {
   });
 }
 
-async function gatherDiagnosticReport({ dockerManager, logPath, foxVersion, platform }) {
-  platform = platform || process.platform;
+async function gatherDiagnosticReport({ dockerManager, logPath, foxVersion, platform = process.platform }) {
   const report = {
     timestamp: new Date().toISOString(),
     installation_id: randomUUID(),
@@ -118,7 +127,7 @@ async function gatherDiagnosticReport({ dockerManager, logPath, foxVersion, plat
       filtered = raw.split('\n').filter(l => /docker/i.test(l)).join('\n')
         || '[No docker entries in launchctl]';
     }
-    report.darwin = { docker_daemon: filtered };
+    report.darwin = { docker_daemon: scrubText(filtered) };
   }
 
   return report;
@@ -206,5 +215,7 @@ module.exports = {
   formatAsMarkdown,
   scrubText,
   readLogTail,
+  runSafe,
   SCRUB_PATTERNS,
+  MAX_LOG_BYTES,
 };

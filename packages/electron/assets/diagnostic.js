@@ -1,6 +1,6 @@
 'use strict';
 
-var _reportText = '';
+let _reportText = '';
 
 if (window.fitbDiagnostic) {
   window.fitbDiagnostic.gather().then(function (markdown) {
@@ -11,7 +11,7 @@ if (window.fitbDiagnostic) {
       return;
     }
     _reportText = markdown;
-    var body = document.getElementById('report-body');
+    const body = document.getElementById('report-body');
     body.textContent = markdown;
     body.style.display = 'block';
     document.getElementById('btn-copy').disabled = false;
@@ -25,7 +25,7 @@ if (window.fitbDiagnostic) {
 document.getElementById('btn-copy').addEventListener('click', function () {
   if (_reportText && window.fitbDiagnostic) {
     window.fitbDiagnostic.copy(_reportText);
-    var btn = document.getElementById('btn-copy');
+    const btn = document.getElementById('btn-copy');
     btn.textContent = 'Copied!';
     setTimeout(function () { btn.textContent = 'Copy to clipboard'; }, 2000);
   }
