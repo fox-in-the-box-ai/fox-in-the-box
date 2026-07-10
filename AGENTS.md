@@ -31,16 +31,21 @@ fox-in-the-box/             ← monorepo root
 ├── packages/
 │   ├── integration/        ← Dockerfile, supervisord, entrypoint, default-configs
 │   ├── electron/           ← Electron desktop app
+│   ├── deb/                ← .deb package build + apt repo publish
+│   ├── install-core/       ← Core install scripts
 │   ├── scripts/            ← install.sh, dev utilities
-│   └── fox-overlay/        ← sibling overlay for hermes-{agent,webui} (v0.6.0 migration; phases 2-10 populate it)
+│   └── fox-overlay/        ← sibling overlay for hermes-{agent,webui} (v0.6.0 migration)
 ├── docs/
 │   ├── tasks/              ← One task doc per feature (your specs live here)
 │   ├── archive/            ← Frozen design docs (REQUIREMENTS.md, ROADMAP.md)
-│   └── GATEWAY.md, RESET.md, GETTING_STARTED.md, …
-├── tests/
+│   └── DEV_MODE.md, RESET.md, RELEASE_WORKFLOW.md, SECURITY_POSTURE.md, …
+├── qa/
+│   ├── playwright/         ← Playwright end-to-end specs
 │   ├── integration/        ← Full-stack tests
 │   ├── electron/           ← Electron unit tests (jest)
-│   └── container/          ← Shell/bats tests
+│   ├── container/          ← Shell/bats tests
+│   ├── SMOKE_CHECKLIST.md  ← Manual smoke gate
+│   └── SMOKE_LOG.md        ← Per-release smoke entries (release gate)
 ├── README.md               ← Live roadmap lives in README's Roadmap section
 └── AGENTS.md               ← This file
 ```

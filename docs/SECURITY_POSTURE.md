@@ -1,6 +1,6 @@
 # Fox in the Box — Security Posture
 
-Last updated: v0.7.57 (2026-06-20)
+Last updated: v0.7.59 (2026-07-10)
 
 ## Threat model
 
