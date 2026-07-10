@@ -11,6 +11,24 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.7.59] — 2026-07-10
+
+### Changed
+- Upstream bump: hermes-webui v0.51.537 → v0.52.0, hermes-agent v2026.6.19 → v2026.7.7.2
+- Monkey-patches retargeted for v0.52.0 upstream refactors: `reload_config` → `_refresh_config_cache`, `get_available_models` gained `force_refresh` parameter, `_run_agent_streaming` gained `moa_config` parameter, `save_settings` anchors updated for new upstream helper calls
+- All 9 webui overlay patches regenerated with v0.52.0 line numbers
+- Bumped Electron 42.4.1 → 42.5.1, dockerode 5.0.0 → 5.0.1, @playwright/test 1.61.0 → 1.61.1
+- Bumped 9 CI actions (actions/cache v5→v6, docker/login-action v4.2→v4.4, docker/setup-buildx-action v4.1→v4.2, github/codeql-action v4.36.2→v4.36.3, actions/setup-python v6.2→v6.3, and others)
+
+### Fixed
+- Option B diff guard regex now allows overlay package changes alongside upstream bumps (previously only `versions.toml` was allowed, blocking legitimate patch regeneration)
+- Added `$` anchor to `forks/hermes-(agent|webui)` in Option B guard regex (defense-in-depth hardening)
+
+### Security
+- Updated pip constraints: cryptography 49.0.0 → 46.0.7 (upstream hermes-agent hard-pin for CVE-2026-39892, CVE-2026-34073). Note: 46.0.7 is below the fix for GHSA-537c-gmf6-5ccf (vulnerable OpenSSL in wheels, fixed in 48.0.1); this is an upstream constraint that cannot be overridden without pip resolution failure — tracked for upstream remediation
+
+---
+
 ## [0.7.58] — 2026-06-20
 
 ### Security

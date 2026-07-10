@@ -69,8 +69,8 @@ _log = logging.getLogger("fox_overlay.webui_patches.streaming")
 _RUN_AGENT_STREAMING_SENTINEL = "_fox_patched_run_agent_streaming"
 
 # Expected upstream signature for _run_agent_streaming.
-# v0.51.84 added `goal_related=False`. Refresh both this and any anchors
-# when upstream renames a parameter.
+# v0.51.84 added `goal_related=False`; v0.52.0 added `moa_config=None`.
+# Refresh both this and any anchors when upstream renames a parameter.
 _EXPECTED_RUN_AGENT_STREAMING_SIG = (
     "(session_id, msg_text, model, workspace, stream_id, attachments=None, "
     "*, ephemeral=False, model_provider=None, goal_related=False, moa_config=None)"
