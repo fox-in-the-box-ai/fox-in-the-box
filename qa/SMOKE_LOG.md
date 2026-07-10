@@ -25,6 +25,14 @@ Skipped sections are OK as long as they're explicitly noted with reason. Empty e
 
 ---
 
+## v0.7.59 — 2026-07-10 (DV — upstream bump v0.52.0)
+
+CI-verified: Build & Push (amd64+arm64), Smoke (amd64+arm64), validate-overlay, CodeQL, Trivy, Electron smoke (macOS+Windows), .deb smoke all green on PR #645. Container image promoted to :stable. Adversarial 4-perspective review panel (SECURITY/CORRECTNESS/TEST DISCIPLINE/CODE QUALITY) run against full v0.7.58..HEAD diff — 6 findings identified and fixed in-pass before merge.
+
+Bypass reason: Upstream bump (hermes-webui v0.52.0, hermes-agent v2026.7.7.2) + Dependabot dep bumps + review-panel fixes (docstring refreshes, test stub update, guard regex hardening). All monkey-patch changes are mechanically coupled to the upstream version — retargeting anchors and passing through new parameters. No new Fox-authored behavior. 315/315 overlay unit tests pass.
+
+---
+
 ## v0.7.58 — 2026-06-20 (DV — cleanup patch)
 
 Bypass reason: Dependency-only release — npm override for js-yaml (closes Dependabot #60), electron-log/electron-updater patch bumps, @types/node major (devDep), CI action bumps (checkout v7, gh-release v3.0.1). No Fox overlay changes, no runtime behavior changes. All PRs CI-green before merge (#609, #610, #611).
