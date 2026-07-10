@@ -331,7 +331,7 @@ Source: https://github.com/digitalocean/marketplace-partners/blob/master/scripts
 | Field | Value | Status |
 |-------|-------|--------|
 | App name | Fox in the Box | Ready |
-| Version | 0.7.44 (or current at submission) | Ready |
+| Version | 0.7.59 (or current at submission) | Ready |
 | OS | Ubuntu 24.04 LTS | Ready |
 | Software included | Docker CE, Caddy, Fox in the Box (list with versions) | To build |
 | Short description | Private AI assistant with memory, local AI, and secure remote access | Ready |
