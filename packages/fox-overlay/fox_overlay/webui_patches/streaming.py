@@ -73,7 +73,7 @@ _RUN_AGENT_STREAMING_SENTINEL = "_fox_patched_run_agent_streaming"
 # when upstream renames a parameter.
 _EXPECTED_RUN_AGENT_STREAMING_SIG = (
     "(session_id, msg_text, model, workspace, stream_id, attachments=None, "
-    "*, ephemeral=False, model_provider=None, goal_related=False)"
+    "*, ephemeral=False, model_provider=None, goal_related=False, moa_config=None)"
 )
 
 

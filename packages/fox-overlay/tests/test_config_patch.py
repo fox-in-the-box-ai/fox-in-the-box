@@ -69,17 +69,23 @@ _cfg_path = None
 _cfg_fingerprint = None
 
 
+def _refresh_config_cache(config_path: Path | None = None) -> None:
+    """Refresh _cfg_cache for config_path."""
+    global _cfg_mtime, _cfg_path, _cfg_fingerprint
+    if config_path is None:
+        config_path = _get_config_path()
+    _cfg_cache.clear()
+    _old_cfg_mtime = _cfg_mtime
+    # ... upstream content collapsed ...
+    # still hits the fast path without a cold run.
+    if _old_cfg_mtime != 0.0:
+        _delete_models_cache_on_disk()
+
+
 def reload_config() -> None:
     """Reload config.yaml from the active profile's directory."""
-    global _cfg_mtime, _cfg_path, _cfg_fingerprint
     with _cfg_lock:
-        _cfg_cache.clear()
-        config_path = _get_config_path()
-        _old_cfg_mtime = _cfg_mtime
-        # ... upstream content collapsed ...
-        # still hits the fast path without a cold run.
-        if _old_cfg_mtime != 0.0:
-            _delete_models_cache_on_disk()
+        _refresh_config_cache(_get_config_path())
 
 
 _SETTINGS_DEFAULTS = {
@@ -97,8 +103,18 @@ _SETTINGS_BOOL_KEYS = {
 _SETTINGS_LANG_RE = None  # placeholder
 
 
+def _read_raw_settings_file():
+    return {}
+
+
+def _extract_persisted_speech_keys(raw):
+    return set()
+
+
 def save_settings(settings: dict) -> dict:
     """Save settings to disk. Returns the merged settings. Ignores unknown keys."""
+    raw_settings = _read_raw_settings_file()
+    persisted_speech_keys = _extract_persisted_speech_keys(raw_settings)
     current = load_settings()
     pending_theme = current.get("theme")
     pending_skin = current.get("skin")
@@ -123,7 +139,7 @@ def _format_ollama_label(mid: str) -> str:
     return mid.split(":", 1)[0] if ":" in mid else mid
 
 
-def get_available_models(*, prefer_cache: bool = False) -> dict:
+def get_available_models(*, prefer_cache: bool = False, force_refresh: bool = False) -> dict:
     """Stub of upstream's picker assembly. Returns a fixed shape so the
     wrap can splice on top without needing upstream's full logic."""
     return {
@@ -169,7 +185,7 @@ def test_apply_marks_all_function_sentinels(fresh_config):
     """Phase 8 (v0.51.84) — get_config patch dropped (upstream native mtime check)."""
     _u, patch_mod = fresh_config
     patch_mod.apply()
-    assert getattr(_u.reload_config, "_fox_patched_reload_config", False) is True
+    assert getattr(_u._refresh_config_cache, "_fox_patched_refresh_config_cache", False) is True
     assert getattr(_u.save_settings, "_fox_patched_save_settings", False) is True
     # Sanity: get_config NOT patched anymore
     assert getattr(_u.get_config, "_fox_patched_get_config", False) is False
@@ -247,11 +263,11 @@ def test_bool_unrecognized_string_is_skipped(fresh_config):
 
 # ── Anchor drift detection ───────────────────────────────────────────────
 
-def test_anchor_drift_in_reload_config_fails_fast(tmp_path, monkeypatch):
+def test_anchor_drift_in_refresh_config_cache_fails_fast(tmp_path, monkeypatch):
     """Drop the multi-var global declaration → patch can't find new anchor."""
     drifted = _UPSTREAM_CONFIG_SOURCE.replace(
-        "    global _cfg_mtime, _cfg_path, _cfg_fingerprint\n    with _cfg_lock:\n",
-        "    with _cfg_lock:\n",
+        "    global _cfg_mtime, _cfg_path, _cfg_fingerprint\n    if config_path is None:\n",
+        "    if config_path is None:\n",
     )
     _install_stub(tmp_path, drifted, monkeypatch)
     import fox_overlay.webui_patches.config as patch_mod
@@ -355,7 +371,7 @@ def test_picker_no_double_add_if_upstream_already_has_ollama(fresh_config, monke
     _stub_ollama_get_models(monkeypatch, running=True, models=[{"name": "phi4-mini"}])
     patch_mod.apply()
     # Simulate upstream returning an OLLAMA group already
-    def _upstream_already_has_ollama(*, prefer_cache: bool = False) -> dict:
+    def _upstream_already_has_ollama(*, prefer_cache: bool = False, force_refresh: bool = False) -> dict:
         return {
             "active_provider": None,
             "default_model": "test-model",
@@ -398,7 +414,7 @@ def test_picker_skips_malformed_model_entries(fresh_config, monkeypatch):
 def test_signature_drift_in_get_available_models_fails_fast(tmp_path, monkeypatch):
     """If upstream changes the picker signature, the wrap must fail loudly."""
     drifted = _UPSTREAM_CONFIG_SOURCE.replace(
-        "def get_available_models(*, prefer_cache: bool = False) -> dict:",
+        "def get_available_models(*, prefer_cache: bool = False, force_refresh: bool = False) -> dict:",
         "def get_available_models(workspace: str = '/tmp') -> dict:",
     )
     _install_stub(tmp_path, drifted, monkeypatch)

@@ -11,9 +11,9 @@ v0.51.84's upstream changes:
    invalidation NATIVELY (with a more sophisticated ``_cfg_fingerprint``
    mechanism). Fox's patch is REDUNDANT. The get_config substitution
    is dropped from this version.
-2. **``reload_config()``** — upstream expanded the ``global`` declaration
-   from ``_cfg_mtime`` only to ``_cfg_mtime, _cfg_path, _cfg_fingerprint``.
-   Fox's anchor updated accordingly.
+2. **``reload_config()``** — upstream refactored into a thin wrapper
+   delegating to ``_refresh_config_cache()``. Fox's anchors retarget
+   ``_refresh_config_cache`` (v0.52.0).
 3. **``save_settings()``** — unchanged in v0.51.84; all 3 substitutions
    apply with their original anchors.
 4. **``_SETTINGS_DEFAULTS`` + ``_SETTINGS_BOOL_KEYS``** — still
@@ -68,14 +68,14 @@ from ._helpers import substitute_function
 
 _log = logging.getLogger("fox_overlay.webui_patches.config")
 
-_RELOAD_CONFIG_SENTINEL = "_fox_patched_reload_config"
+_REFRESH_CONFIG_CACHE_SENTINEL = "_fox_patched_refresh_config_cache"
 _SAVE_SETTINGS_SENTINEL = "_fox_patched_save_settings"
 _GET_AVAILABLE_MODELS_SENTINEL = "_fox_patched_get_available_models"
 _MODULE_DEFAULTS_FLAG = "_fox_settings_defaults_applied"
 
-_EXPECTED_RELOAD_CONFIG_SIG = "() -> None"
+_EXPECTED_REFRESH_CONFIG_CACHE_SIG = "(config_path: pathlib.Path | None = None) -> None"
 _EXPECTED_SAVE_SETTINGS_SIG = "(settings: dict) -> dict"
-_EXPECTED_GET_AVAILABLE_MODELS_SIG = "(*, prefer_cache: bool = False) -> dict"
+_EXPECTED_GET_AVAILABLE_MODELS_SIG = "(*, prefer_cache: bool = False, force_refresh: bool = False) -> dict"
 
 _FOX_DEFAULTS = {
     # Local AI fallback (#9). Toggling ON triggers a one-time GGUF
@@ -229,8 +229,8 @@ def _wrap_get_available_models(upstream_module) -> None:
 
     _check_signature(upstream_fn, _EXPECTED_GET_AVAILABLE_MODELS_SIG, "get_available_models")
 
-    def _fox_get_available_models(*, prefer_cache: bool = False):
-        result = upstream_fn(prefer_cache=prefer_cache)
+    def _fox_get_available_models(*, prefer_cache: bool = False, force_refresh: bool = False):
+        result = upstream_fn(prefer_cache=prefer_cache, force_refresh=force_refresh)
         try:
             if isinstance(result, dict):
                 _splice_ollama_group(result)
@@ -252,14 +252,17 @@ def _wrap_get_available_models(upstream_module) -> None:
 def apply() -> None:
     from api import config as _u
 
-    # Apply-level idempotency: bail if reload_config already patched.
+    # Apply-level idempotency: bail if _refresh_config_cache already patched.
     # (get_config patch was dropped in Phase 8 follow-up #238 — upstream
     # v0.51.84 implements mtime-based cache invalidation natively.)
-    if getattr(_u.reload_config, _RELOAD_CONFIG_SENTINEL, False):
+    # v0.52.0: upstream refactored reload_config into a 3-line wrapper
+    # delegating to _refresh_config_cache; the cache-eviction anchors
+    # live in _refresh_config_cache now.
+    if getattr(_u._refresh_config_cache, _REFRESH_CONFIG_CACHE_SENTINEL, False):
         return
 
     # ── Signature self-checks ───────────────────────────────────────────
-    _check_signature(_u.reload_config, _EXPECTED_RELOAD_CONFIG_SIG, "reload_config")
+    _check_signature(_u._refresh_config_cache, _EXPECTED_REFRESH_CONFIG_CACHE_SIG, "_refresh_config_cache")
     _check_signature(_u.save_settings, _EXPECTED_SAVE_SETTINGS_SIG, "save_settings")
 
     # ── Module-scope additions: defaults dict + bool key set ────────────
@@ -276,33 +279,31 @@ def apply() -> None:
             len(_FOX_DEFAULTS), len(_FOX_BOOL_KEYS),
         )
 
-    # ── Patch reload_config: add in-memory models-cache eviction ────────
-    # v0.51.84: upstream expanded `global _cfg_mtime` to `global _cfg_mtime,
-    # _cfg_path, _cfg_fingerprint`. Anchor updated to match.
+    # ── Patch _refresh_config_cache: add in-memory models-cache eviction ─
+    # v0.52.0: upstream moved the reload body into _refresh_config_cache;
+    # reload_config() is now a thin wrapper. Anchors retarget here.
     substitute_function(
         upstream_module=_u,
-        function_name="reload_config",
+        function_name="_refresh_config_cache",
         substitutions=[
             (
-                # Expand global declaration to include the models-cache vars.
                 "    global _cfg_mtime, _cfg_path, _cfg_fingerprint\n"
-                "    with _cfg_lock:\n",
+                "    if config_path is None:\n",
                 "    global _cfg_mtime, _cfg_path, _cfg_fingerprint, _available_models_cache, _available_models_cache_ts\n"
-                "    with _cfg_lock:\n",
+                "    if config_path is None:\n",
             ),
             (
-                # Add cache eviction after on-disk cache delete (#138).
-                "        if _old_cfg_mtime != 0.0:\n"
-                "            _delete_models_cache_on_disk()\n",
-                "        if _old_cfg_mtime != 0.0:\n"
-                "            _delete_models_cache_on_disk()\n"
-                "            # Fox #138: evict in-memory cache too — same gating as\n"
-                "            # on-disk delete (only on actual changes, not first load).\n"
-                "            _available_models_cache = None\n"
-                "            _available_models_cache_ts = 0.0\n",
+                "    if _old_cfg_mtime != 0.0:\n"
+                "        _delete_models_cache_on_disk()\n",
+                "    if _old_cfg_mtime != 0.0:\n"
+                "        _delete_models_cache_on_disk()\n"
+                "        # Fox #138: evict in-memory cache too — same gating as\n"
+                "        # on-disk delete (only on actual changes, not first load).\n"
+                "        _available_models_cache = None\n"
+                "        _available_models_cache_ts = 0.0\n",
             ),
         ],
-        sentinel=_RELOAD_CONFIG_SENTINEL,
+        sentinel=_REFRESH_CONFIG_CACHE_SENTINEL,
     )
 
     # ── Patch save_settings: three additions ────────────────────────────
@@ -312,8 +313,12 @@ def apply() -> None:
         substitutions=[
             (
                 # Top-of-function: Tailscale + Ollama URL validation gates.
+                # v0.52.0: upstream added raw_settings + persisted_speech_keys
+                # before current = load_settings(). Anchor updated.
                 'def save_settings(settings: dict) -> dict:\n'
                 '    """Save settings to disk. Returns the merged settings. Ignores unknown keys."""\n'
+                '    raw_settings = _read_raw_settings_file()\n'
+                '    persisted_speech_keys = _extract_persisted_speech_keys(raw_settings)\n'
                 '    current = load_settings()\n',
                 'def save_settings(settings: dict) -> dict:\n'
                 '    """Save settings to disk. Returns the merged settings. Ignores unknown keys.\n'
@@ -339,6 +344,8 @@ def apply() -> None:
                 '            _ollama_url_changed = True\n'
                 '        except ImportError:\n'
                 '            pass\n'
+                '    raw_settings = _read_raw_settings_file()\n'
+                '    persisted_speech_keys = _extract_persisted_speech_keys(raw_settings)\n'
                 '    current = load_settings()\n',
             ),
             (
