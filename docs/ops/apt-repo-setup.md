@@ -113,8 +113,8 @@ apt.foxinthebox.ai/
 ├── pool/
 │   └── main/
 │       └── f/foxinthebox/
-│           ├── foxinthebox_0.7.44_amd64.deb
-│           └── foxinthebox_0.7.44_arm64.deb
+│           ├── foxinthebox_0.7.59_amd64.deb
+│           └── foxinthebox_0.7.59_arm64.deb
 ├── gpg                              ← public signing key
 └── conf/                            ← reprepro metadata (not user-facing)
 ```

@@ -303,12 +303,13 @@ The app itself is free and open source. You only pay for AI usage at your provid
 What we're working on next. No promises on dates — this is a small team — but this is the direction.
 
 **Recently shipped**
+- **Upstream bump** — hermes-webui v0.52.0, hermes-agent v2026.7.7.2 (v0.7.59)
+- **Security alert triage** — resolved 24 supply-chain alerts via npm overrides + Dockerfile upgrade (v0.7.55–v0.7.57)
+- **Apt repository** — `.deb` packages published to `apt.foxinthebox.ai` for headless Linux installs (v0.7.59)
+- **Playwright smoke specs** — automated E2E tests for critical Fox surfaces (v0.7.55)
 - **CI quality gates** — test coverage threshold (45% minimum) and container startup time regression gate (v0.7.54)
 - **Custom provider UI** — add, edit, test, and delete OpenAI-compatible providers (llama.cpp, LM Studio, vLLM) from Settings → Providers (v0.7.53)
-- **Diagnostic report** — one-click "Send diagnostic report" in the launcher and via Ctrl+Shift+D (v0.7.53)
-- **Approval card explanations** — plain-English explanation of flagged commands before approval (v0.7.53)
 - **Electron 42 + supply-chain hardening** — Electron 28→42, Python dependency lock, unsigned artifact labeling (v0.7.52)
-- **Upstream bump** — hermes-webui v0.51.528, hermes-agent v2026.6.19 (v0.7.51)
 - **Upstream separation** — Fox overlays cleanly separated from upstream Hermes codebase (v0.6.0)
 
 **v0.8.0 — ships when these criteria are met:**
