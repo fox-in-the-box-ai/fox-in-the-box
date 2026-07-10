@@ -1,8 +1,8 @@
 diff --git a/api/routes.py b/api/routes.py
-index eee4f166..6b661ab7 100644
+index c3a40051..6f512995 100644
 --- a/api/routes.py
 +++ b/api/routes.py
-@@ -1455,7 +1455,7 @@ def _clean_session_model_provider(value: str | None) -> str | None:
+@@ -5838,7 +5838,7 @@ def _clean_session_model_provider(value: str | None) -> str | None:
  def _split_provider_qualified_model(model: str) -> tuple[str, str | None]:
      model = str(model or "").strip()
      if model.startswith("@") and ":" in model:
