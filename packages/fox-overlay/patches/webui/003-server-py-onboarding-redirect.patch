@@ -1,34 +1,11 @@
-From: Fox in the Box overlay <noreply@fox-in-the-box.local>
-Subject: [PATCH 003/003] Restore Fox onboarding redirect in server.py
-
-The v0.6.0/v0.7.0 (Phase 7/8) overlay migration moved
-fox_overlay/webui_modules/onboarding.py + setup.{html,css,js} into the
-overlay package, registered the /setup and /api/setup/ dispatcher
-routes, and added .fox-removals entries for the old static/onboarding.js.
-
-What it did NOT do: write a patch to re-install the redirect middleware
-into virgin upstream's server.py. v0.5.4 had it inline at server.py
-lines 147-148 and 167-168. Once the submodule was re-pointed at virgin
-upstream in Phase 8, those lines were gone — so every fresh-install user
-landing on / went straight to upstream's chat shell instead of being
-bounced to /setup for the Fox wizard.
-
-This patch restores the wiring: import Fox's two onboarding helpers
-(guarded so vanilla webui without fox_overlay still boots) and call them
-at the top of both do_GET and _handle_write (which is shared by
-do_POST/do_PATCH/do_DELETE — so this single insertion covers all
-write methods, not just POST).
-
-Reference: forks/hermes-webui@62c08548:server.py lines 95, 147-148,
-167-168 (the v0.5.4 pre-migration state). Issue #331.
-
 diff --git a/server.py b/server.py
+index dcf26b0d..cebad311 100644
 --- a/server.py
 +++ b/server.py
-@@ -144,6 +144,20 @@ except ModuleNotFoundError as _fox_e:
+@@ -110,6 +110,20 @@ except ModuleNotFoundError as _fox_e:
  except Exception as _fox_e:
      logger.warning("fox_overlay.bootstrap failed (%s); Fox routes disabled", _fox_e)
-
+ 
 +# Fox onboarding redirect: bounce un-onboarded users to /setup before any
 +# other routing fires. v0.5.4 had this inline; the Phase 7/8 overlay
 +# migration moved the helpers into fox_overlay.webui_modules.onboarding
@@ -46,7 +23,7 @@ diff --git a/server.py b/server.py
  from api.auth import check_auth
  from api.config import HOST, PORT, STATE_DIR, SESSION_DIR, DEFAULT_WORKSPACE
  from api.helpers import (
-@@ -332,6 +346,10 @@ class Handler(BaseHTTPRequestHandler):
+@@ -389,6 +403,10 @@ class Handler(BaseHTTPRequestHandler):
              set_request_profile(cookie_profile)
          try:
              parsed = urlparse(self.path)
@@ -57,7 +34,7 @@ diff --git a/server.py b/server.py
              if not check_auth(self, parsed): return
              result = handle_get(self, parsed)
              if result is False:
-@@ -363,6 +381,10 @@ class Handler(BaseHTTPRequestHandler):
+@@ -414,6 +432,10 @@ class Handler(BaseHTTPRequestHandler):
              set_request_profile(cookie_profile)
          try:
              parsed = urlparse(self.path)
@@ -65,6 +42,6 @@ diff --git a/server.py b/server.py
 +            if should_redirect_to_setup(parsed.path) and redirect_to_setup is not None:
 +                return redirect_to_setup(self)
 +
-             # Stage-346 Opus SHOULD-FIX defense-in-depth: scope the CSP-report
-             # auth carve-out to POST only. The endpoint is intentionally
-             # unauthenticated (browsers omit cookies on CSP reports), but the
+             _is_csp_report_post = (
+                 parsed.path == "/api/csp-report" and self.command == "POST"
+             )
