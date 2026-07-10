@@ -1,21 +1,29 @@
 """Fox webui patch: config.py — settings defaults + cache invalidation + save-gate validation.
 
 Re-applies the Fox edits to ``api/config.py``. Originally targeted Fox
-merge-base 9e31a2a; refreshed for v0.51.84 in Phase 8 follow-up #238.
+merge-base 9e31a2a; refreshed through v0.52.0.
 
-## Phase 8 refresh notes
+## Upstream refresh history
 
-v0.51.84's upstream changes:
+v0.51.84 (Phase 8 follow-up #238):
 
 1. **``get_config()``** — upstream NOW implements mtime-based cache
    invalidation NATIVELY (with a more sophisticated ``_cfg_fingerprint``
    mechanism). Fox's patch is REDUNDANT. The get_config substitution
    is dropped from this version.
 2. **``reload_config()``** — upstream refactored into a thin wrapper
-   delegating to ``_refresh_config_cache()``. Fox's anchors retarget
-   ``_refresh_config_cache`` (v0.52.0).
-3. **``save_settings()``** — unchanged in v0.51.84; all 3 substitutions
-   apply with their original anchors.
+   delegating to ``_refresh_config_cache()``.
+
+v0.52.0:
+
+3. **``_refresh_config_cache()``** — Fox's anchors retarget this
+   function (indentation shifted from 8-space inside ``with _cfg_lock:``
+   to 4-space at function body level).
+4. **``save_settings()``** — upstream added ``_read_raw_settings_file()``
+   and ``_extract_persisted_speech_keys()`` calls; Fox's anchors updated
+   to include these in the search/replace pair.
+5. **``get_available_models()``** — gained ``force_refresh`` keyword
+   parameter; Fox's wrapper passes it through.
 4. **``_SETTINGS_DEFAULTS`` + ``_SETTINGS_BOOL_KEYS``** — still
    module-scope; dict/set additions still work.
 
@@ -45,9 +53,9 @@ v0.51.84's upstream changes:
 
 ### Function patches
 
-* ``reload_config()`` — evict the in-memory ``_available_models_cache``
-  after on-disk cache delete (#138 chat-model-picker stale-after-
-  Ollama-switch fix).
+* ``_refresh_config_cache()`` — evict the in-memory
+  ``_available_models_cache`` after on-disk cache delete (#138
+  chat-model-picker stale-after-Ollama-switch fix).
 * ``save_settings()`` — three additions:
   - Validate Tailscale power-user fields at the save gate
   - Validate Ollama custom URL + normalize + remember the change

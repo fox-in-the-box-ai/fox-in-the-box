@@ -1,6 +1,11 @@
 # Frozen Python dependencies for the Fox container image.
 # Generated from ghcr.io/fox-in-the-box-ai/cloud:v0.7.51 on 2026-06-20,
 # then patched for hermes-agent v2026.7.7.2 (cryptography 49.0.0 -> 46.0.7).
+# hermes-agent hard-pins cryptography==46.0.7 in pyproject.toml (citing
+# CVE-2026-39892, CVE-2026-34073). 46.0.7 is below the fix for
+# GHSA-537c-gmf6-5ccf (vulnerable OpenSSL in wheels, fixed in 48.0.1);
+# this is an upstream constraint we cannot override without pip resolution
+# failure. Tracked for upstream remediation.
 #
 # This file pins every transitive dependency resolved during container build.
 # It is used as a pip constraints file (-c) to prevent silent dependency drift

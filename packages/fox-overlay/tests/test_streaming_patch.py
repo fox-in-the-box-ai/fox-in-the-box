@@ -21,9 +21,9 @@ import sys
 import pytest
 
 
-# Minimal upstream streaming.py stub matching v0.51.84 around the
+# Minimal upstream streaming.py stub matching v0.52.0 around the
 # remaining (FITB#9 plumbing) anchor only. Includes upstream's
-# `goal_related=False` kwarg added in v0.51.x.
+# `goal_related=False` (v0.51.84) and `moa_config=None` (v0.52.0).
 _UPSTREAM_STREAMING_SOURCE = '''\
 def _run_agent_streaming(
     session_id,
@@ -36,8 +36,9 @@ def _run_agent_streaming(
     ephemeral=False,
     model_provider=None,
     goal_related=False,
+    moa_config=None,
 ):
-    """Stub matching upstream v0.51.84 anchor region only."""
+    """Stub matching upstream v0.52.0 anchor region only."""
     _fallback_resolved = None
     if True:
         _fb_entry = None
