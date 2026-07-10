@@ -96,8 +96,8 @@ Do NOT mark `/etc/foxinthebox/supervisord.conf` as a dpkg conffile. It is genera
 `packages/fox-overlay/versions.toml` contains:
 ```toml
 [hermes]
-agent_tag  = "v2026.5.16"
-webui_tag  = "v0.51.124"
+agent_tag  = "v2026.7.7.2"
+webui_tag  = "v0.52.0"
 ```
 install-core.sh parses this with pure bash (grep + sed) — no toml parser needed. Pattern: `grep "^agent_tag" versions.toml | sed 's/.*= *"\(.*\)"/\1/'`
 
