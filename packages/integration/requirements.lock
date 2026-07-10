@@ -1,5 +1,6 @@
 # Frozen Python dependencies for the Fox container image.
-# Generated from ghcr.io/fox-in-the-box-ai/cloud:v0.7.51 on 2026-06-20.
+# Generated from ghcr.io/fox-in-the-box-ai/cloud:v0.7.51 on 2026-06-20,
+# then patched for hermes-agent v2026.7.7.2 (cryptography 49.0.0 -> 46.0.7).
 #
 # This file pins every transitive dependency resolved during container build.
 # It is used as a pip constraints file (-c) to prevent silent dependency drift
@@ -27,7 +28,7 @@ cffi==2.0.0
 charset-normalizer==3.4.7
 click==8.4.1
 croniter==6.0.0
-cryptography==49.0.0
+cryptography==46.0.7
 distro==1.9.0
 docstring_parser==0.18.0
 fastapi==0.138.0

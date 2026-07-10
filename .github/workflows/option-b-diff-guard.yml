@@ -46,9 +46,11 @@ jobs:
           #   runtime monkey-patches, tests, scripts, and versions.toml are
           #   all mechanically coupled to the upstream version and must be
           #   updated alongside the submodule pointer bump.
+          # - `packages/integration/requirements.lock` is the pip constraints
+          #   file regenerated when upstream dependency pins change.
           # - This workflow file itself may need updating when the set of
           #   allowed paths evolves alongside upstream bumps.
-          ALLOWED_RE='^(forks/hermes-(agent|webui)|packages/fox-overlay/|\.github/workflows/option-b-diff-guard\.yml$)'
+          ALLOWED_RE='^(forks/hermes-(agent|webui)|packages/(fox-overlay/|integration/requirements\.lock$)|\.github/workflows/option-b-diff-guard\.yml$)'
 
           changed=$(git diff --name-only "$BASE_SHA".."$HEAD_SHA")
           echo "----- Changed files in this Option B PR -----"
