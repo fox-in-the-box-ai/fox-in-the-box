@@ -42,9 +42,13 @@ jobs:
           #   under `forks/`. Their content changes are gitlink-only — the
           #   submodule SHA in the parent tree changes; the file MODE is
           #   160000 (submodule), not a regular file edit.
-          # - `packages/fox-overlay/versions.toml` is the human-readable
-          #   record of which upstream tags are pinned; bumped alongside.
-          ALLOWED_RE='^(forks/hermes-(agent|webui)|packages/fox-overlay/versions\.toml)$'
+          # - `packages/fox-overlay/` is the overlay package — patches,
+          #   runtime monkey-patches, tests, scripts, and versions.toml are
+          #   all mechanically coupled to the upstream version and must be
+          #   updated alongside the submodule pointer bump.
+          # - This workflow file itself may need updating when the set of
+          #   allowed paths evolves alongside upstream bumps.
+          ALLOWED_RE='^(forks/hermes-(agent|webui)|packages/fox-overlay/|\.github/workflows/option-b-diff-guard\.yml$)'
 
           changed=$(git diff --name-only "$BASE_SHA".."$HEAD_SHA")
           echo "----- Changed files in this Option B PR -----"
@@ -53,7 +57,7 @@ jobs:
 
           violations=$(echo "$changed" | grep -Ev "$ALLOWED_RE" || true)
           if [ -n "$violations" ]; then
-            echo "::error::Option B violation. A PR titled 'bump(upstream): …' must touch ONLY the upstream submodule pointers and packages/fox-overlay/versions.toml. The following files are out-of-bounds for an Option B PR:"
+            echo "::error::Option B violation. A PR titled 'bump(upstream): …' must touch ONLY the upstream submodule pointers, packages/fox-overlay/, and this guard workflow. The following files are out-of-bounds for an Option B PR:"
             echo "$violations" | sed 's/^/::error::  - /'
             echo "::error::If this PR is supposed to include Fox-code changes, rename it to drop the 'bump(upstream):' prefix. If the auto-bump should apply but you also need a code change, split into two PRs."
             exit 1
