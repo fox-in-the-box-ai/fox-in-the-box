@@ -41,7 +41,14 @@ PYTHONPATH=. pytest tests/test_bedrock_imds_gate.py -v
 
 All 8 tests passed locally.
 
-## Assumptions / Supervisor notes
+## Follow-up: Bedrock always listable
+
+When IMDS is blocked, Bedrock is no longer falsely `is_oauth`, and with no
+API-key env var it is not `configurable` — so Settings filtered it out.
+
+`010-bedrock-always-listable.patch` keeps `id==='bedrock'` in the providers
+list and shows an AWS-credentials hint. Dogfood VPS was hotfixed the same way
+in-container (`panels.js`).
 
 - Fox AGENTS.md says Supervisor amends/pushes; this WIP commit is for review.
 - User asked for a PR on `fox-in-the-box-ai/fox-in-the-box` — please push this
