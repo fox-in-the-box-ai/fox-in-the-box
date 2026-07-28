@@ -41,14 +41,16 @@ PYTHONPATH=. pytest tests/test_bedrock_imds_gate.py -v
 
 All 8 tests passed locally.
 
-## Follow-up: Bedrock always listable
+## Follow-up: Bedrock Settings credentials
 
-When IMDS is blocked, Bedrock is no longer falsely `is_oauth`, and with no
-API-key env var it is not `configurable` — so Settings filtered it out.
+Upstream hermes-webui PR: https://github.com/nesquena/hermes-webui/pull/6563
 
-`010-bedrock-always-listable.patch` keeps `id==='bedrock'` in the providers
-list and shows an AWS-credentials hint. Dogfood VPS was hotfixed the same way
-in-container (`panels.js`).
+`010-bedrock-settings-credentials.patch` (against webui v0.52.0):
+- Map Bedrock → `AWS_BEARER_TOKEN_BEDROCK` (API key field)
+- IAM access key + secret → `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`
+- Settings card shows both forms; never labels Bedrock as OAuth
+
+Companion IMDS gate remains in `fox_overlay/aws_bedrock_auth.py`.
 
 - Fox AGENTS.md says Supervisor amends/pushes; this WIP commit is for review.
 - User asked for a PR on `fox-in-the-box-ai/fox-in-the-box` — please push this
