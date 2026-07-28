@@ -33,10 +33,10 @@ def apply_all() -> None:
     """
     from . import config
     config.apply()
-    # Note: providers.py patch retired v0.6.2 (#269) — upstream's per-turn
-    # env reload at gateway/run.py covers the original use case. models.py
-    # patch removed Phase 8 #239 — upstream v0.51.84 ships Fox's #1558 P0
-    # guard natively. See git history for the dropped patches.
+    # Note: the v0.6.2 providers env-reload patch was retired (#269). The
+    # current providers.py module is a different fix: Bedrock IMDS gate +
+    # OAuth mislabel. models.py patch removed Phase 8 #239 — upstream
+    # v0.51.84 ships Fox's #1558 P0 guard natively.
     from . import streaming
     streaming.apply()
     from . import auth
@@ -45,4 +45,6 @@ def apply_all() -> None:
     auth_body_drain.apply()
     from . import csrf
     csrf.apply()
-    _log.warning("[fox-overlay] webui_patches.apply_all() complete (%d patch modules)", 5)
+    from . import providers
+    providers.apply()
+    _log.warning("[fox-overlay] webui_patches.apply_all() complete (%d patch modules)", 6)
