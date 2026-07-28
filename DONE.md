@@ -51,6 +51,8 @@ Upstream hermes-webui PR: https://github.com/nesquena/hermes-webui/pull/6563
 - Settings card shows both forms; never labels Bedrock as OAuth
 - UI states credential priority: API key → IAM pair → (IMDS last / gated);
   plus an “In use now” line when one or both are saved
+- Saving one credential type replaces the other (clears stale IAM/bearer)
+  so deleted access keys cannot keep signing after an API-key switch
 
 Companion IMDS gate remains in `fox_overlay/aws_bedrock_auth.py`.
 
