@@ -78,7 +78,16 @@ def test_installer_patches_every_browser_title_path_and_preserves_refs(tmp_path:
         '<link rel="icon" href="static/favicon.svg">\n'
         '<link rel="manifest" href="manifest.json">\n'
         '<meta name="apple-mobile-web-app-title" content="Hermes">\n'
-        '<link rel="apple-touch-icon" sizes="512x512" href="static/apple-touch-icon.png">\n',
+        '<link rel="apple-touch-icon" sizes="512x512" href="static/apple-touch-icon.png">\n'
+        "<script>(function(){try{var themes={light:1,dark:1,system:1},"
+        "t=(localStorage.getItem('hermes-theme')||'dark').toLowerCase(),"
+        "theme=themes[t]?t:'dark';"
+        "if(skin!=='default')document.documentElement.dataset.skin=skin;"
+        "}catch(e){document.documentElement.classList.add('dark');}})()</script>\n"
+        "<script>(function(){try{var t=localStorage.getItem('hermes-theme')||'dark';"
+        "}catch(e){}})()</script>\n"
+        '<meta name="theme-color" id="hermes-theme-color" content="#0D0D1A">\n'
+        '<input type="hidden" id="settingsTheme" value="dark">\n',
         encoding="utf-8",
     )
     manifest = {
@@ -118,6 +127,11 @@ def test_installer_patches_every_browser_title_path_and_preserves_refs(tmp_path:
     assert 'sizes="180x180"' in index
     assert 'href="static/favicon.svg"' in index
     assert 'href="manifest.json"' in index
+    # Default theme must be light
+    assert "||'light'" in index
+    assert "value=\"light\"" in index
+    assert 'content="#FAF7F0"' in index
+    assert "classList.add('dark')" not in index
 
     installed_manifest = json.loads((static / "manifest.json").read_text(encoding="utf-8"))
     assert installed_manifest["name"] == "Fox in the box"

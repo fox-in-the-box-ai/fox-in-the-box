@@ -24,6 +24,31 @@ ASSET_NAMES = (
 
 REPLACEMENTS: dict[str, tuple[tuple[str, str], ...]] = {
     "static/index.html": (
+        # Default theme: light instead of dark (new visitors before any localStorage key)
+        (
+            "t=(localStorage.getItem('hermes-theme')||'dark').toLowerCase()",
+            "t=(localStorage.getItem('hermes-theme')||'light').toLowerCase()",
+        ),
+        (
+            "themes[t]?t:'dark'",
+            "themes[t]?t:'light'",
+        ),
+        (
+            "if(skin!=='default')document.documentElement.dataset.skin=skin;}catch(e){document.documentElement.classList.add('dark');}})()",
+            "if(skin!=='default')document.documentElement.dataset.skin=skin;}catch(e){}})()",
+        ),
+        (
+            "var t=localStorage.getItem('hermes-theme')||'dark'",
+            "var t=localStorage.getItem('hermes-theme')||'light'",
+        ),
+        (
+            'id="hermes-theme-color" content="#0D0D1A"',
+            'id="hermes-theme-color" content="#FAF7F0"',
+        ),
+        (
+            'id="settingsTheme" value="dark"',
+            'id="settingsTheme" value="light"',
+        ),
         ("<title>Hermes</title>", f"<title>{BRAND}</title>"),
         (
             '<meta name="apple-mobile-web-app-title" content="Hermes">',
