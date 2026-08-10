@@ -9,9 +9,16 @@
 # served via upstream extensions.py at /extensions/<path>.
 # Setup wizard files (setup.html/css/js) deferred to Phase 7 (coupled to
 # api/onboarding.py's REPO_ROOT / "static" / "setup.html" path access).
-# Fox-branded favicons (apple-touch-icon.png + 5 favicon variants) deferred
-# to a dedicated future phase (coherent group, handle atomically with
-# manifest.json icon refs).
+# Canonical browser/PWA brand set, installed over upstream static/ by
+# install_webui_branding.py. favicon.svg and favicon-512.svg are byte-identical
+# to https://foxinthebox.io/favicon.svg; raster files retain transparency.
+"webui_brand/favicon.svg" = "fox-only"
+"webui_brand/favicon.ico" = "fox-only"
+"webui_brand/favicon-32.png" = "fox-only"
+"webui_brand/apple-touch-icon.png" = "fox-only"
+"webui_brand/favicon-192.png" = "fox-only"
+"webui_brand/favicon-512.png" = "fox-only"
+"webui_brand/favicon-512.svg" = "fox-only"
 "fox-in-the-box.css" = "fox-only"
 "fox-overlay.js" = "fox-only"
 "images/fox_avatar_cropped.jpg" = "fox-only"
@@ -33,6 +40,9 @@
 "agent_overlay/SOUL.md" = "fox-only"
 
 [python]
+# Install-time helper: strict anchored title/manifest patching plus canonical
+# WebUI asset copy. Invoked by install-core.sh only when WebUI overlay is enabled.
+"install_webui_branding.py" = "fox-only-additive"
 # Phase 3 — agent-side overlay. Three monkey-patch modules applied via
 # the `hermes_agent.plugins` entry-point group.
 # Phase 5 and Phase 6 add webui-side entries below.
