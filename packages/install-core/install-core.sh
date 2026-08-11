@@ -274,8 +274,8 @@ _pip_install() {
         _log "Using pip constraints: $FITB_PIP_CONSTRAINTS"
     fi
 
-    _log "Installing hermes-agent[anthropic,bedrock,google]..."
-    "$pip_cmd" install -e "$FITB_APP_DIR/hermes-agent[anthropic,bedrock,google]" \
+    _log "Installing hermes-agent[anthropic,bedrock,google,mem0]..."
+    "$pip_cmd" install -e "$FITB_APP_DIR/hermes-agent[anthropic,bedrock,google,mem0]" \
         "${constraints_flag[@]}" --quiet --no-cache-dir
 
     _log "Installing hermes-webui..."

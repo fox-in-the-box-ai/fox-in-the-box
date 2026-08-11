@@ -14,6 +14,15 @@ logging:
   level: info
   file: /data/logs/hermes.log
 
+# ── Memory ────────────────────────────────────────────────────────────────────
+# Self-hosted long-term memory via the mem0_oss provider (mem0ai + Qdrant,
+# no cloud account, no API key). Deps are baked into the image by the [mem0]
+# extra in install-core.sh. The LLM/embedder are auto-detected from the
+# configured provider (OPENROUTER_API_KEY / ANTHROPIC_API_KEY /
+# OPENAI_API_KEY / AWS Bedrock) — see fox-overlay/agent_memory_plugins/mem0_oss.
+memory:
+  provider: mem0_oss
+
 # ── MCP Servers ───────────────────────────────────────────────────────────────
 # Brave Search MCP — enables real-time web search and grounding.
 # Set BRAVE_API_KEY in /data/config/hermes.env to activate.
