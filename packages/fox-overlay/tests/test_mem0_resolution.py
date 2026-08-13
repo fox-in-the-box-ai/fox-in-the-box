@@ -472,12 +472,13 @@ def pinned_llm(monkeypatch):
         pass
 
     class LlmFactory:
-        # Real mem0ai 2.0.10 stores (class_type, config_class) 2-tuples and
-        # unpacks them in Factory.create — the stub must model that shape
-        # (image-selftest phase B caught the earlier string-valued stub
-        # diverging from the installed library).
+        # Real mem0ai 2.0.10 stores (dotted_path_string, config_class)
+        # 2-tuples; Factory.create resolves element 0 via load_class()'s
+        # rsplit. Verified against the published wheel — image-selftest
+        # phase B caught two wrong stub models in a row (bare string, then
+        # class-object tuple).
         provider_to_class = {
-            "openai": (_EnvFirstOpenAILLM, _StockOpenAIConfig),
+            "openai": ("mem0.llms.openai.OpenAILLM", _StockOpenAIConfig),
         }
 
     factory.LlmFactory = LlmFactory
@@ -584,11 +585,20 @@ class TestPinnedLLMTruthTable:
     def test_registration_is_idempotent(self, pinned_llm):
         pinned_llm.module.ensure_registered()
         registered = pinned_llm.factory.provider_to_class["openai"]
-        # Real 2.0.10 shape: (class_type, config_class); only the class
-        # element is replaced, the stock config class is preserved.
+        # Real 2.0.10 shape: (dotted_path_string, config_class); only the
+        # path element is replaced, the stock config class is preserved.
         assert isinstance(registered, tuple) and len(registered) == 2
-        assert registered[0] is pinned_llm.module.PinnedOpenAILLM
+        assert isinstance(registered[0], str)
+        assert registered[0].endswith("._pinned_llm.PinnedOpenAILLM")
         assert registered[1].__name__ == "_StockOpenAIConfig"
+        # The path must resolve back to the class via load_class semantics.
+        mod_path, cls_name = registered[0].rsplit(".", 1)
+        import importlib
+
+        assert (
+            getattr(importlib.import_module(mod_path), cls_name)
+            is pinned_llm.module.PinnedOpenAILLM
+        )
         pinned_llm.module.ensure_registered()
         assert pinned_llm.factory.provider_to_class["openai"] == registered
 
