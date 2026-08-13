@@ -24,7 +24,8 @@
   },
   "devDependencies": {
     "electron": "^42.5.1",
-    "electron-builder": "^26.0.0",
+    "electron-builder": "^26.15.3",
+    "electron-builder-squirrel-windows": "26.15.3",
     "jest": "^30.0.0",
     "rcedit": "^5.0.0"
   },
