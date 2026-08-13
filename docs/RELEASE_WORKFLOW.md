@@ -21,6 +21,8 @@ Before tagging anything:
 - [ ] **`qa/SMOKE_CHECKLIST.md` run end-to-end against a fresh container built from `main`**
 - [ ] CHANGELOG entry drafted in concise / sectioned style (see prior releases for tone — `Fixed`/`Added`/`What's next`)
 
+**v0.7.60 HARD gate (no bypass):** the pre-release real-container smoke with an **OpenRouter-only key** (design §g.2 steps 1–14 — memory READY line, store/recall round trip, embed-server kill/recovery, catalog-blackout boot, pool-only credential round trip) must run against the PR-built image and pass before the tag. This is a PR-body commitment for the mem0 default-on release; the `qa/SMOKE_LOG.md` entry for v0.7.60 may not use a Bypass reason for these steps.
+
 ## Cutting a release — two flows
 
 Fox in the Box has two distinct release paths since v0.7.0. Pick based on what changed.
@@ -118,6 +120,14 @@ The freeze lifts **after the tag, not in the release PR**. Deleting the marker i
 ### Squash-subject rule
 
 The guard jobs key on the PR **title**, while the Option B `:stable` auto-advance keys on the **squash-merge commit subject** — which is editable at merge time. Never hand-edit a squash-merge subject to `bump(upstream):` — the subject must match the PR title, and during a freeze window no `bump(upstream):` subject may merge at all.
+
+## Infrastructure asset releases (permanent — never delete)
+
+The **`assets-nomic-embed-v1.5`** prerelease GitHub Release hosts the embedding-model GGUF mirror. It is **permanent infrastructure, not a product release**: every container build (all PRs, both arches, the deb postinst, and every future rebuild of any past tag) curls its `releases/download/` asset URL. Rules:
+
+- **Never delete, rename, or re-tag it** — doing so breaks every container build and every apt install retroactively.
+- **Never promote it to a full release** — prerelease status is load-bearing: a non-prerelease would become `/releases/latest` and break electron-updater's update check for the entire deployed desktop fleet.
+- Model bumps get a **new** asset tag + prerelease (and a new `embed-model.lock`); the old one stays up for as long as any released tag references it.
 
 ## Verifying the release
 

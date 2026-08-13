@@ -18,14 +18,14 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
-- protobuf 7.35.1 → 6.33.6 image-wide (required by mem0ai), verified against the Google provider serialization path on both Debian install paths
+- protobuf 7.35.1 → 6.33.6 image-wide (required by mem0ai). On Debian installs the pin applies via a constraints file (`FITB_PIP_CONSTRAINTS`) on hosts where python 3.11 is available; 3.12/3.13 hosts install unconstrained within mem0ai's supported range (`>=5.29.6,<7`) with a logged notice — both paths are exercised by the release deb smoke, and the Google provider serialization path is probed in-image on every PR
 - If you previously enabled memory with a remote embedder (OpenAI or Bedrock), the new local-embedder default does not match your existing memory store. Memory reports an explicit error with two options: keep your store by restoring your previous embedder settings (in mem0_oss.json under your Hermes data directory — /data/data/hermes/mem0_oss.json in the container, $HERMES_HOME/mem0_oss.json on bare metal — if that file exists, else via MEM0_OSS_EMBEDDER_* variables), or start fresh by deleting the mem0_oss data directory. Nothing is deleted automatically
-- Debian/apt downgrades from this release to 0.7.59 require removing the `memory: provider:` line from hermes.yaml first (or purging the Fox venv): the older release's memory plugin predates the fail-loud rework and would otherwise run against the newer installed dependencies. See docs
+- Debian/apt downgrades from this release to 0.7.59 require removing the `memory: provider:` line from hermes.yaml first (or purging the Fox venv): the older release's memory plugin predates the fail-loud rework and would otherwise run against the newer installed dependencies. See docs/MEMORY.md
 - Default WebUI theme is now light (brand palette `#FAF7F0`), replacing the previous dark default; existing installs keep their saved theme preference
 
 ### Security
 
-- mem0's built-in PostHog telemetry is disabled at every Fox-managed process boundary (MEM0_TELEMETRY=False). No memory content or usage events leave the machine; the only network traffic memory adds is the fact-extraction call to the chat provider you already use — and that routing follows your chat configuration exactly, never overridden by stray environment variables. (If you separately configure the upstream `mem0` provider from a bare-metal shell, export MEM0_TELEMETRY=False there too — see docs.)
+- mem0's built-in PostHog telemetry is disabled at every Fox-managed process boundary (MEM0_TELEMETRY=False). No memory content or usage events leave the machine; the only network traffic memory adds is the fact-extraction call to the chat provider you already use — and that routing follows your chat configuration exactly, never overridden by stray environment variables. (If you separately configure the upstream `mem0` provider from a bare-metal shell, export MEM0_TELEMETRY=False there too — see docs/MEMORY.md.)
 - Closed Dependabot HIGH alerts #87/#88 by evicting the app-builder-lib 24.13.3 / builder-util-runtime 9.2.4 subtree from the lockfiles: `electron-builder-squirrel-windows` is now an explicit devDependency pinned exactly at 26.15.3 so pnpm no longer auto-installs the old version to satisfy app-builder-lib's exact peer. Note the coupling: `electron-builder` (^26.15.3) and the squirrel pin must be bumped together — bumping one without the other reintroduces the peer mismatch
 
 ### Fixed

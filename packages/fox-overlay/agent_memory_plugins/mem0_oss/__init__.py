@@ -294,6 +294,28 @@ def _unsupported_reason(provider_id: str) -> str:
 _memo_lock = threading.Lock()
 _memo: Dict[str, Any] = {"stamp": None, "result": None, "error": None, "error_ts": 0.0}
 
+# Op-failure latch (§a.2 "first op failure is visible"): a sub-threshold op
+# failure writes status=error; that state may only be cleared by (a) a
+# subsequent successful memory OP (_record_success) or (b) a FRESH resolution
+# after memo invalidation.  A memo-hit resolution must never downgrade
+# error→ready.  Guarded by _memo_lock.
+_op_error: Dict[str, str] = {"reason": ""}
+
+
+def _latch_op_error(reason: str) -> None:
+    with _memo_lock:
+        _op_error["reason"] = reason
+
+
+def _clear_op_error() -> None:
+    with _memo_lock:
+        _op_error["reason"] = ""
+
+
+def _latched_op_error() -> str:
+    with _memo_lock:
+        return _op_error["reason"]
+
 
 def _watched_paths() -> List[str]:
     """Files whose mtime change invalidates the resolution memo.
@@ -366,9 +388,11 @@ def _resolve_memoized() -> ResolvedConfig:
             _memo.update(
                 {"stamp": stamp, "result": None, "error": exc, "error_ts": now}
             )
+            _op_error["reason"] = ""  # fresh outcome supersedes any op-error latch
         raise
     with _memo_lock:
         _memo.update({"stamp": stamp, "result": result, "error": None, "error_ts": 0.0})
+        _op_error["reason"] = ""  # only a FRESH resolution may clear an op error
     return result
 
 
@@ -515,7 +539,7 @@ def _branch_and_credentials(raw: str, pdef, file_cfg: dict) -> ResolvedConfig:
     # would otherwise fall through to the 6b catch-all; mem0's config-first
     # anthropic adapter is the transport here.
     if pdef.id == "anthropic":
-        api_key = _resolve_api_key(pdef, raw=raw)
+        api_key = _resolve_api_key(pdef, raw=raw, file_cfg=file_cfg)
         return ResolvedConfig(
             provider_id="anthropic",
             mem0_llm_provider="anthropic",
@@ -545,8 +569,8 @@ def _branch_and_credentials(raw: str, pdef, file_cfg: dict) -> ResolvedConfig:
         or pdef.id == "openai-api"
         or pdef.source == "local-fallback"
     ):
-        api_key = _resolve_api_key(pdef, raw=raw)
-        base_url = _resolve_base_url(pdef)
+        api_key = _resolve_api_key(pdef, raw=raw, file_cfg=file_cfg)
+        base_url = _resolve_base_url(pdef, file_cfg=file_cfg)
         return ResolvedConfig(
             provider_id=pdef.id,
             mem0_llm_provider="openai",
@@ -596,10 +620,15 @@ def _pool_api_key(provider_id: str) -> str:
     return ""
 
 
-def _resolve_api_key(pdef, raw: str = "") -> str:
+def _resolve_api_key(pdef, raw: str = "", file_cfg: Optional[dict] = None) -> str:
     """Step 8 key resolution: overrides → env (.env-preferred) → pool →
-    placeholder → explicit state-7 error.  Scoped to api_key rows."""
-    file_cfg_key = str(_read_file_overrides().get("api_key") or "").strip()
+    placeholder → explicit state-7 error.  Scoped to api_key rows.
+
+    ``file_cfg`` is the already-loaded mem0_oss.json dict, threaded through
+    from ``_resolve()`` so the file is read once per resolution.
+    """
+    file_cfg = file_cfg if file_cfg is not None else _read_file_overrides()
+    file_cfg_key = str(file_cfg.get("api_key") or "").strip()
     override = file_cfg_key or os.environ.get("MEM0_OSS_API_KEY", "").strip()
     if override:
         return override
@@ -669,9 +698,13 @@ def _resolve_api_key(pdef, raw: str = "") -> str:
     )
 
 
-def _resolve_base_url(pdef) -> str:
-    """Step 8 base_url resolution with the empty-``base_url_env_var`` guard."""
-    file_cfg = _read_file_overrides()
+def _resolve_base_url(pdef, file_cfg: Optional[dict] = None) -> str:
+    """Step 8 base_url resolution with the empty-``base_url_env_var`` guard.
+
+    ``file_cfg`` is the already-loaded mem0_oss.json dict, threaded through
+    from ``_resolve()`` so the file is read once per resolution.
+    """
+    file_cfg = file_cfg if file_cfg is not None else _read_file_overrides()
     override = (
         str(file_cfg.get("base_url") or file_cfg.get("openai_base_url") or "").strip()
         or os.environ.get("MEM0_OSS_BASE_URL", "").strip()
@@ -1281,6 +1314,15 @@ class Mem0OSSMemoryProvider(MemoryProvider):
             )
             return False
 
+        # Op-failure latch (§a.2): a sub-threshold op failure stays visible
+        # until a successful memory OP or a FRESH resolution clears it — a
+        # memo-hit resolution must not downgrade error→ready.  Memory itself
+        # stays operational (the breaker has not tripped).
+        latched_reason = _latched_op_error()
+        if latched_reason:
+            _write_state("error", latched_reason)
+            return True
+
         _write_state(
             "ready", "", llm=resolved.provider_id, embedder=embedder["description"]
         )
@@ -1395,6 +1437,7 @@ class Mem0OSSMemoryProvider(MemoryProvider):
             self._fail_count += 1
             self._last_fail_ts = time.monotonic()
             crossed = self._fail_count == _BREAKER_THRESHOLD
+        _latch_op_error(reason or "memory operation failed")
         _write_state("error", reason or "memory operation failed")
         if crossed:
             logger.error(
@@ -1409,7 +1452,9 @@ class Mem0OSSMemoryProvider(MemoryProvider):
         with self._lock:
             had_failures = self._fail_count > 0
             self._fail_count = 0
-        if had_failures:
+        had_op_error = bool(_latched_op_error())
+        _clear_op_error()  # a successful memory OP clears the failure latch
+        if had_failures or had_op_error:
             _write_ready_state()
 
     # -- System prompt block -----------------------------------------------

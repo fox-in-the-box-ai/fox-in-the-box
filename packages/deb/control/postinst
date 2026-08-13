@@ -15,10 +15,37 @@ if ! id foxinthebox &>/dev/null; then
     adduser --system --group --home /opt/foxinthebox --shell /bin/bash foxinthebox
 fi
 
+# ── 2a. Pip constraints probe (constrained/unconstrained bifurcation) ────────
+# The payload ships requirements.lock — the same pin set the container build
+# uses, resolved under Python 3.11. Constrain pip only when the venv
+# interpreter is (or will be) 3.11.x:
+#   • existing venv → gate on its own `venv/bin/python -V` (upgrades keep the
+#     venv's original interpreter, whatever the host has since gained);
+#   • fresh install → gate on `command -v python3.11`, matching install-core's
+#     venv-creation fallback (`command -v python3.11 || command -v python3`).
+# On 3.12/3.13 hosts the 3.11-resolved pin set may be unsatisfiable, so those
+# proceed unconstrained with the notice below; mem0ai==2.0.10 stays
+# exact-pinned by the hermes-agent [mem0] extra on every path.
+FITB_CONSTRAINTS=""
+VENV_PY=/opt/foxinthebox/venv/bin/python
+if [ -x "$VENV_PY" ]; then
+    if "$VENV_PY" -V 2>&1 | grep -q '^Python 3\.11\.'; then
+        FITB_CONSTRAINTS=/opt/foxinthebox/requirements.lock
+    fi
+elif command -v python3.11 &>/dev/null; then
+    FITB_CONSTRAINTS=/opt/foxinthebox/requirements.lock
+fi
+if [ -n "$FITB_CONSTRAINTS" ]; then
+    echo "foxinthebox: Python 3.11 venv — using pip constraints ($FITB_CONSTRAINTS)"
+else
+    echo "foxinthebox: NOTICE — venv Python is not 3.11; installing without the pinned constraints set (pip resolves transitive versions; mem0ai remains exact-pinned via the hermes-agent extra)"
+fi
+
 # ── 2. Run install-core.sh (idempotent — handles fresh install and upgrade) ──
 # Runs as root (dpkg convention). Creates venv, clones repos, writes configs.
 FITB_APP_DIR=/opt/foxinthebox \
 FITB_CONTEXT=bare-metal \
+FITB_PIP_CONSTRAINTS="$FITB_CONSTRAINTS" \
 bash /opt/foxinthebox/install-core.sh
 
 # ── 3. Set ownership of app + config directories ────────────────────────────

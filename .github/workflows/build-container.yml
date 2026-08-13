@@ -501,16 +501,21 @@ jobs:
   # ── Per-PR image self-test (design §g.3). Runs the PR-built image and execs
   # into it:
   #   phase A — _WELL_KNOWN/_POOL_ID_MAP sync assertions against the real
-  #     hermes_cli import surface (packages/fox-overlay/tests/
-  #     image_selftest_phase_a.py, baked into the image at /app/fox-overlay).
-  #     HARD-FAILS on drift — these assertions cannot run in validate-overlay
-  #     (no hermes-agent on PYTHONPATH, no httpx), so this job is their only
-  #     per-PR home.
-  #   phase B — memory activation with a stub key: the preflight module must
-  #     produce exactly one `memory: READY|OFF|ERROR` line and seed a valid
-  #     state.json. First-run onboarding state is tolerated (any of the three
-  #     statuses is acceptable); the assertion is on the preflight/state.json
-  #     path, not the UI.
+  #     hermes_cli import surface + the §e protobuf 6.33.6 upb wire probe
+  #     (packages/fox-overlay/tests/image_selftest_phase_a.py, baked into the
+  #     image at /app/fox-overlay). HARD-FAILS on drift — these assertions
+  #     cannot run in validate-overlay (no hermes-agent on PYTHONPATH, no
+  #     httpx), so this job is their only per-PR home.
+  #   phase B — REAL memory activation with a stub key (§g.3/§1.3): first the
+  #     preflight module must produce exactly one `memory: READY|OFF|ERROR`
+  #     line and seed a valid state.json (first-run onboarding state
+  #     tolerated); then image_selftest_phase_b.py exercises the real plugin
+  #     path — _get_memory() constructs a Memory whose LLM is PinnedOpenAILLM
+  #     with the client base_url pinned to the resolved OpenRouter URL despite
+  #     the exported OPENROUTER_API_KEY hijack condition, the mem0 version
+  #     tripwire is asserted ARMED (monkeypatched 2.1.0 → MemoryUnavailable/
+  #     error), and one search-only op runs through the local embed-server on
+  #     :8644. A mem0 pin bump cannot stay latent past this per-PR gate.
   image-selftest:
     name: Image self-test
     needs: [merge]
@@ -568,12 +573,13 @@ jobs:
           docker exec selftest-fox \
             python3 /app/fox-overlay/tests/image_selftest_phase_a.py
 
-      - name: "Phase B: memory preflight + state.json with a stub key"
+      - name: "Phase B: real memory activation with a stub key"
         run: |
           set -euo pipefail
-          # Stub key is a syntactically-usable placeholder — resolution is
-          # static (no provider round trip in preflight), so no real secret
-          # is needed. Run as the runtime user (preflight refuses uid 0).
+          # Part 1 — preflight/state.json seed path. The stub key is a
+          # syntactically-usable placeholder — preflight resolution is static
+          # (no provider round trip), so no real secret is needed. Run as the
+          # runtime user (preflight refuses uid 0).
           OUT=$(docker exec \
             -u foxinthebox \
             -e HOME=/app \
@@ -609,6 +615,22 @@ jobs:
           print(f"OK: {paths[0]} status={status}")
           PY
           echo "✅ preflight/state.json path verified"
+
+          # Part 2 — real activation (design §g.3/§1.3): _get_memory() with
+          # the stub OPENROUTER_API_KEY doubling as the hijack condition.
+          # Asserts PinnedOpenAILLM type, pinned client base_url, armed
+          # version tripwire, and a search-only op through embed-server
+          # :8644. The stub key is never sent anywhere — search embeds
+          # locally and never calls the fact-extraction LLM.
+          docker exec \
+            -u foxinthebox \
+            -e HOME=/app \
+            -e HERMES_HOME=/data/data/hermes \
+            -e PYTHONPATH=/data/apps/hermes-agent \
+            -e MEM0_TELEMETRY=False \
+            -e OPENROUTER_API_KEY=sk-or-selftest-stub-key \
+            selftest-fox python3 /app/fox-overlay/tests/image_selftest_phase_b.py
+          echo "✅ real memory activation verified (pinned LLM, armed tripwire, local search op)"
 
       - name: Container logs (always — debug)
         if: always()

@@ -28,6 +28,14 @@ Per-row sync sources (design §a.0):
   _POOL_ID_MAP  → every value is a PROVIDER_REGISTRY key, every key is a
                   canonical providers.py id, and each entry round-trips
                   through hermes_cli.providers.ALIASES (pool id → providers id)
+
+Also carries the §e protobuf wire probe: google.protobuf pinned at 6.33.6
+image-wide (mem0ai requires <7.0.0,>=5.29.6) with a status_pb2.Status
+serialize/parse round-trip through the upb backend.
+
+Log hygiene: failure messages quote only the plugin's own table values (env
+VARIABLE NAMES like "OPENAI_API_KEY", never secret values) and reference the
+registry side by its source location instead of echoing it.
 """
 
 from __future__ import annotations
@@ -84,6 +92,40 @@ def _import_surfaces():
     )
 
 
+def _check_protobuf(check) -> None:
+    """§e wire probe: pinned protobuf + a real serialize/parse round-trip.
+
+    mem0ai 2.0.10 forces protobuf 7.35.1 → 6.33.6 image-wide; the Google
+    provider path serializes through it. Import + version equality alone
+    would miss a broken native backend, so round-trip a status_pb2.Status
+    through the upb implementation.
+    """
+    import google.protobuf
+    from google.protobuf.internal import api_implementation
+    from google.rpc import status_pb2
+
+    check(
+        google.protobuf.__version__ == "6.33.6",
+        "protobuf version drifted: in-image %r, expected the 6.33.6 pin "
+        "(requirements.lock — mem0ai requires <7.0.0,>=5.29.6; re-verify the "
+        "Google provider path before changing either)" % (google.protobuf.__version__,),
+    )
+    impl = api_implementation.Type()
+    check(
+        impl == "upb",
+        "protobuf backend is %r, not 'upb' — the wire probe would not be "
+        "representative of the production serialization path" % (impl,),
+    )
+    msg = status_pb2.Status(code=3, message="fox-selftest-probe")
+    parsed = status_pb2.Status()
+    parsed.ParseFromString(msg.SerializeToString())
+    check(
+        parsed.code == 3 and parsed.message == "fox-selftest-probe",
+        "protobuf status_pb2.Status round-trip corrupted the payload "
+        "(code=%r, message=%r)" % (parsed.code, parsed.message),
+    )
+
+
 def main() -> None:
     (
         registry,
@@ -109,12 +151,16 @@ def main() -> None:
         sys.exit(1)
 
     # ── openai-api: full equality vs PROVIDER_REGISTRY ───────────────────────
+    # Failure messages quote only the plugin table's env-var NAMES; the
+    # registry side is referenced by source location, never echoed (log
+    # hygiene — nothing named *api_key* flows into output).
     reg = registry["openai-api"]
     tbl_vars, tbl_url = well_known["openai-api"]
     check(
         tuple(tbl_vars) == tuple(reg.api_key_env_vars),
-        "openai-api env vars drifted: _WELL_KNOWN=%r vs PROVIDER_REGISTRY=%r"
-        % (tbl_vars, reg.api_key_env_vars),
+        "openai-api env vars drifted: _WELL_KNOWN=%r no longer equals "
+        "PROVIDER_REGISTRY['openai-api'].api_key_env_vars (see "
+        "hermes_cli/auth.py)" % (tbl_vars,),
     )
     check(
         tbl_url == reg.inference_base_url,
@@ -127,19 +173,17 @@ def main() -> None:
     tbl_vars, tbl_url = well_known["anthropic"]
     check(
         set(tbl_vars) <= set(reg.api_key_env_vars),
-        "anthropic env vars drifted: _WELL_KNOWN=%r is not a subset of "
-        "PROVIDER_REGISTRY=%r" % (tbl_vars, reg.api_key_env_vars),
+        "anthropic env vars drifted: _WELL_KNOWN=%r is no longer a subset of "
+        "PROVIDER_REGISTRY['anthropic'].api_key_env_vars (see "
+        "hermes_cli/auth.py)" % (tbl_vars,),
     )
     check(
         len(tbl_vars) > 0
         and len(reg.api_key_env_vars) > 0
         and tbl_vars[0] == reg.api_key_env_vars[0],
-        "anthropic first env var drifted: _WELL_KNOWN[0]=%r vs "
-        "PROVIDER_REGISTRY[0]=%r"
-        % (
-            tbl_vars[0] if tbl_vars else None,
-            reg.api_key_env_vars[0] if reg.api_key_env_vars else None,
-        ),
+        "anthropic first env var drifted: _WELL_KNOWN[0]=%r no longer matches "
+        "PROVIDER_REGISTRY['anthropic'].api_key_env_vars[0] (see "
+        "hermes_cli/auth.py)" % (tbl_vars[0] if tbl_vars else None,),
     )
     check(
         tbl_url == reg.inference_base_url,
@@ -173,12 +217,9 @@ def main() -> None:
         len(tbl_vars) > 0
         and len(reg.api_key_env_vars) > 0
         and tbl_vars[0] == reg.api_key_env_vars[0],
-        "azure-foundry first env var drifted: _WELL_KNOWN[0]=%r vs "
-        "PROVIDER_REGISTRY[0]=%r"
-        % (
-            tbl_vars[0] if tbl_vars else None,
-            reg.api_key_env_vars[0] if reg.api_key_env_vars else None,
-        ),
+        "azure-foundry first env var drifted: _WELL_KNOWN[0]=%r no longer "
+        "matches PROVIDER_REGISTRY['azure-foundry'].api_key_env_vars[0] (see "
+        "hermes_cli/auth.py)" % (tbl_vars[0] if tbl_vars else None,),
     )
     check(
         tbl_url == "" and reg.inference_base_url == "",
@@ -209,18 +250,23 @@ def main() -> None:
             % (prov_id, pool_id, pool_id, aliases.get(pool_id)),
         )
 
+    # ── protobuf wire probe (§e — in-image serialization path) ──────────────
+    _check_protobuf(check)
+
     if errors:
         for e in errors:
             print(f"FAIL: {e}", file=sys.stderr)
         print(
-            f"FAIL: {len(errors)} sync assertion(s) failed — _WELL_KNOWN/"
-            "_POOL_ID_MAP drifted against hermes_cli",
+            f"FAIL: {len(errors)} phase A assertion(s) failed — "
+            "_WELL_KNOWN/_POOL_ID_MAP drifted against hermes_cli, or the "
+            "protobuf wire probe failed",
             file=sys.stderr,
         )
         sys.exit(1)
 
     print("OK: _WELL_KNOWN rows match their hermes_cli sync sources")
     print("OK: _POOL_ID_MAP entries are registry-valid and ALIASES round-trip")
+    print("OK: protobuf 6.33.6 upb round-trip verified")
 
 
 if __name__ == "__main__":

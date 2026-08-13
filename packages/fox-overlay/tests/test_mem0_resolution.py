@@ -611,6 +611,53 @@ class TestStateJson:
         assert state["status"] == "error"
         assert "embed-server" in state["reason"]
 
+    def test_op_failure_error_persists_across_memo_hit_resolutions(
+        self, env, monkeypatch, pinned_llm
+    ):
+        """§a.2 state-flap guard: a sub-threshold op failure writes
+        status=error; a memo-HIT is_available() must NOT downgrade it back
+        to ready.  Only a FRESH resolution (watched-file mtime change) or a
+        successful memory op may clear it."""
+        _write_config(env.home, "model:\n  provider: openrouter\n")
+        monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test-1234")
+        monkeypatch.setattr(plugin, "_embed_server_healthy", lambda: True)
+        state_path = env.home / "mem0_oss" / "state.json"
+        provider = plugin.Mem0OSSMemoryProvider()
+
+        assert provider.is_available() is True
+        assert json.loads(state_path.read_text())["status"] == "ready"
+
+        # One op failure (below the breaker threshold) → visible error.
+        provider._record_failure("memory operation failed: upstream 500")
+        assert json.loads(state_path.read_text())["status"] == "error"
+
+        # Memo-hit resolution: memory stays operational, but the error
+        # state must persist with the op-failure reason.
+        assert provider.is_available() is True
+        state = json.loads(state_path.read_text())
+        assert state["status"] == "error"
+        assert "upstream 500" in state["reason"]
+
+        # Watched-file mtime change → FRESH resolution → ready again.
+        os.utime(env.home / "config.yaml", ns=(1_000_000_000, 999_999_999_000_000_000))
+        assert provider.is_available() is True
+        assert json.loads(state_path.read_text())["status"] == "ready"
+
+    def test_op_success_clears_op_failure_error(self, env, monkeypatch, pinned_llm):
+        _write_config(env.home, "model:\n  provider: openrouter\n")
+        monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test-1234")
+        monkeypatch.setattr(plugin, "_embed_server_healthy", lambda: True)
+        state_path = env.home / "mem0_oss" / "state.json"
+        provider = plugin.Mem0OSSMemoryProvider()
+
+        assert provider.is_available() is True
+        provider._record_failure("memory operation failed: transient")
+        assert json.loads(state_path.read_text())["status"] == "error"
+
+        # The breaker success path (a working memory op) restores ready.
+        provider._record_success()
+        assert json.loads(state_path.read_text())["status"] == "ready"
+
     def test_error_state_written_for_explicit_misconfig(self, env, pinned_llm):
         _write_config(env.home, "model:\n  provider: openrouter\n")  # no key
         provider = plugin.Mem0OSSMemoryProvider()

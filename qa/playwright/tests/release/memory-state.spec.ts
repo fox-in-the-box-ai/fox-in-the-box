@@ -27,5 +27,6 @@ test.describe("Release — memory state on /readyz", () => {
       typeof body.checks.memory.ok,
       "memory check ok must be boolean",
     ).toBe("boolean");
+    await api.dispose();
   });
 });

@@ -66,6 +66,10 @@ ASSERTIONS='
         else
             # postinst download warn-and-continue path (design §1.2): the unit
             # must stay stopped (autostart=false), never a FATAL retry loop.
+            # ::warning:: surfaces as a GitHub Actions annotation (stdout is
+            # forwarded through docker run) so a persistently failing GGUF
+            # download is visible in CI, not buried in the log.
+            echo "::warning::test-deb: embedding model was not downloaded by postinst (warn-and-continue path) — asserting autostart=false instead; investigate the GGUF release asset if this persists"
             echo "WARN: embedding model not downloaded — asserting the autostart=false path"
             echo "$EMBED_BLOCK" | grep -q "^autostart=false" || { echo "FAIL: model absent but embed-server autostart is not false"; exit 1; }
             echo "PASS: model absent, embed-server correctly left autostart=false"

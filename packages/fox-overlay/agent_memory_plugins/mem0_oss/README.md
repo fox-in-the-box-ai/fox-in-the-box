@@ -1,113 +1,101 @@
 # Mem0 OSS Memory Plugin
 
 Self-hosted, privacy-first long-term memory using the open-source
-[mem0ai](https://github.com/mem0ai/mem0) library. No cloud API key or
-external service needed — everything runs on your machine.
+[mem0ai](https://github.com/mem0ai/mem0) library. Everything runs on your
+machine: fact extraction uses the chat provider you already have configured,
+embeddings are computed by a bundled local model, and all data stays on disk.
 
-## How it works
+For the full user-facing guide (provider matrix, troubleshooting, upgrade
+recipes), see `docs/MEMORY.md` in the Fox in the Box repository.
 
-- **LLM fact extraction** — after each conversation turn, mem0 uses an LLM
-  to extract important facts, preferences, and context from the exchange.
-- **Semantic search** — memories are stored in a local [Qdrant](https://qdrant.tech/)
-  vector database. Searches use embedding-based similarity so natural-language
-  queries work well.
-- **Automatic deduplication** — mem0 merges new facts with existing ones to
-  avoid duplicate storage.
-- **Built-in memory mirroring** — writes via the built-in `memory` tool are
-  automatically mirrored into mem0 via `on_memory_write`, so nothing is lost
-  whether you use the native tool or the mem0-specific tools.
+## Architecture
 
-## Setup
+- **Fact-extraction LLM = your main chat provider.** The plugin resolves the
+  provider through the same surfaces Hermes chat uses
+  (`resolve_provider_full` over config.yaml `model.provider` /
+  `providers:` / `custom_providers:`, then the same credential chain: env
+  vars with `~/.hermes/.env` preferred, then the credential pool populated
+  by `hermes auth add`). If chat works, memory works — no extra key.
+- **Embedder = always local.** A bundled `nomic-embed-text-v1.5` model
+  (768 dimensions) is served by a llama.cpp embed-server on
+  `127.0.0.1:8644` and reached through mem0's OpenAI adapter with an
+  explicit base URL. Memory content never leaves the machine for embedding,
+  and the vector-store dimensions stay stable for the life of the install.
+- **Vector store = embedded Qdrant** (local path, no server), 768 dims.
+- **Pinned LLM adapter.** mem0ai 2.0.10's OpenAI adapter prefers
+  `OPENROUTER_API_KEY` from the environment over its config, which could
+  silently reroute fact extraction. The plugin registers a pinned subclass
+  (`_pinned_llm.PinnedOpenAILLM`) that rebuilds the client strictly from the
+  resolved config. A version tripwire fails memory loudly (state `error`)
+  if the installed mem0ai version ever differs from the audited `2.0.10`
+  pin — the pin must be re-audited before any bump.
+- **No telemetry.** mem0's built-in PostHog telemetry is disabled
+  (`MEM0_TELEMETRY=False`) at every Fox-managed process boundary, including
+  by this plugin at import time.
 
-### 1. Install dependencies
+## The three states
 
-```bash
-pip install mem0ai qdrant-client
-```
+Resolution always lands in exactly one visible state, written atomically to
+`$HERMES_HOME/mem0_oss/state.json` and surfaced on `/readyz` and the boot
+log (`memory: READY|OFF|ERROR — <reason>`):
 
-### 2. Configure a backend
+| State     | Meaning                                                       | Examples of the exact reason                                                                                  |
+| --------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| **READY** | Memory active                                                 | `memory: READY — llm=openrouter, embedder=local:nomic-embed-text-v1.5`                                        |
+| **OFF**   | Nothing misconfigured; memory unsupported or disabled here    | `disabled (MEM0_OSS_DISABLED=1)`; `memory fact-extraction doesn't support provider '<id>' …`; no provider yet |
+| **ERROR** | Explicit configuration that cannot work; reason names the fix | `missing API key for provider 'openrouter' — set OPENROUTER_API_KEY … (credential pool was checked)`          |
 
-**Zero extra config — auto-detect (recommended)**
+There is no silent no-op: when memory is not READY, tools and the memory
+prompt block are suppressed and the reason is visible. A failed memory
+operation flips the state to `error` immediately (first failure, before the
+circuit-breaker threshold) and stays visible until an operation succeeds or
+the configuration actually changes.
 
-If you already have a Hermes provider configured (OpenRouter, Anthropic, OpenAI,
-or AWS Bedrock), mem0 OSS will automatically pick it up — no `MEM0_OSS_*` vars
-needed. The plugin mirrors the standard Hermes auxiliary provider priority:
+## Activation and disable switches
 
-```
-OPENROUTER_API_KEY  →  uses OpenRouter (openrouter → openai adapter)
-ANTHROPIC_API_KEY   →  uses Anthropic directly
-OPENAI_API_KEY      →  uses OpenAI (+ OPENAI_BASE_URL if set)
-AWS_ACCESS_KEY_ID   →  uses AWS Bedrock (boto3 reads creds automatically)
-```
-
-The first matching key wins.
-
-**Option A — config.yaml (preferred for per-provider control)**
-
-The plugin inherits from `auxiliary.default` if no `auxiliary.mem0_oss` block
-exists, so if you've already set a default auxiliary provider for other tasks
-you get mem0 OSS for free:
-
-```yaml
-# ~/.hermes/config.yaml
-auxiliary:
-  default: # inherited by mem0_oss and all other aux tasks
-    provider: auto
-    model: us.anthropic.claude-haiku-4-5-20251001-v1:0
-
-  # Optional — override just for mem0_oss:
-  mem0_oss:
-    provider: openrouter # or openai, anthropic, ollama, aws_bedrock, custom
-    model: openai/gpt-4o-mini
-    # api_key: ...            # optional — falls back to provider's standard env var
-    # base_url: ...           # optional — for custom/local endpoints
-```
-
-Supported provider values: `openrouter`, `openai`, `anthropic`, `ollama`,
-`lmstudio`, `aws_bedrock` (alias: `bedrock`), `custom`, `auto`.
-`auto` uses the same env-var detection order as zero-config.
-
-**Option B — AWS Bedrock**
-
-If you already use Hermes with Bedrock, no additional config is needed.
-The plugin reuses `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_REGION`.
-
-LLM default: `us.anthropic.claude-haiku-4-5-20251001-v1:0`
-Embedder default: `amazon.titan-embed-text-v2:0` (1024-dim)
-
-**Option C — OpenAI**
-
-```bash
-# If OPENAI_API_KEY is already set, nothing more is needed.
-# Override model/embedder explicitly if desired:
-export MEM0_OSS_LLM_MODEL=gpt-4o-mini
-export MEM0_OSS_EMBEDDER_MODEL=text-embedding-3-small
-export MEM0_OSS_EMBEDDER_DIMS=1536
-```
-
-**Option D — Ollama (fully local, no API key)**
-
-```bash
-export MEM0_OSS_LLM_PROVIDER=ollama
-export MEM0_OSS_LLM_MODEL=llama3.2
-export MEM0_OSS_EMBEDDER_PROVIDER=ollama
-export MEM0_OSS_EMBEDDER_MODEL=nomic-embed-text
-export MEM0_OSS_EMBEDDER_DIMS=768
-```
-
-### 3. Activate
+Fresh installs ship with memory on by default:
 
 ```yaml
-# ~/.hermes/config.yaml
+# config.yaml
 memory:
   provider: mem0_oss
 ```
 
-Or use the interactive setup wizard:
+To disable: remove the `memory:` key, set `memory: provider: ""`, or export
+`MEM0_OSS_DISABLED=1` (the container test mode does this automatically).
 
-```bash
-hermes memory setup    # select "mem0_oss"
-```
+## Configuration overrides
+
+Precedence: **computed defaults < environment variables <
+`$HERMES_HOME/mem0_oss.json`** (the JSON file overrides individual keys).
+
+| Env var                      | Default                            | Description                                                                            |
+| ---------------------------- | ---------------------------------- | -------------------------------------------------------------------------------------- |
+| `MEM0_OSS_DISABLED`          | _(unset)_                          | `1` disables memory entirely (visible OFF)                                             |
+| `MEM0_OSS_LLM_PROVIDER`      | main chat provider                 | Resolve this provider for fact extraction instead of the main one                      |
+| `MEM0_OSS_LLM_MODEL`         | provider default                   | Fact-extraction model id                                                               |
+| `MEM0_OSS_API_KEY`           | resolved like chat                 | Dedicated key for memory LLM calls                                                     |
+| `MEM0_OSS_BASE_URL`          | resolved like chat                 | Dedicated endpoint for memory LLM calls (`MEM0_OSS_OPENAI_BASE_URL` is a legacy alias) |
+| `MEM0_OSS_EMBEDDER_PROVIDER` | local                              | `openai` (any OpenAI-compatible endpoint) or `aws_bedrock`                             |
+| `MEM0_OSS_EMBEDDER_MODEL`    | `nomic-embed-text-v1.5`            | Embedder model id                                                                      |
+| `MEM0_OSS_EMBEDDER_BASE_URL` | `http://127.0.0.1:8644/v1`         | Embedder endpoint override                                                             |
+| `MEM0_OSS_EMBEDDER_DIMS`     | 768                                | Embedding dimensions (flows to embedder AND vector store)                              |
+| `MEM0_OSS_COLLECTION`        | `hermes`                           | Qdrant collection name                                                                 |
+| `MEM0_OSS_USER_ID`           | `hermes-user`                      | Memory namespace                                                                       |
+| `MEM0_OSS_TOP_K`             | `10`                               | Default search result count                                                            |
+| `MEM0_OSS_VECTOR_STORE_PATH` | `$HERMES_HOME/mem0_oss/qdrant`     | On-disk Qdrant path                                                                    |
+| `MEM0_OSS_HISTORY_DB_PATH`   | `$HERMES_HOME/mem0_oss/history.db` | SQLite history path                                                                    |
+
+`$HERMES_HOME/mem0_oss.json` accepts the same keys in snake_case without
+the `MEM0_OSS_` prefix (`llm_provider`, `llm_model`, `api_key`, `base_url`,
+`embedder_provider`, `embedder_model`, `embedder_base_url`,
+`embedder_dims`, `collection`, `user_id`, `top_k`, …). If that file exists
+with embedder keys, it silently shadows the env vars — edit the file.
+
+Credential changes (key rotation in `~/.hermes/.env`, `hermes auth add`)
+take effect without a restart: the resolver watches the mtimes of
+config.yaml, `.env`, and the auth store. Changes made only via shell
+`export` self-heal within 10 minutes or on restart.
 
 ## Storage
 
@@ -115,12 +103,10 @@ hermes memory setup    # select "mem0_oss"
 | ---------------------------------- | ---------------------------------- |
 | `$HERMES_HOME/mem0_oss/qdrant/`    | Qdrant vector store (all memories) |
 | `$HERMES_HOME/mem0_oss/history.db` | mem0 history SQLite database       |
+| `$HERMES_HOME/mem0_oss/state.json` | Current memory state + reason      |
 
-Override with `MEM0_OSS_VECTOR_STORE_PATH` and `MEM0_OSS_HISTORY_DB_PATH`.
-
-Non-secret settings can also be persisted to `$HERMES_HOME/mem0_oss.json`
-by the setup wizard (via `save_config`), or written manually — see
-[All configuration options](#all-configuration-options).
+To reset memory completely, stop the services and delete
+`$HERMES_HOME/mem0_oss/`. Nothing is ever deleted automatically.
 
 ## Agent tools
 
@@ -130,11 +116,8 @@ by the setup wizard (via `save_config`), or written manually — see
 | `mem0_oss_add`    | Store a durable fact: preferences, environment details, decisions, corrections. Skips session events, work logs, and short-lived state |
 
 Facts are extracted and stored automatically on every conversation turn via
-`sync_turn` — no explicit save call needed.
-
-Writes via the built-in `memory` tool are also mirrored automatically into
-mem0 via `on_memory_write`. To explicitly save something mid-session, use
-`mem0_oss_add` (or the built-in `memory` tool — both propagate to mem0).
+`sync_turn`. Writes via the built-in `memory` tool are mirrored into mem0
+via `on_memory_write`. When memory is not READY, the tools are not offered.
 
 ## Concurrent access (WebUI + gateway)
 
@@ -144,58 +127,3 @@ host, the plugin creates a fresh `Memory` instance per operation and releases
 the Qdrant lock immediately after each call. If a brief overlap occurs the
 operation is skipped gracefully (logged at DEBUG, not counted as a failure)
 rather than raising an error.
-
-## All configuration options
-
-### Environment variables
-
-| Env var                      | Default                                 | Description                                                                    |
-| ---------------------------- | --------------------------------------- | ------------------------------------------------------------------------------ |
-| `MEM0_OSS_LLM_PROVIDER`      | auto-detected                           | LLM provider (`openrouter`, `openai`, `anthropic`, `ollama`, `aws_bedrock`, …) |
-| `MEM0_OSS_LLM_MODEL`         | provider default                        | LLM model id                                                                   |
-| `MEM0_OSS_EMBEDDER_PROVIDER` | mirrors LLM provider                    | Embedder provider                                                              |
-| `MEM0_OSS_EMBEDDER_MODEL`    | provider default                        | Embedder model id                                                              |
-| `MEM0_OSS_EMBEDDER_DIMS`     | provider default                        | Embedding dimensions                                                           |
-| `MEM0_OSS_COLLECTION`        | `hermes`                                | Qdrant collection name                                                         |
-| `MEM0_OSS_USER_ID`           | `hermes-user`                           | Memory namespace                                                               |
-| `MEM0_OSS_TOP_K`             | `10`                                    | Default search result count                                                    |
-| `MEM0_OSS_VECTOR_STORE_PATH` | `$HERMES_HOME/mem0_oss/qdrant`          | On-disk Qdrant path                                                            |
-| `MEM0_OSS_HISTORY_DB_PATH`   | `$HERMES_HOME/mem0_oss/history.db`      | SQLite history path                                                            |
-| `MEM0_OSS_API_KEY`           | _(auto-detected from provider env var)_ | Explicit API key for the LLM backend                                           |
-| `MEM0_OSS_OPENAI_BASE_URL`   | _(none)_                                | OpenAI-compatible endpoint override                                            |
-
-### config.yaml (auxiliary.mem0_oss / auxiliary.default)
-
-`auxiliary.mem0_oss` keys take precedence; any key not set there falls back to
-`auxiliary.default` (which is also used by compression, vision, and other aux tasks).
-
-| Key        | Description                                        |
-| ---------- | -------------------------------------------------- |
-| `provider` | Hermes provider name (see auto-detect order above) |
-| `model`    | LLM model id                                       |
-| `base_url` | Custom OpenAI-compatible endpoint                  |
-| `api_key`  | Explicit API key (takes precedence over env vars)  |
-
-### Key resolution priority
-
-1. `MEM0_OSS_API_KEY` env var
-2. `auxiliary.mem0_oss.api_key` in `config.yaml`
-3. Provider's standard env var (`OPENROUTER_API_KEY`, `ANTHROPIC_API_KEY`,
-   `OPENAI_API_KEY`, …) resolved via the Hermes provider registry
-4. AWS credentials from environment (for Bedrock)
-
-Or put non-secret settings in `$HERMES_HOME/mem0_oss.json` (keys are the
-env-var names without the `MEM0_OSS_` prefix, in snake_case):
-
-```json
-{
-  "llm_provider": "aws_bedrock",
-  "llm_model": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
-  "embedder_provider": "aws_bedrock",
-  "embedder_model": "amazon.titan-embed-text-v2:0",
-  "embedder_dims": 1024,
-  "collection": "hermes",
-  "user_id": "hermes-user",
-  "top_k": 10
-}
-```
