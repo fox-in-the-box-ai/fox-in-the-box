@@ -197,7 +197,19 @@ _apply_patches() {
     fi
 }
 
-# ── 5. Agent memory plugins ───────────────────────────────────────────────────
+# ── 5. WebUI brand assets + browser titles ────────────────────────────────────
+_install_webui_branding() {
+    [ "$FITB_DISABLE_WEBUI_OVERLAY" = "1" ] && { _log "Skipping WebUI branding (overlay disabled)"; return 0; }
+    local installer="$FITB_OVERLAY_DIR/install_webui_branding.py"
+    local target="$FITB_APP_DIR/hermes-webui"
+
+    [ -f "$installer" ] || _die "WebUI branding installer missing at $installer"
+    [ -d "$target/static" ] || _die "hermes-webui/static missing — upstream layout changed?"
+    python3 "$installer" "$target" --overlay-root "$FITB_OVERLAY_DIR"
+    _log "Installed Fox WebUI icons and browser-title branding → $target"
+}
+
+# ── 6. Agent memory plugins ───────────────────────────────────────────────────
 _install_memory_plugins() {
     [ "$FITB_DISABLE_AGENT_OVERLAY" = "1" ] && { _log "Skipping memory plugins (overlay disabled)"; return 0; }
     local src="$FITB_OVERLAY_DIR/agent_memory_plugins"
@@ -214,7 +226,7 @@ _install_memory_plugins() {
     done
 }
 
-# ── 6. .fox-removals ─────────────────────────────────────────────────────────
+# ── 7. .fox-removals ─────────────────────────────────────────────────────────
 _apply_removals() {
     [ "$FITB_DISABLE_WEBUI_OVERLAY" = "1" ] && { _log "Skipping removals (overlay disabled)"; return 0; }
     local manifest="$FITB_OVERLAY_DIR/.fox-removals"
@@ -237,7 +249,7 @@ _apply_removals() {
     done
 }
 
-# ── 7. SOUL.md ────────────────────────────────────────────────────────────────
+# ── 8. SOUL.md ────────────────────────────────────────────────────────────────
 _install_soul() {
     [ "$FITB_DISABLE_AGENT_OVERLAY" = "1" ] && { _log "Skipping SOUL.md (overlay disabled)"; return 0; }
     local src="$FITB_OVERLAY_DIR/agent_overlay/SOUL.md"
@@ -249,7 +261,7 @@ _install_soul() {
     _log "Installed Fox SOUL.md → $dest"
 }
 
-# ── 8. pip install ────────────────────────────────────────────────────────────
+# ── 9. pip install ────────────────────────────────────────────────────────────
 _pip_install() {
     local pip_cmd
     local constraints_flag=()
@@ -300,7 +312,7 @@ _pip_install() {
     fi
 }
 
-# ── 9. supervisord.conf (generated — paths substituted) ───────────────────────
+# ── 10. supervisord.conf (generated — paths substituted) ──────────────────────
 _write_supervisord_conf() {
     local app="$FITB_APP_DIR"
     local data="$FITB_DATA_DIR"
@@ -441,6 +453,7 @@ fi
 
 _sync_hermes_repos
 _apply_patches
+_install_webui_branding
 _install_memory_plugins
 _apply_removals
 _install_soul

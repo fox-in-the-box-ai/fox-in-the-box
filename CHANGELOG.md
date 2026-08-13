@@ -11,7 +11,12 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- Canonical Fox branding across all surfaces: new app icons (macOS/Windows/Linux), full WebUI favicon set (ico/svg/png + apple-touch), browser and PWA titles now read "Fox in the Box"
 - Bedrock credentials card in Settings → Providers: save either a bearer token or an IAM key pair (saving one clears the other, so stale credentials cannot linger)
+
+### Changed
+
+- Default WebUI theme is now light (brand palette `#FAF7F0`), replacing the previous dark default; existing installs keep their saved theme preference
 
 ### Fixed
 

@@ -40,7 +40,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install pytest + coverage + overlay deps
-        run: pip install pytest pytest-cov pyyaml --quiet
+        run: pip install pytest pytest-cov pyyaml pillow --quiet
 
       - name: Run validate-overlay
         run: bash packages/fox-overlay/scripts/validate-overlay.sh
