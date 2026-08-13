@@ -18,7 +18,12 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 - Default WebUI theme is now light (brand palette `#FAF7F0`), replacing the previous dark default; existing installs keep their saved theme preference
 
+### Security
+
+- Closed Dependabot HIGH alerts #87/#88 by evicting the app-builder-lib 24.13.3 / builder-util-runtime 9.2.4 subtree from the lockfiles: `electron-builder-squirrel-windows` is now an explicit devDependency pinned exactly at 26.15.3 so pnpm no longer auto-installs the old version to satisfy app-builder-lib's exact peer. Note the coupling: `electron-builder` (^26.15.3) and the squirrel pin must be bumped together — bumping one without the other reintroduces the peer mismatch
+
 ### Fixed
+
 - `validate-overlay.sh` now selects one pytest-capable interpreter for the whole run (container target 3.11 preferred) instead of the first interpreter found; previously a bare python3.13 without pytest silently skipped the unit tests and failed the bootstrap smoke on 3.13-only stdlib layout drift
 
 - An EC2/Lightsail IMDS instance role is no longer treated as Bedrock OAuth authentication. Previously the provider card showed "Authenticated via OAuth" on any AWS VM and then failed with 403 at invoke time. Instance-role auth is now rejected by default; set `HERMES_BEDROCK_ALLOW_INSTANCE_ROLE=1` to opt back in. Explicit keys, `AWS_PROFILE`, shared credentials files, ECS task roles, and IRSA are unaffected
