@@ -198,8 +198,13 @@ def main() -> None:
     results = None
     for attempt in range(1, SEARCH_ATTEMPTS + 1):
         try:
+            # mem0ai 2.0.10 signature: search(query, *, top_k=..., filters=...)
+            # — no top-level user_id kwarg (verified against the wheel; the
+            # plugin's own call sites already use this form).
             results = memory.search(
-                "what do you know about the fox?", user_id=user_id, limit=3
+                "what do you know about the fox?",
+                top_k=3,
+                filters={"user_id": user_id},
             )
             last_exc = None
             break
