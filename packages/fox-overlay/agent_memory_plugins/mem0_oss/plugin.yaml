@@ -1,6 +1,6 @@
 name: mem0_oss
-version: 1.0.0
-description: "Mem0 OSS — self-hosted LLM fact extraction with local Qdrant vector store. No cloud account required."
+version: 2.0.0
+description: "Mem0 OSS — self-hosted long-term memory. Fact extraction follows your main chat provider; embeddings are computed entirely on-device (bundled nomic-embed-text-v1.5 via llama.cpp). Local Qdrant vector store, no cloud account, no telemetry. Memory state is always visible: ready, off (with reason), or error — never a silent no-op."
 pip_dependencies:
   - mem0ai
   - qdrant-client

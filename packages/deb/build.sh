@@ -33,6 +33,17 @@ cp -r "$REPO_ROOT/packages/integration/scripts/." "$APPDIR/scripts/"
 # install-core.sh and preflight.sh overlay on top
 cp "$REPO_ROOT/packages/install-core/install-core.sh" "$APPDIR/install-core.sh"
 cp "$REPO_ROOT/packages/install-core/preflight.sh"    "$APPDIR/scripts/preflight.sh"
+# embed-model.lock must sit beside install-core.sh — it sources the lock via
+# "$(dirname "$0")/embed-model.lock" (single source of truth for the embed
+# model pin; the GGUF itself is downloaded by postinst, not shipped).
+cp "$REPO_ROOT/packages/integration/embed-model.lock" "$APPDIR/embed-model.lock"
+# Pip constraints file for the bare-metal venv. Same pin set the container
+# build uses (resolved under Python 3.11). postinst passes it to install-core
+# as FITB_PIP_CONSTRAINTS only when the venv interpreter is/will be 3.11.x;
+# other Python versions install unconstrained (the 3.11-resolved set may be
+# unsatisfiable there), with mem0ai still exact-pinned via the hermes-agent
+# [mem0] extra on every path.
+cp "$REPO_ROOT/packages/integration/requirements.lock" "$APPDIR/requirements.lock"
 chmod +x "$APPDIR/install-core.sh" "$APPDIR/scripts/"*.sh 2>/dev/null || true
 
 # Default configs

@@ -1,0 +1,17 @@
+# embed-model.lock — single source of truth for the local embedding model pin.
+#
+# KEY=VALUE lines only (this file is shell-sourced by install-core.sh and by
+# the Dockerfile fetch layer); comments must stay on their own '#' lines.
+# Every consumer of the model URL, hash, or filename derives it from this
+# file — the literal values must not appear anywhere else in the repo
+# (enforced by packages/fox-overlay/tests/test_embed_model_lock.py).
+#
+# Upstream provenance:
+#   source:  https://huggingface.co/nomic-ai/nomic-embed-text-v1.5-GGUF
+#   file:    nomic-embed-text-v1.5.Q5_K_M.gguf
+#   license: Apache 2.0
+#   The upstream LFS sha256 is identical to EMBED_MODEL_SHA256 below —
+#   cross-checked against the mirrored bytes at mirror time (2026-08-14).
+EMBED_MODEL_URL=https://github.com/fox-in-the-box-ai/fox-in-the-box/releases/download/assets-nomic-embed-v1.5/nomic-embed-text-v1.5.Q5_K_M.gguf
+EMBED_MODEL_SHA256=0c7930f6c4f6f29b7da5046e3a2c0832aa3f602db3de5760a95f0582dbd3d6e6
+EMBED_MODEL_FILENAME=nomic-embed-text-v1.5.Q5_K_M.gguf

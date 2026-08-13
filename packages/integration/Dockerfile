@@ -17,7 +17,10 @@ FROM python:3.11-slim
 # unset (some non-buildkit pathway), the case statements default to x64
 # anyway, so this change cannot make non-buildkit builds worse.
 ARG TARGETARCH
-# Pin QDRANT_VERSION to match qdrant-client in hermes-agent (see task 03 docs).
+# Pin QDRANT_VERSION deliberately. The standalone server and the pip-installed
+# qdrant-client are intentionally independent: mem0 uses the client in embedded
+# *path* mode (no server connection on any default path), and nothing on a
+# default install path dials this server with a version-coupled client.
 # Do NOT use "latest" in production builds.
 ARG QDRANT_VERSION=v1.9.4
 # Pin LLAMACPP_VERSION — daily build tags on ggml-org/llama.cpp ship pre-built
@@ -103,6 +106,21 @@ RUN set -eux; \
         | tar -xzf - -C /app/llama-cpp --strip-components=1; \
     chmod +x /app/llama-cpp/llama-server
 
+# ── embedding model (mem0 local embedder — served by [program:embed-server]) ──
+# The URL / sha256 / filename live ONLY in embed-model.lock (single source of
+# truth for the model pin). The lock is COPYd to /tmp/ deliberately: it must
+# sit beside install-core.sh — which also runs from /tmp during this build —
+# because install-core sources it via "$(dirname "$0")/embed-model.lock".
+# The GGUF is arch-independent; the llama-server binary above serves it.
+# Placed with the stable binary layers (qdrant / llama-server) so overlay and
+# app-source edits don't bust this ~95 MB download layer.
+COPY packages/integration/embed-model.lock /tmp/embed-model.lock
+RUN set -eux; \
+    . /tmp/embed-model.lock; \
+    mkdir -p /app/models; \
+    curl -fsSL "$EMBED_MODEL_URL" -o "/app/models/$EMBED_MODEL_FILENAME"; \
+    echo "$EMBED_MODEL_SHA256  /app/models/$EMBED_MODEL_FILENAME" | sha256sum -c
+
 # ── non-root user ─────────────────────────────────────────────────────────────
 RUN useradd -r -s /bin/bash -d /app foxinthebox \
     && mkdir -p /data \
@@ -157,7 +175,7 @@ RUN set -eux; \
     FITB_DISABLE_AGENT_OVERLAY=${FITB_DISABLE_AGENT_OVERLAY} \
     FITB_PIP_CONSTRAINTS=/app/requirements.lock \
     bash /tmp/install-core.sh; \
-    rm /tmp/install-core.sh; \
+    rm /tmp/install-core.sh /tmp/embed-model.lock; \
     chown -R foxinthebox:foxinthebox /app/hermes-agent /app/hermes-webui /app/fox-overlay
 
 ENV HERMES_WEBUI_EXTENSION_DIR=/app/fox-overlay/webui_static \
@@ -170,6 +188,10 @@ RUN chmod +x /app/entrypoint.sh
 
 # ── runtime ───────────────────────────────────────────────────────────────────
 ENV FITB_DEV=${FITB_DEV}
+# mem0's bundled PostHog telemetry stays off at every process boundary. The
+# image-level ENV covers processes outside supervisord's environment= lines
+# and the entrypoint's export (e.g. docker exec sessions).
+ENV MEM0_TELEMETRY=False
 VOLUME ["/data"]
 EXPOSE 8787 6333
 
