@@ -483,8 +483,12 @@ SEARCH_SCHEMA = {
 ADD_SCHEMA = {
     "name": "mem0_oss_add",
     "description": (
-        "Store a fact, preference, or piece of context to long-term memory. "
-        "mem0 deduplicates automatically — safe to call for any important detail."
+        "Store a durable fact to long-term memory — user preferences, environment"
+        " details, architectural decisions, stable conventions, or corrections."
+        " Only store facts that will still be useful in a future session."
+        " Do NOT store session events, completed-work logs, commit SHAs, run"
+        " stats, or anything that will be stale in a week."
+        " mem0 deduplicates automatically."
     ),
     "parameters": {
         "type": "object",
@@ -667,7 +671,10 @@ class Mem0OSSMemoryProvider(MemoryProvider):
             "## Mem0 OSS Memory (self-hosted)\n"
             "You have access to long-term memory stored locally via mem0.\n"
             "- Use `mem0_oss_search` to recall relevant facts before answering.\n"
-            "- Use `mem0_oss_add` to store important new facts, preferences, or context.\n"
+            "- Use `mem0_oss_add` to store **durable** facts only: user preferences,"
+            " environment details, architectural decisions, stable conventions, corrections.\n"
+            "- Do NOT store session events, completed-work logs, commit SHAs, run stats,"
+            " or any fact that will be stale in a week — skip those entirely.\n"
             "- Facts are extracted and deduplicated automatically on each turn.\n"
             "- Search is semantic — natural-language queries work well.\n"
         )
