@@ -168,6 +168,11 @@ if [ -f "$HERMES_ENV" ]; then
     set +a
 fi
 
+# mem0's bundled PostHog telemetry is disabled at every Fox-managed process
+# boundary. supervisord sets this per-program via environment=; the export
+# here covers anything spawned from the entrypoint itself.
+export MEM0_TELEMETRY=False
+
 # ── 5a. Test-mode overrides (v0.7.7 #264) ──────────────────────────────────────
 # When FITB_TEST_MODE=1 is set, Fox's webui_modules/test_hooks.py registers
 # POST /test/* routes that let Playwright reset state between specs. Also
@@ -180,6 +185,9 @@ if [ "${FITB_TEST_MODE:-0}" = "1" ]; then
     echo "[entrypoint] FITB_TEST_MODE=1 — exporting test-mode defaults (do not use in production)"
     export OPENROUTER_BASE_URL="${OPENROUTER_BASE_URL:-http://127.0.0.1:9001/openrouter}"
     export OLLAMA_BASE_URL="${OLLAMA_BASE_URL:-http://127.0.0.1:9002/ollama}"
+    # Memory is deterministic-off under test mode: Playwright specs assert the
+    # explicit "disabled" state rather than racing provider resolution.
+    export MEM0_OSS_DISABLED=1
 fi
 
 # ── 5b. Patch hermes.yaml with runtime env vars ────────────────────────────────
@@ -201,6 +209,27 @@ skills:
   external_dirs:
     - /data/apps/hermes-agent/skills
 EOF
+fi
+
+# step 5d: memory preflight (added by resolution workstream)
+# ── 5d. Memory preflight ──────────────────────────────────────────────────────
+# Resolves the memory provider (no embed-server probe), seeds
+# $HERMES_HOME/mem0_oss/state.json, and prints exactly one
+# "memory: READY|OFF|ERROR — <reason>" line to the boot log (design §1.5).
+# Warn-never-fail: memory problems must never block boot. Runs as
+# foxinthebox — the preflight refuses uid 0, and the state file must be
+# writable by the gateway user.
+_preflight_cmd=(env HOME=/app HERMES_HOME=/data/data/hermes \
+    PYTHONPATH=/data/apps/hermes-agent MEM0_TELEMETRY=False \
+    /app/scripts/run-with-env.sh python3 -m plugins.memory.mem0_oss.preflight)
+if command -v runuser >/dev/null 2>&1; then
+    runuser -u foxinthebox -- "${_preflight_cmd[@]}" \
+        || echo "[entrypoint] WARN: memory preflight failed (non-fatal; memory state will be evaluated by the gateway)"
+elif command -v setpriv >/dev/null 2>&1; then
+    setpriv --reuid foxinthebox --regid foxinthebox --init-groups "${_preflight_cmd[@]}" \
+        || echo "[entrypoint] WARN: memory preflight failed (non-fatal; memory state will be evaluated by the gateway)"
+else
+    echo "[entrypoint] WARN: neither runuser nor setpriv available — skipping memory preflight (gateway startup evaluation will seed state.json)"
 fi
 
 # ── 6. Tailscale Serve (background: after WebUI + Tailscale login) ─────────────

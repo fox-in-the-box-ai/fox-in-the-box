@@ -17,6 +17,7 @@ pnpm build:docker:dev
 ```
 
 What this does:
+
 - Reads `VERSION` (repo root) — currently `0.7.59`
 - Builds with `--build-arg FITB_DEV=1`
 - Tags the image as `fox-in-the-box:dev`
@@ -29,6 +30,7 @@ pnpm dev:container
 ```
 
 Wraps:
+
 ```bash
 docker run -it --rm \
   --cap-add=NET_ADMIN --device /dev/net/tun \
@@ -57,6 +59,7 @@ For static-asset changes (HTML / JS / CSS in `forks/hermes-webui/static/`), just
 ```
 
 If a mount is missing:
+
 ```
 [dev-init] WARNING: /root/.hermes/hermes-webui/.git not found
 [dev-init] Make sure both `-v` flags are present (forks/hermes-agent and forks/hermes-webui)
@@ -64,12 +67,12 @@ If a mount is missing:
 
 ## Prod vs Dev image differences
 
-| Aspect | `fox-in-the-box:dev` | `fox-in-the-box:<version>` (production) |
-|---|---|---|
-| Build flag | `FITB_DEV=1` | `FITB_DEV=0` (default) |
-| Submodule source | Bind-mounted from your host | Cloned from a git tag at build time |
-| Tag | `dev` | semver e.g. `0.7.59` |
-| Use case | Iterating on submodule code | Released artifact, CI, what users run |
+| Aspect           | `fox-in-the-box:dev`        | `fox-in-the-box:<version>` (production) |
+| ---------------- | --------------------------- | --------------------------------------- |
+| Build flag       | `FITB_DEV=1`                | `FITB_DEV=0` (default)                  |
+| Submodule source | Bind-mounted from your host | Cloned from a git tag at build time     |
+| Tag              | `dev`                       | semver e.g. `0.7.59`                    |
+| Use case         | Iterating on submodule code | Released artifact, CI, what users run   |
 
 ## Common workflows
 
@@ -92,6 +95,7 @@ exit
 # or in another shell:
 docker stop <container>
 ```
+
 Switch the submodule branches with `git checkout master` (note: hermes-webui uses `master`, not `main`), re-run `pnpm dev:container`.
 
 ### Reproduce a production-only issue
@@ -111,12 +115,13 @@ docker run --rm --cap-add=NET_ADMIN --device /dev/net/tun \
 
 ## Troubleshooting
 
-| Symptom | Likely cause | Fix |
-|---|---|---|
-| "Cannot find `/root/.hermes/hermes-agent/.git`" | Missing or wrong `-v` | Verify both `-v` flags include `:/root/.hermes/...` |
-| "Container still cloning from git" | Used `:latest` instead of `:dev` | `pnpm build:docker:dev` then `pnpm dev:container` |
-| "My code changes don't show up" | Service has cached bytecode / open file | `supervisorctl restart hermes-webui` (or whichever) |
-| "Container won't start, exits in seconds" | Submodule branch references a Python module not yet checked out | Fix the branch state first; `pnpm dev:container` again |
+| Symptom                                                                                               | Likely cause                                                                                                                                             | Fix                                                                                                                                                                                                                                                                                                                                                                         |
+| ----------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| "Cannot find `/root/.hermes/hermes-agent/.git`"                                                       | Missing or wrong `-v`                                                                                                                                    | Verify both `-v` flags include `:/root/.hermes/...`                                                                                                                                                                                                                                                                                                                         |
+| "Container still cloning from git"                                                                    | Used `:latest` instead of `:dev`                                                                                                                         | `pnpm build:docker:dev` then `pnpm dev:container`                                                                                                                                                                                                                                                                                                                           |
+| "My code changes don't show up"                                                                       | Service has cached bytecode / open file                                                                                                                  | `supervisorctl restart hermes-webui` (or whichever)                                                                                                                                                                                                                                                                                                                         |
+| "Container won't start, exits in seconds"                                                             | Submodule branch references a Python module not yet checked out                                                                                          | Fix the branch state first; `pnpm dev:container` again                                                                                                                                                                                                                                                                                                                      |
+| "Memory reports an embed-server error" / `supervisorctl status` shows `embed-server` STOPPED or FATAL | Embedding model missing or hash-mismatched at install time — the supervisord conf was written with `autostart=false` (or the unit exhausted its retries) | Check the log at `${data}/logs/embed-server.err` (container: `/data/logs/embed-server.err`; deb install: `/opt/foxinthebox/.foxinthebox/logs/embed-server.err`). Re-run the install/upgrade so `_install_embed_model` retries the download (every postinst re-run retries and flips `autostart` back to true once the model lands), then `supervisorctl start embed-server` |
 
 ## Related files
 

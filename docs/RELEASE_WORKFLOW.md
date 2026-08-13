@@ -97,6 +97,28 @@ gh pr merge <PR#> --squash --subject "bump(upstream): webui vX.Y.W → vX.Y.Z (c
 
 See [`docs/architecture/upstream-overlay.md`](architecture/upstream-overlay.md) → "Versioning policy (Option B)" for the design rationale.
 
+## Release-freeze windows (`.release-freeze` marker)
+
+Some release windows must couple upstream-bump cadence to release cadence: when a merged-but-untagged release change is sitting on `main`, an Option B `bump(upstream):` merge would auto-advance `:stable` from the `:latest` manifest and ship the unreleased change to all container users with no tag, no CHANGELOG, no Release.
+
+### Marker mechanism
+
+- A freeze is declared by committing a **`.release-freeze`** file at the repo root (one line naming the freeze and its lift condition). It lands in the same PR as the change that must not leak via `:stable`.
+- The `freeze` job (`Release-freeze guard`) in `.github/workflows/option-b-diff-guard.yml` fails any `bump(upstream):`-titled PR while `.release-freeze` exists **on `origin/main` at run time** — never the PR's stale base. Non-bump PRs skip the job (skipped satisfies the required check).
+- Enforcement requires two branch-protection settings on `main` (already applied): both workflow contexts (`guard` and `freeze`) are **required status checks**, and **"require branches to be up to date before merging" (strict)** is on — so a bump PR opened before the freeze landed is forced through a branch update → fresh `freeze` run → sees the marker → fails.
+
+### Checklist ordering during a freeze
+
+The freeze lifts **after the tag, not in the release PR**. Deleting the marker in the release PR itself would open a merge-to-tag gap during which a bump merge could advance `:stable` pre-tag. Order is:
+
+1. **Tag push** (`git push origin vX.Y.Z` → release.yml runs).
+2. **Artifact verification** (GitHub Release published, binaries present, container tags advanced — see "Verifying the release" below).
+3. **Freeze-lift PR** — `chore: lift vX.Y.Z release freeze`, whose **single change** is deleting `.release-freeze`. The marker deletion is deliberately NOT on the release-PR checklist.
+
+### Squash-subject rule
+
+The guard jobs key on the PR **title**, while the Option B `:stable` auto-advance keys on the **squash-merge commit subject** — which is editable at merge time. Never hand-edit a squash-merge subject to `bump(upstream):` — the subject must match the PR title, and during a freeze window no `bump(upstream):` subject may merge at all.
+
 ## Verifying the release
 
 ```bash
@@ -109,6 +131,7 @@ gh release view v0.5.0 --json assets -q '.assets[].name'
 ```
 
 Then, **on the released binary** (not on local main):
+
 - Download the macOS DMG from the GitHub Release page → install → launch → walk wizard → real chat
 - Download the Windows .exe → install on a Windows box → SmartScreen accepts → launch → walk wizard → real chat
 - For Linux: `curl -fsSL …/install.sh | bash` on a fresh Ubuntu VM (or Docker-in-Docker container with Docker installed)
@@ -141,16 +164,16 @@ This is a self-service escape hatch — communicate the tag to roll back to in t
 
 ## Where the configuration lives
 
-| Concern | File |
-|---|---|
-| Version source of truth | `VERSION` (repo root) |
-| Electron app version | `packages/electron/package.json` (must match `VERSION`) |
-| Container build | `packages/integration/Dockerfile` |
-| Multi-arch CI | `.github/workflows/build-container.yml` |
-| Electron CI | `.github/workflows/build-electron.yml` |
-| Release orchestration | `.github/workflows/release.yml` |
-| Code signing config | `packages/electron/electron-builder.yml` |
-| GitHub secrets needed | macOS: `CSC_LINK`, `CSC_KEY_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID`. Windows: `AZURE_TENANT_ID`, `AZURE_CLIENT_ID` (OIDC, no client secret) |
+| Concern                 | File                                                                                                                                                                      |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Version source of truth | `VERSION` (repo root)                                                                                                                                                     |
+| Electron app version    | `packages/electron/package.json` (must match `VERSION`)                                                                                                                   |
+| Container build         | `packages/integration/Dockerfile`                                                                                                                                         |
+| Multi-arch CI           | `.github/workflows/build-container.yml`                                                                                                                                   |
+| Electron CI             | `.github/workflows/build-electron.yml`                                                                                                                                    |
+| Release orchestration   | `.github/workflows/release.yml`                                                                                                                                           |
+| Code signing config     | `packages/electron/electron-builder.yml`                                                                                                                                  |
+| GitHub secrets needed   | macOS: `CSC_LINK`, `CSC_KEY_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID`. Windows: `AZURE_TENANT_ID`, `AZURE_CLIENT_ID` (OIDC, no client secret) |
 
 ## Naming conventions
 

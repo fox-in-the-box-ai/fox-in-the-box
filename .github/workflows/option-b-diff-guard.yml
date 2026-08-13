@@ -14,6 +14,17 @@ name: Option B diff guard
 # job sees the subject match its `^bump\(upstream\):` regex, retags :stable
 # to the new digest, and every DMG/exe user's next launch pulls the unintended
 # Fox-code change as a "stable" upgrade.
+#
+# Second job `freeze` (Release-freeze guard): during a declared release-freeze
+# window — signalled by a `.release-freeze` marker file at the repo root of
+# origin/main — no `bump(upstream):` PR may merge, because the Option B
+# auto-bump would re-tag :stable from a :latest manifest carrying unreleased
+# Fox-code changes ahead of the release tag. The marker is always read from
+# origin/main AT RUN TIME (never the PR's stale base), and is lifted by a
+# post-tag PR that deletes the file. Both jobs are required status checks on
+# main with "require branches to be up to date" (strict), so a bump PR opened
+# before the freeze landed cannot merge on a stale pre-freeze run. See
+# docs/RELEASE_WORKFLOW.md → "Release-freeze windows".
 
 on:
   pull_request:
@@ -66,3 +77,32 @@ jobs:
           fi
 
           echo "✅ Option B contract satisfied — diff is upstream-pin-only."
+
+  # Release-freeze guard. Skipped (green) on non-bump PRs — same title gate as
+  # `guard` above, so the required check context always resolves. On
+  # bump(upstream): PRs it fails iff `.release-freeze` exists on origin/main
+  # at run time.
+  freeze:
+    # No `name:` on purpose — the required status-check context must be the
+    # job id `freeze` (branch protection lists it verbatim, like `guard`).
+    runs-on: ubuntu-latest
+    if: startsWith(github.event.pull_request.title, 'bump(upstream):')
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+
+      - name: Fail if a release freeze is active on origin/main
+        run: |
+          set -euo pipefail
+          # Always evaluate against origin/main AS OF NOW — never the PR's
+          # (potentially stale) base ref. A bump PR opened before the freeze
+          # landed must still see the marker.
+          git fetch --depth=1 origin main
+          if git cat-file -e origin/main:.release-freeze 2>/dev/null; then
+            echo "::error::A release freeze is active — no 'bump(upstream):' PR may merge until the freeze is lifted (post-tag PR deletes .release-freeze). Marker on origin/main:"
+            git cat-file -p origin/main:.release-freeze | sed 's/^/::error::  /'
+            exit 1
+          fi
+          echo "✅ No release freeze active on origin/main — bump(upstream) merges are allowed."

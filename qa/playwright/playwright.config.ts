@@ -1,4 +1,4 @@
-import { defineConfig, devices } from '@playwright/test';
+import { defineConfig, devices } from "@playwright/test";
 
 /**
  * Fox in the Box — Playwright config.
@@ -17,10 +17,10 @@ import { defineConfig, devices } from '@playwright/test';
  */
 
 const IS_CI = !!process.env.CI;
-const IS_NIGHTLY = process.env.PLAYWRIGHT_NIGHTLY === '1';
+const IS_NIGHTLY = process.env.PLAYWRIGHT_NIGHTLY === "1";
 
 export default defineConfig({
-  testDir: './tests',
+  testDir: "./tests",
   // Run tests in parallel within and across files.
   fullyParallel: true,
   // Fail the build on test.only — caught CI bugs in past projects.
@@ -29,24 +29,33 @@ export default defineConfig({
   retries: IS_CI && !IS_NIGHTLY ? 1 : 0,
 
   reporter: IS_CI
-    ? [['list'], ['html', { open: 'never', outputFolder: 'playwright-report' }]]
-    : [['list']],
+    ? [["list"], ["html", { open: "never", outputFolder: "playwright-report" }]]
+    : [["list"]],
 
   use: {
     // Base URL: tests can use page.goto('/health') etc. Override per project
     // for the multi-container Phase 2 shape.
-    baseURL: process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:8801',
-    trace: 'retain-on-failure',
-    screenshot: 'only-on-failure',
-    video: 'retain-on-failure',
+    baseURL: process.env.PLAYWRIGHT_BASE_URL || "http://localhost:8801",
+    trace: "retain-on-failure",
+    screenshot: "only-on-failure",
+    video: "retain-on-failure",
   },
 
   projects: [
     {
-      name: 'smoke',
-      testDir: './tests/smoke',
-      use: { ...devices['Desktop Chrome'] },
+      name: "smoke",
+      testDir: "./tests/smoke",
+      use: { ...devices["Desktop Chrome"] },
     },
+    // Release-only project — exists ONLY under FITB_RELEASE_E2E so that bare
+    // `playwright test` (the documented pnpm test:e2e invocation, which runs
+    // ALL projects) and playwright.yml's Phase-0 `--list` are byte-identical
+    // without the env var. Executed at release time via
+    // `FITB_RELEASE_E2E=1 pnpm exec playwright test --project=release`
+    // against the PR-built image.
+    ...(process.env.FITB_RELEASE_E2E
+      ? [{ name: "release", testDir: "./tests/release" }]
+      : []),
     // Phase 1+ projects (matrix shape — no specs yet). Kept commented so the
     // shape is visible to future contributors but doesn't run on Phase 0 CI.
     // {

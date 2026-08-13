@@ -33,6 +33,11 @@ if [ "$FITB_CONTEXT" = "docker" ]; then
 else
     FITB_DATA_DIR="${FITB_DATA_DIR:-/opt/foxinthebox/.foxinthebox}"
 fi
+# Qdrant server pin. The standalone server and the pip-installed qdrant-client
+# are intentionally independent: mem0 uses the client in embedded *path* mode
+# (no server connection on any default path), and nothing on a default install
+# path dials this server with a version-coupled client. Bump deliberately;
+# never "latest".
 QDRANT_VERSION="${QDRANT_VERSION:-v1.9.4}"
 LLAMACPP_VERSION="${LLAMACPP_VERSION:-b9026}"
 FITB_SKIP_BINARIES="${FITB_SKIP_BINARIES:-0}"
@@ -53,6 +58,24 @@ _warn() { echo "[install-core] WARNING: $*" >&2; }
 _die()  { echo "[install-core] ERROR: $*" >&2; exit 1; }
 
 _log "Starting Fox in the Box install (version=$FITB_VERSION, context=$FITB_CONTEXT, app=$FITB_APP_DIR)"
+
+# ── 0b. Embedding-model pin (embed-model.lock) ────────────────────────────────
+# Single source of truth for the embed model URL / sha256 / filename. The lock
+# always lives beside this script: deb → $APPDIR (build.sh stages both files
+# there), docker → /tmp (the Dockerfile COPYs it next to install-core.sh).
+# Sourced OUTSIDE the FITB_SKIP_BINARIES gate on purpose: the Docker image
+# build runs with FITB_SKIP_BINARIES=1 yet still writes the supervisord
+# heredoc, which needs EMBED_MODEL_FILENAME for the embed-server command.
+EMBED_MODEL_LOCK="$(dirname "$0")/embed-model.lock"
+if [ -f "$EMBED_MODEL_LOCK" ]; then
+    # shellcheck source=/dev/null
+    . "$EMBED_MODEL_LOCK"
+else
+    _warn "embed-model.lock not found at $EMBED_MODEL_LOCK — embed-server will not be configured"
+fi
+EMBED_MODEL_URL="${EMBED_MODEL_URL:-}"
+EMBED_MODEL_SHA256="${EMBED_MODEL_SHA256:-}"
+EMBED_MODEL_FILENAME="${EMBED_MODEL_FILENAME:-}"
 
 # ── 1. Qdrant binary ──────────────────────────────────────────────────────────
 _install_qdrant() {
@@ -90,6 +113,37 @@ _install_llama_server() {
         | tar -xzf - -C "$FITB_APP_DIR/llama-cpp" --strip-components=1
     chmod +x "$dest"
     _log "llama-server installed at $dest"
+}
+
+# ── 2b. Embedding model (mem0 local embedder — pin in embed-model.lock) ───────
+# Stronger than the _install_llama_server existence-only skip: the skip here
+# requires a matching sha256, so a corrupt or superseded model is re-fetched.
+# Failures warn and continue — never fail the dpkg transaction under set -e;
+# a missing/corrupt model surfaces as a visible memory error at runtime, and
+# every subsequent postinst re-run retries the download.
+_install_embed_model() {
+    if [ -z "$EMBED_MODEL_URL" ] || [ -z "$EMBED_MODEL_SHA256" ] || [ -z "$EMBED_MODEL_FILENAME" ]; then
+        _warn "embed-model.lock keys missing — skipping embedding model install"
+        return 0
+    fi
+    local dest="$FITB_APP_DIR/models/$EMBED_MODEL_FILENAME"
+    if [ -f "$dest" ] && echo "$EMBED_MODEL_SHA256  $dest" | sha256sum -c --status 2>/dev/null; then
+        _log "embedding model already present and verified — skipping download"
+        return 0
+    fi
+    _log "Downloading embedding model $EMBED_MODEL_FILENAME..."
+    mkdir -p "$FITB_APP_DIR/models"
+    if ! curl -fsSL "$EMBED_MODEL_URL" -o "$dest"; then
+        _warn "embedding model download failed — memory will report an error until a later install run succeeds"
+        rm -f "$dest"
+        return 0
+    fi
+    if ! echo "$EMBED_MODEL_SHA256  $dest" | sha256sum -c --status 2>/dev/null; then
+        _warn "embedding model sha256 mismatch — removing; memory will report an error until a later install run succeeds"
+        rm -f "$dest"
+        return 0
+    fi
+    _log "embedding model installed at $dest"
 }
 
 # ── 3. Hermes repos — clone or sync to pinned upstream tags ───────────────────
@@ -286,8 +340,8 @@ _pip_install() {
         _log "Using pip constraints: $FITB_PIP_CONSTRAINTS"
     fi
 
-    _log "Installing hermes-agent[anthropic,bedrock,google]..."
-    "$pip_cmd" install -e "$FITB_APP_DIR/hermes-agent[anthropic,bedrock,google]" \
+    _log "Installing hermes-agent[anthropic,bedrock,google,mem0]..."
+    "$pip_cmd" install -e "$FITB_APP_DIR/hermes-agent[anthropic,bedrock,google,mem0]" \
         "${constraints_flag[@]}" --quiet --no-cache-dir
 
     _log "Installing hermes-webui..."
@@ -330,6 +384,19 @@ _write_supervisord_conf() {
 
     mkdir -p "$(dirname "$conf_path")"
     _log "Writing $conf_path (app=$app, data=$data)..."
+
+    # embed-server autostart: true only when the model file exists AND its
+    # hash matches at conf-write time. On the memory-off cohort a failed
+    # _install_embed_model download must leave a stopped unit, not a
+    # permanently-FATAL retry loop. Retry is natural: every postinst re-run
+    # calls _install_embed_model again and rewrites this conf, flipping
+    # autostart to true once the model lands.
+    local embed_autostart="false"
+    local embed_model_path="$app/models/${EMBED_MODEL_FILENAME:-}"
+    if [ -n "${EMBED_MODEL_FILENAME:-}" ] && [ -f "$embed_model_path" ] && \
+       echo "${EMBED_MODEL_SHA256:-}  $embed_model_path" | sha256sum -c --status 2>/dev/null; then
+        embed_autostart="true"
+    fi
 
     cat > "$conf_path" << SUPERVISORD_EOF
 [supervisord]
@@ -396,6 +463,24 @@ stderr_logfile_maxbytes=10MB
 stderr_logfile_backups=3
 priority=20
 
+; ── embed-server (local embeddings for mem0 memory) ───────────────────────────
+; Serves the pinned embedding model (see embed-model.lock) over the OpenAI-compat
+; /v1/embeddings endpoint, loopback only. autostart is computed at conf-write
+; time: true iff the model file is present and hash-verified.
+[program:embed-server]
+command=${app}/llama-cpp/llama-server -m ${app}/models/${EMBED_MODEL_FILENAME} --embedding --host 127.0.0.1 --port 8644 -c 8192 -t 2 --sleep-idle-seconds 120
+user=foxinthebox
+autostart=${embed_autostart}
+autorestart=true
+startretries=2
+stdout_logfile=${data}/logs/embed-server.log
+stderr_logfile=${data}/logs/embed-server.err
+stdout_logfile_maxbytes=10MB
+stdout_logfile_backups=3
+stderr_logfile_maxbytes=10MB
+stderr_logfile_backups=3
+priority=25
+
 ; ── hermes gateway ────────────────────────────────────────────────────────────
 [program:hermes-gateway]
 command=/usr/bin/nice -n 10 ${app}/scripts/run-with-env.sh python -m hermes_cli.main gateway run --replace
@@ -408,7 +493,7 @@ stdout_logfile_maxbytes=10MB
 stdout_logfile_backups=3
 stderr_logfile_maxbytes=10MB
 stderr_logfile_backups=3
-environment=HOME="${app}",PYTHONPATH="${data}/apps/hermes-agent",PATH="${app}/venv/bin:/usr/local/bin:/usr/bin:/bin",HERMES_HOME="${data}/data/hermes",BRAVE_API_KEY="__BRAVE_API_KEY__",HERMES_ENV_PATH="${data}/config/hermes.env",SUPERVISORD_CONF="${conf_path}"
+environment=HOME="${app}",PYTHONPATH="${data}/apps/hermes-agent",PATH="${app}/venv/bin:/usr/local/bin:/usr/bin:/bin",HERMES_HOME="${data}/data/hermes",BRAVE_API_KEY="__BRAVE_API_KEY__",HERMES_ENV_PATH="${data}/config/hermes.env",SUPERVISORD_CONF="${conf_path}",MEM0_TELEMETRY="False"
 priority=30
 
 ; ── hermes webui ──────────────────────────────────────────────────────────────
@@ -423,7 +508,7 @@ stdout_logfile_maxbytes=10MB
 stdout_logfile_backups=3
 stderr_logfile_maxbytes=10MB
 stderr_logfile_backups=3
-environment=HOME="${app}",PYTHONPATH="${data}/apps/hermes-webui",HERMES_WEBUI_HOST="0.0.0.0",HERMES_WEBUI_AGENT_DIR="${data}/apps/hermes-agent",HERMES_WEBUI_STATE_DIR="${data}/state/webui",HERMES_HOME="${data}/data/hermes",ONBOARDING_PATH="${data}/config/onboarding.json",PATH="${app}/venv/bin:/usr/local/bin:/usr/bin:/bin",HERMES_ENV_PATH="${data}/config/hermes.env",SUPERVISORD_CONF="${conf_path}",HERMES_WEBUI_EXTENSION_DIR="${app}/fox-overlay/webui_static",HERMES_WEBUI_EXTENSION_SCRIPT_URLS="/extensions/onboarding-preview.js,/extensions/fox-overlay.js,/extensions/hostname-prompt.js,/extensions/fallback-polish.js,/extensions/stream-error-retry.js,/extensions/chat-model-preselect.js,/extensions/model-picker-filter.js,/extensions/approval-explain.js",HERMES_WEBUI_EXTENSION_STYLESHEET_URLS="/extensions/fox-in-the-box.css"
+environment=HOME="${app}",PYTHONPATH="${data}/apps/hermes-webui",HERMES_WEBUI_HOST="0.0.0.0",HERMES_WEBUI_AGENT_DIR="${data}/apps/hermes-agent",HERMES_WEBUI_STATE_DIR="${data}/state/webui",HERMES_HOME="${data}/data/hermes",ONBOARDING_PATH="${data}/config/onboarding.json",PATH="${app}/venv/bin:/usr/local/bin:/usr/bin:/bin",HERMES_ENV_PATH="${data}/config/hermes.env",SUPERVISORD_CONF="${conf_path}",HERMES_WEBUI_EXTENSION_DIR="${app}/fox-overlay/webui_static",HERMES_WEBUI_EXTENSION_SCRIPT_URLS="/extensions/onboarding-preview.js,/extensions/fox-overlay.js,/extensions/hostname-prompt.js,/extensions/fallback-polish.js,/extensions/stream-error-retry.js,/extensions/chat-model-preselect.js,/extensions/model-picker-filter.js,/extensions/approval-explain.js",HERMES_WEBUI_EXTENSION_STYLESHEET_URLS="/extensions/fox-in-the-box.css",MEM0_TELEMETRY="False"
 priority=40
 
 ; ── llama-server (local AI fallback — autostart=false) ───────────────────────
@@ -449,6 +534,9 @@ SUPERVISORD_EOF
 if [ "$FITB_SKIP_BINARIES" != "1" ]; then
     _install_qdrant
     _install_llama_server
+    # Must run before _write_supervisord_conf: the conf's embed-server
+    # autostart is computed from the model's presence + hash.
+    _install_embed_model
 fi
 
 _sync_hermes_repos

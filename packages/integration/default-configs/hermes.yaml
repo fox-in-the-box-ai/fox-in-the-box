@@ -33,3 +33,14 @@ mcp_servers:
 skills:
   external_dirs:
     - /data/apps/hermes-agent/skills
+
+# ── Memory (long-term) ────────────────────────────────────────────────────────
+# Long-term memory via the mem0_oss provider. Fact extraction follows the main
+# chat provider (whatever `model.provider` resolves to); embeddings are always
+# computed locally by the baked embed-server — no extra API key, and memory
+# content never leaves the machine for embedding. Memory state surfaces at
+# /readyz and in the boot "memory:" status line: active, off (with reason),
+# or error — never a silent no-op.
+# Disable: set MEM0_OSS_DISABLED=1 in the environment, or remove this key.
+memory:
+  provider: mem0_oss

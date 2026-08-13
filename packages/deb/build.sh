@@ -33,6 +33,10 @@ cp -r "$REPO_ROOT/packages/integration/scripts/." "$APPDIR/scripts/"
 # install-core.sh and preflight.sh overlay on top
 cp "$REPO_ROOT/packages/install-core/install-core.sh" "$APPDIR/install-core.sh"
 cp "$REPO_ROOT/packages/install-core/preflight.sh"    "$APPDIR/scripts/preflight.sh"
+# embed-model.lock must sit beside install-core.sh — it sources the lock via
+# "$(dirname "$0")/embed-model.lock" (single source of truth for the embed
+# model pin; the GGUF itself is downloaded by postinst, not shipped).
+cp "$REPO_ROOT/packages/integration/embed-model.lock" "$APPDIR/embed-model.lock"
 chmod +x "$APPDIR/install-core.sh" "$APPDIR/scripts/"*.sh 2>/dev/null || true
 
 # Default configs
