@@ -67,9 +67,18 @@ def ensure_registered() -> None:
 
     from mem0.utils.factory import LlmFactory
 
-    # Register by dotted path: mem0's factory load_class() resolves string
-    # paths; deriving from __module__ keeps this correct in both packaging
-    # contexts (in-repo agent_memory_plugins.* and in-image plugins.memory.*).
-    wanted = f"{PinnedOpenAILLM.__module__}.{PinnedOpenAILLM.__qualname__}"
-    if LlmFactory.provider_to_class.get("openai") != wanted:
-        LlmFactory.provider_to_class["openai"] = wanted
+    # mem0ai 2.0.10 stores (class_type, config_class) 2-tuples in
+    # provider_to_class and unpacks them in Factory.create (factory.py:80) —
+    # verified against the installed library by image-selftest phase B, which
+    # caught the earlier dotted-path registration failing to unpack. Replace
+    # only the class element and preserve the stock config class.
+    entry = LlmFactory.provider_to_class.get("openai")
+    if not (isinstance(entry, tuple) and len(entry) == 2):
+        raise MemoryUnavailable(
+            "mem0 LlmFactory registry shape changed: expected a "
+            "(class, config_class) tuple for 'openai', got {got!r} — re-audit "
+            "the pinned adapter against this mem0 version".format(got=entry),
+            severity="error",
+        )
+    if entry[0] is not PinnedOpenAILLM:
+        LlmFactory.provider_to_class["openai"] = (PinnedOpenAILLM, entry[1])

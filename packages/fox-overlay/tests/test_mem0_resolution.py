@@ -468,8 +468,17 @@ def pinned_llm(monkeypatch):
     utils = types.ModuleType("mem0.utils")
     factory = types.ModuleType("mem0.utils.factory")
 
+    class _StockOpenAIConfig:
+        pass
+
     class LlmFactory:
-        provider_to_class = {"openai": "mem0.llms.openai.OpenAILLM"}
+        # Real mem0ai 2.0.10 stores (class_type, config_class) 2-tuples and
+        # unpacks them in Factory.create — the stub must model that shape
+        # (image-selftest phase B caught the earlier string-valued stub
+        # diverging from the installed library).
+        provider_to_class = {
+            "openai": (_EnvFirstOpenAILLM, _StockOpenAIConfig),
+        }
 
     factory.LlmFactory = LlmFactory
     openai_mod = types.ModuleType("openai")
@@ -575,9 +584,20 @@ class TestPinnedLLMTruthTable:
     def test_registration_is_idempotent(self, pinned_llm):
         pinned_llm.module.ensure_registered()
         registered = pinned_llm.factory.provider_to_class["openai"]
-        assert registered.endswith(".PinnedOpenAILLM")
+        # Real 2.0.10 shape: (class_type, config_class); only the class
+        # element is replaced, the stock config class is preserved.
+        assert isinstance(registered, tuple) and len(registered) == 2
+        assert registered[0] is pinned_llm.module.PinnedOpenAILLM
+        assert registered[1].__name__ == "_StockOpenAIConfig"
         pinned_llm.module.ensure_registered()
         assert pinned_llm.factory.provider_to_class["openai"] == registered
+
+    def test_registration_rejects_unknown_registry_shape(self, pinned_llm):
+        pinned_llm.factory.provider_to_class["openai"] = "a.dotted.Path"
+        with pytest.raises(plugin.MemoryUnavailable) as excinfo:
+            pinned_llm.module.ensure_registered()
+        assert excinfo.value.severity == "error"
+        assert "registry shape" in excinfo.value.reason
 
 
 # ── is_available() → state.json (design §a.2 structural guarantees) ────
