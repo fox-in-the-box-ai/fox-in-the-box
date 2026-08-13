@@ -47,16 +47,37 @@ ok() {
     echo "✅ $1"
 }
 
-# ── 0. Python unit tests ──────────────────────────────────────────────────────
-echo "[0/3] Running Python unit tests (packages/fox-overlay/tests/)..."
-
-PYTHON_BIN_EARLY=""
-for candidate in python3.13 python3.12 python3.11 python3 python; do
-    if command -v "$candidate" >/dev/null 2>&1; then
-        PYTHON_BIN_EARLY="$candidate"
+# ── Interpreter selection (shared by sections 0 and 3) ────────────────────────
+# One interpreter for the whole script (#704): prefer the container's target
+# runtime (python:3.11-slim) first, and prefer an interpreter that can actually
+# run pytest over one that merely exists — a bare python3.13 without pytest
+# previously won selection, silently skipped the tests, and then failed the
+# bootstrap smoke on 3.13-only stdlib layout drift (pathlib._local).
+PYTHON_CANDIDATES="python3.11 python3.12 python3.13 python3 python"
+PYTHON_BIN=""
+for candidate in $PYTHON_CANDIDATES; do
+    if command -v "$candidate" >/dev/null 2>&1 \
+        && "$candidate" -m pytest --version >/dev/null 2>&1; then
+        PYTHON_BIN="$candidate"
         break
     fi
 done
+if [ -z "$PYTHON_BIN" ]; then
+    # No pytest anywhere — fall back to the first interpreter that exists
+    # (tests are skipped below, matching the old behavior).
+    for candidate in $PYTHON_CANDIDATES; do
+        if command -v "$candidate" >/dev/null 2>&1; then
+            PYTHON_BIN="$candidate"
+            break
+        fi
+    done
+fi
+[ -n "$PYTHON_BIN" ] && echo "Using interpreter: $PYTHON_BIN ($("$PYTHON_BIN" --version 2>&1))"
+
+# ── 0. Python unit tests ──────────────────────────────────────────────────────
+echo "[0/3] Running Python unit tests (packages/fox-overlay/tests/)..."
+
+PYTHON_BIN_EARLY="$PYTHON_BIN"
 
 if [ -n "$PYTHON_BIN_EARLY" ]; then
     if "$PYTHON_BIN_EARLY" -m pytest --version >/dev/null 2>&1; then
@@ -108,14 +129,8 @@ ok "Overlay basis clean"
 # a real container boot.
 echo "[3/3] Smoke-testing fox_overlay.bootstrap.install() locally..."
 
-# Try multiple Python interpreters in order of preference.
-PYTHON_BIN=""
-for candidate in python3.13 python3.12 python3.11 python3 python; do
-    if command -v "$candidate" >/dev/null 2>&1; then
-        PYTHON_BIN="$candidate"
-        break
-    fi
-done
+# Reuse the interpreter selected at the top of the script so the smoke runs
+# under the same Python that ran (or would have run) the unit tests.
 
 if [ -z "$PYTHON_BIN" ]; then
     echo "   ⚠️  No Python interpreter found — skipping bootstrap smoke."
