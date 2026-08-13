@@ -11,9 +11,8 @@ the ``[project.entry-points."hermes_agent.plugins"]`` group.
   the gateway code path (upstream's gateway never calls PluginManager
   directly; the shim is a Phase-3 follow-on patch — see fork PR #2).
 
-We apply the three agent-side monkey-patches here so the patched
-behavior is in place before any runtime code path touches the patched
-symbols.
+We apply the agent-side monkey-patches here so the patched behavior is
+in place before any runtime code path touches the patched symbols.
 
 Note on mem0_oss: the original Phase 3 plan relocated mem0_oss to this
 overlay as a second entry-point plugin. During Phase 3b PR review,
@@ -29,6 +28,7 @@ fox-in-the-box#155).
 """
 from .fox_overlay_plugin.monkey_patches import (
     auxiliary_client,
+    bedrock_imds,
     cron_diagnostics,
     runtime_provider,
 )
@@ -43,3 +43,4 @@ def register(ctx) -> None:
     runtime_provider.apply()
     auxiliary_client.apply()
     cron_diagnostics.apply()
+    bedrock_imds.apply()
