@@ -17,3 +17,4 @@
 007-ui-js-colon-split-fix.patch
 008-routes-py-colon-split-fix.patch
 009-remove-onboarding-js-script-tag.patch
+010-bedrock-settings-credentials.patch

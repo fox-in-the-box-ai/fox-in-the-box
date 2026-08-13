@@ -12,7 +12,7 @@
     "test:e2e:install-browsers": "playwright install --with-deps chromium"
   },
   "devDependencies": {
-    "@playwright/test": "^1.61.1",
-    "@types/node": "^26.0.1"
+    "@playwright/test": "^1.62.0",
+    "@types/node": "^26.1.2"
   }
 }

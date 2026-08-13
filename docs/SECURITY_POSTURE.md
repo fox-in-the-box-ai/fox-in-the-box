@@ -8,6 +8,10 @@ Fox in the Box is a **single-tenant, self-hosted** AI assistant. The user IS the
 
 The container runs on the user's infrastructure (local Docker, cloud VM, or fleet-managed host). The network attack surface is the HTTP port (8787) which should be behind TLS termination (Caddy, nginx, or fleet proxy) in any non-local deployment.
 
+### Cloud provider credentials
+
+On AWS VMs, the instance metadata service (IMDS) makes the machine's default instance role reachable by any local process. Fox does **not** treat an IMDS-derived instance role as valid Bedrock authentication: the provider card will not show as authenticated, and Bedrock calls are rejected until explicit credentials are configured (bearer token or IAM key pair in Settings → Providers, `AWS_PROFILE`, a shared credentials file, an ECS task role, or IRSA). Operators who deliberately want instance-role auth can opt in with `HERMES_BEDROCK_ALLOW_INSTANCE_ROLE=1`.
+
 ## Supply-chain monitoring
 
 ### Automated scanning
@@ -22,6 +26,7 @@ The following alert categories have been triaged and accepted based on Fox's thr
 
 **Ancient/disputed CVEs in system libraries (21 alerts, CVEs from 2005–2019):**
 These are long-standing CVEs in Debian system packages (glibc, tar, perl, iptables, coreutils, ldap, kerberos, systemd, git, libgcrypt) that have been open across the entire Debian ecosystem for years. None have practical exploit paths in Fox's single-tenant threat model:
+
 - Fox doesn't use LDAP, Kerberos, or Perl
 - Fox doesn't process untrusted tar archives or user-supplied regex patterns
 - Container isolation + TLS termination mitigate the remaining vectors
