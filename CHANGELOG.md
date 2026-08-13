@@ -9,11 +9,20 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+
+- Bedrock credentials card in Settings → Providers: save either a bearer token or an IAM key pair (saving one clears the other, so stale credentials cannot linger)
+
+### Fixed
+
+- An EC2/Lightsail IMDS instance role is no longer treated as Bedrock OAuth authentication. Previously the provider card showed "Authenticated via OAuth" on any AWS VM and then failed with 403 at invoke time. Instance-role auth is now rejected by default; set `HERMES_BEDROCK_ALLOW_INSTANCE_ROLE=1` to opt back in. Explicit keys, `AWS_PROFILE`, shared credentials files, ECS task roles, and IRSA are unaffected
+
 ---
 
 ## [0.7.59] — 2026-07-10
 
 ### Changed
+
 - Upstream bump: hermes-webui v0.51.537 → v0.52.0, hermes-agent v2026.6.19 → v2026.7.7.2
 - Monkey-patches retargeted for v0.52.0 upstream refactors: `reload_config` → `_refresh_config_cache`, `get_available_models` gained `force_refresh` parameter, `_run_agent_streaming` gained `moa_config` parameter, `save_settings` anchors updated for new upstream helper calls
 - All 9 webui overlay patches regenerated with v0.52.0 line numbers
@@ -21,10 +30,12 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - Bumped 9 CI actions (actions/cache v5→v6, docker/login-action v4.2→v4.4, docker/setup-buildx-action v4.1→v4.2, github/codeql-action v4.36.2→v4.36.3, actions/setup-python v6.2→v6.3, and others)
 
 ### Fixed
+
 - Option B diff guard regex now allows overlay package changes alongside upstream bumps (previously only `versions.toml` was allowed, blocking legitimate patch regeneration)
 - Added `$` anchor to `forks/hermes-(agent|webui)` in Option B guard regex (defense-in-depth hardening)
 
 ### Security
+
 - Updated pip constraints: cryptography 49.0.0 → 46.0.7 (upstream hermes-agent hard-pin for CVE-2026-39892, CVE-2026-34073). Note: 46.0.7 is below the fix for GHSA-537c-gmf6-5ccf (vulnerable OpenSSL in wheels, fixed in 48.0.1); this is an upstream constraint that cannot be overridden without pip resolution failure — tracked for upstream remediation
 
 ---
@@ -32,9 +43,11 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ## [0.7.58] — 2026-06-20
 
 ### Security
+
 - Closed Dependabot #60: added npm override for js-yaml ^4.1.0 in packages/electron (eliminates js-yaml@3.14.2 from npm lockfile — quadratic DoS via untrusted YAML input)
 
 ### Changed
+
 - Bumped electron-log 5.4.3 → 5.4.4, electron-updater 6.8.3 → 6.8.9 (patch updates)
 - Bumped @types/node 25.9.3 → 26.0.0 (devDependency)
 - Bumped CI actions: actions/checkout v6 → v7, softprops/action-gh-release v3.0.0 → v3.0.1
@@ -44,6 +57,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ## [0.7.57] — 2026-06-20
 
 ### Security
+
 - Resolved 17 npm supply-chain alerts (per Dependabot advisories) via pnpm overrides: tar (7 alerts — path traversal), protobufjs (3 — DoS), @grpc/grpc-js (2 — crash on malformed input), form-data (1 — CRLF injection), js-yaml (2 — quadratic DoS), tmp (1 — path traversal), @babel/core (1 — file read via source maps)
 - Upgraded Python build tools in container image: pip, wheel, and setuptools (including vendored jaraco.context) to current patch levels (7 Trivy alerts)
 
@@ -52,6 +66,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ## [0.7.56] — 2026-06-20
 
 ### Changed
+
 - Upstream bump: hermes-webui v0.51.528 → v0.51.537 (9 patch releases); hermes-agent unchanged at v2026.6.19 (#580)
 
 ---
@@ -59,11 +74,13 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ## [0.7.55] — 2026-06-20
 
 ### Added
+
 - `GET /skillset` contract endpoint — returns active skillset manifest summary (name, version, data sources, declared capabilities); 404 when no skillset loaded (#477)
 - Playwright smoke specs for critical Fox surfaces — 8 new spec files covering contract endpoints (`/version`, `/capabilities`, `/readyz`, `/skillset`), hostname overlay, onboarding API, provider settings, and a parametrized contract-endpoints sweep (29 test cases total) (#266)
 - GitHub issue templates split into separate forms (bug, feature, question) with PR template checklist (#431)
 
 ### Changed
+
 - `data_plane_access` capability is now dynamic — reports `true` when instance is managed with a data plane URL configured, instead of always `false` (#478)
 - README: corrected Electron version (28→42), refreshed roadmap "Recently shipped" section through v0.7.54
 - CONTRIBUTING.md: Python style reference redirected from upstream `forks/` to `packages/fox-overlay/`
@@ -73,10 +90,12 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ## [0.7.54] — 2026-06-20
 
 ### Added
+
 - Test coverage gate in CI — fox-overlay tests enforce 45% minimum line coverage via pytest-cov, fails the PR if coverage drops below threshold (#408)
 - Startup time regression gate in CI — smoke job measures wall-clock time from container start to first healthy `/health` response per architecture, warns above 45s, fails above 90s with single-retry flake resistance (#429)
 
 ### Fixed
+
 - Electron build failure on electron-builder 26 — removed deprecated `publisherName` from win config (publisher name now derived from signing certificate)
 
 ---
@@ -84,11 +103,13 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ## [0.7.53] — 2026-06-20
 
 ### Added
+
 - Approval card shows a plain-English explanation of flagged commands — helps users understand what a command does before approving (#150)
 - Diagnostic report button in the error window and via Ctrl+Shift+D — collects system, Docker, and log data in one click for support (#293)
 - Custom provider management in Settings → Providers — add, edit, test, and delete OpenAI-compatible endpoints (llama.cpp, LM Studio, vLLM, etc.) directly from the UI (#144)
 
 ### Fixed
+
 - macOS notarization config updated for electron-builder 26 (team ID read from environment variable instead of inline config) (#574)
 
 ---
@@ -96,10 +117,12 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ## [0.7.52] — 2026-06-20
 
 ### Added
+
 - `TRADEMARK.md` — trademark policy for project name and logo, with fork-renaming requirement (#410)
 - Python dependency lock file (`packages/integration/requirements.lock`) pins all transitive dependencies in container builds (#418)
 
 ### Changed
+
 - README roadmap section updated with current version targets and criteria-based v0.8.0 acceptance gate (#406)
 - Container builds use pip constraints to prevent silent dependency drift (#418)
 - Electron desktop app bumped from Electron 28 to 42 (Chromium 134), with electron-builder 24→26, dockerode 4→5, jest 29→30, rcedit 4→5 (#540)
@@ -111,16 +134,19 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ## [0.7.51] — 2026-06-20
 
 ### Added
+
 - Comparison table vs self-hosted AI alternatives (Open WebUI, AnythingLLM, Jan, LibreChat) in README (#421)
 - `docs/assets/` directory for demo media (#419)
 
 ### Fixed
+
 - Keep-alive stream corruption on auth rejection: rejected POST requests no longer leave unread body bytes in the socket buffer, preventing HTTP request smuggling on the next keep-alive request (#559)
 - Container `:stable` tag promotion decoupled from Electron build success — a failed desktop build no longer blocks container availability (#550)
 - Fleet-provisioned containers: `/data` directory ownership corrected so the application user can create files directly under the mount point (#549)
 - Upstream's `onboarding.js` script tag removed via static patch to prevent interference with Fox's own onboarding wizard (#564)
 
 ### Changed
+
 - Upstream bump: hermes-webui v0.51.475 → v0.51.528 (53 upstream releases), hermes-agent v2026.6.5 → v2026.6.19
 - Overlay patches 003/006 refreshed for upstream structural changes (new `outlineToggleBtn` shifted empty-state block)
 - Cron diagnostics monkey-patches updated for upstream refactoring: `run_job` reverted from `_run_job_impl` wrapper, delivery logic extracted from `tick()` to `run_one_job()`, error formatting extracted to `_summarize_cron_failure_for_delivery()`, `mark_job_run` gained cross-process file locking
@@ -132,10 +158,12 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ## [0.7.50] — 2026-06-19
 
 ### Added
+
 - Upstream overlay strategy doc (`docs/architecture/upstream-overlay.md`) — decision flow for when to push Fox overlay patches upstream, detection during patch refresh, quarterly sweep process (#307)
 - `upstream-candidate` label for tracking overlay patches that should also ship as upstream Hermes PRs
 
 ### Fixed
+
 - Onboarding redirect loop: `/login` and `/api/auth/` paths now exempt from onboarding redirect, breaking the chicken-and-egg between patch 003's redirect-to-setup and check_auth's redirect-to-login
 - CSRF token verification bypass for Fleet-proxied requests: browser POST requests through Fleet's subdomain proxy no longer fail with 403 "Session expired" — X-Fox-Auth-authenticated requests skip CSRF token checks (safe because CORS preflight blocks cross-origin injection of custom headers)
 
@@ -144,10 +172,12 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ## [0.7.49] — 2026-06-17
 
 ### Changed
+
 - Upstream bump: hermes-webui v0.51.293 → v0.51.475 (180 upstream releases absorbed)
 - `.deb` install instructions: replaced non-functional `apt.foxinthebox.ai` commands with direct `.deb` download from GitHub Releases (#539)
 
 ### Fixed
+
 - Overlay patches 001/003/004 refreshed for upstream structural changes (CSP functions moved to `api/helpers.py`, new `_autoScrollFollow` setting inserted in boot.js)
 - Overlay patch 007 reduced from 4 hunks to 3 — upstream fixed `_normalizeConfiguredModelKey` colon-split bug independently in v0.51.421; 4 remaining colon-split sites still patched by Fox
 - Release workflow: `publish-apt` job no longer marks the overall release as failed when apt repo secrets are not yet configured (#539)
@@ -157,6 +187,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ## [0.7.47] — 2026-06-17
 
 ### Fixed
+
 - `.deb` bare-metal install: systemd service template now runs as root so supervisord can manage both root (tailscaled) and unprivileged (hermes) children — previously User/Group drop prevented tailscaled from starting.
 - `.deb` bare-metal install: supervisord binary path corrected to use the venv at `/opt/foxinthebox/venv/bin/supervisord` instead of the non-existent `/usr/local/bin/supervisord`.
 - `.deb` bare-metal install: removed system `supervisor` package from apt dependencies — Fox uses its own venv-installed supervisord, avoiding version conflicts.
@@ -176,6 +207,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ## [0.7.46] - 2026-06-10
 
 ### Fixed
+
 - Exempted `/readyz`, `/version`, and `/capabilities` contract endpoints from the onboarding redirect. Previously, these endpoints returned 302 to the setup wizard on instances that hadn't completed onboarding, breaking Fleet conformance checks and health probes.
 - Corrected `check_auth` docstring in auth overlay to match the four-path runtime behavior (PATH 1–4: managed X-Fox-Auth, managed session, standalone open, reject).
 
@@ -184,6 +216,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ## [0.7.45] - 2026-06-07
 
 ### Added
+
 - Bare-metal `.deb` package with apt repository and CI. Supports both amd64 and arm64 Debian/Ubuntu installs with systemd service management and automated updates.
 - SBOM (CycloneDX) generation attached to GitHub Releases.
 - CODE_OF_CONDUCT.md (Contributor Covenant v2.1).
@@ -191,12 +224,14 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - Star history badge in README.
 
 ### Changed
+
 - Upstream bump: hermes-webui v0.51.145 → v0.51.293 (148 upstream releases absorbed), hermes-agent v2026.5.16 → v2026.6.5.
 - All GitHub Actions pinned by commit SHA for supply-chain hardening — mutable version tags replaced with immutable SHAs across 12 workflow files.
 - LICENSE copyright updated to Vulpy Inc. (operating as Fox in the Box).
 - Expanded SECURITY.md with vulnerability disclosure process.
 
 ### Fixed
+
 - Docker build: install script now prefers `requirements.txt` over bare `pyproject.toml` for hermes-webui, fixing build failure introduced by upstream v0.51.293 adding a tooling-only `pyproject.toml` with no `[build-system]` section.
 - Patch 007 (colon-split fix) refreshed for upstream v0.51.293 line numbers. All 8 webui patches apply cleanly.
 - Agent overlay anchor refreshed for v2026.5.29.2.
@@ -206,6 +241,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - CI: pnpm/action-setup v4 version conflict resolved — explicit `version: 9` dropped in favor of `packageManager` field in package.json.
 
 ### Security
+
 - CodeQL code scanning and Dependabot alerts enabled.
 - GitHub Actions pinned by SHA across all workflows.
 - SBOM attestation added to release artifacts.
@@ -215,12 +251,14 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ## [0.7.44] - 2026-05-27
 
 ### Fixed
+
 - Removed dead code in streaming patch: keyless local-server fallback (substitution 0) never fired because `_is_local_server_provider("custom")` returns False. The primary keyless path works via upstream's `_resolve_openrouter_runtime`.
 - Fixed `getModelLabel` display for custom gateway models with Ollama-style tags. `@custom:gateway:llama3.1:latest` previously displayed as `latest`; now correctly shows `llama3.1:latest`.
 - Refreshed webui patches 001–003 for upstream v0.51.145. Bootstrap, dispatch hook, and onboarding redirect patches now apply cleanly against the latest upstream (CSP block, `/api/shutdown` route, `BrokenPipeError` catch blocks). Patches 004–008 unchanged.
 - Fixed Windows uninstaller Docker Desktop removal path. `$PROGRAMFILES` resolves to `Program Files (x86)` on 64-bit Windows; changed to `$PROGRAMFILES64`. Also switched from `nsExec::ExecToLog` to `ExecWait` for the GUI-based Docker Desktop uninstaller.
 
 ### Changed
+
 - CHANGELOG header now says "inspired by" Keep a Changelog (was "follows"), reflecting the project-specific sections.
 
 ---
@@ -228,6 +266,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ## [0.7.43] - 2026-05-27
 
 ### Fixed
+
 - Ollama local models now route through the correct provider. Previously `provider: "ollama"` in config.yaml collided with upstream's Ollama Cloud path, causing "no API key found" errors and 404s. Config now writes `provider: "custom"` with the local daemon's base URL.
 - Model ID truncation fixed across frontend and backend. Ollama tag-based IDs (`llama3.1:latest`) contain colons that four JavaScript functions and one Python function incorrectly split on, reducing the model to bare `"latest"`. All five sites now split on the first colon only.
 - Orphan "Configured" badge no longer appears for Ollama models. The frontend's model-key normalizer collapsed `@custom:llama3.1:latest` to `"latest"`, bypassing the dedup check and injecting a phantom entry. Fixed normalizer strips only the `@provider:` prefix.
@@ -238,6 +277,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ## [0.7.42] - 2026-05-27
 
 ### Fixed
+
 - Ollama model picker: models no longer appear twice (CUSTOM + OLLAMA). Upstream's alias resolution mapped "ollama" to "custom", creating a duplicate group; Fox now removes overlapping model IDs from other groups before adding the OLLAMA section.
 - Wizard-selected Ollama model is now preselected on first chat load. Previously the config wrote `model.name` but upstream reads `model.default`; added the correct key so the API returns the right default.
 - Ollama model 404 errors (`model 'latest' not found`) resolved. Picking from the duplicate Custom group set a mismatched provider context that triggered colon-based ID truncation (`llama3.1:latest` → `latest`).
@@ -247,6 +287,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ## [0.7.41] - 2026-05-26
 
 ### Fixed
+
 - Chat empty-state logo replaced: Hermes caduceus → Fox avatar (overlay patch 006, survives upstream updates).
 - Launcher spinner no longer restarts animation when same step emits multiple progress messages (e.g., Docker image layer pulls).
 
@@ -257,11 +298,13 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 **7-step progress alignment + post-reboot Docker fix.**
 
 ### Changed
+
 - Launcher now shows 7 steps that map 1:1 to actual startup operations: Checking system → Installing Docker → Starting Docker → Downloading Fox image → Starting container → Waiting for services → Connecting to network.
 - Steps that don't apply (Docker already running, local-only mode) get an instant checkmark.
 - Tailscale connection polling moved into the orchestrator as a dedicated phase.
 
 ### Fixed
+
 - Windows post-reboot install (`--resume-setup`): skip the `tasklist` loop that could block indefinitely while Docker Desktop shows terms/sign-in. Fox now polls the engine API for up to 6 minutes.
 - All startup shell probes (`tasklist`, `wsl`, `reg query`, etc.) use exec timeouts.
 - `diagnoseWindowsDocker` capped at 15s so WSL probes cannot block the poll loop.
@@ -276,6 +319,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 **Progress UI aligned to 7 consecutive backend phases.**
 
 ### Changed
+
 - Launcher now shows 7 steps that map 1:1 to actual startup operations: Checking system → Installing Docker → Starting Docker → Downloading Fox image → Starting container → Waiting for services → Connecting to network.
 - Steps that don't apply (Docker already running, local-only mode) get an instant checkmark instead of being hidden — consistent frame of reference across launches.
 - Tailscale connection polling moved into the orchestrator as a dedicated phase; progress window stays open until all phases complete.
@@ -287,6 +331,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 **Larger launcher window, selectable diagnostics, Docker detection fallback.**
 
 ### Fixed
+
 - Progress window is 20% wider and 33% taller (520×420 → 620×560). All six steps and the diagnostics section are visible at once. Wrap max-width 420→520px, diagnostics max-height 110→200px.
 - Diagnostics log text is now selectable — users can Ctrl+C lines for support. (`body` had `user-select: none`; `.diag-body` overrides with `user-select: text`.)
 - On Windows, Fox threw `DOCKER_DESKTOP_LAUNCH_FAILED` when `tasklist` didn't find "Docker Desktop.exe" — even when Docker was running. Process name lookup can fail due to name differences or permissions. Fox now falls through to the 360 s daemon wait; if Docker is genuinely up the ping succeeds in seconds, if not the daemon wait expires with a clearer `DAEMON_NOT_READY` error.
@@ -298,6 +343,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 **Launcher progress window now actually works.**
 
 ### Fixed
+
 - The progress window's step list and diagnostics log were always empty. Root cause: both `progress.html` and `error.html` have a `default-src 'self'` CSP meta tag, which Chromium (used by Electron) enforces by blocking inline `<script>` blocks. All rendering and IPC listener setup lived in that blocked script — so `render()` never ran and no IPC messages were ever received. Extracted both inline scripts to same-directory `.js` files; `'self'` allows same-origin external scripts without any CSP change.
 - The error window's content (session ID, error code, message, remediation, diagnostics text) and its Copy and Close buttons were all wired up in the same blocked inline script. Both are now functional.
 
@@ -308,6 +354,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 **Progress window now shows steps and live diagnostics.**
 
 ### Fixed
+
 - Launcher progress window showed an empty step list and a blank diagnostics pane on first launch. Root cause: `showProgress()` only sent `progress:log` when an optional `detail` field was set, but every caller passes a plain string (title only), so the diagnostics pane was always empty. Now every progress update logs its title to the diagnostics pane.
 - Step tracker showed stale active step when startup advanced before the progress page finished loading. The `did-finish-load` handler captured the step index at window-creation time; now recomputes it at fire time.
 - Pending steps were rendered at 22% opacity on the dark `#0D0D1A` background — effectively invisible. Raised to 38%.
@@ -319,6 +366,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 **Launcher dialogs on top, no more silent freeze, Tailscale guidance.**
 
 ### Fixed
+
 - All system dialogs (Docker ToS, reboot prompt, network mode) now open on top of the launcher window. Previously they could appear behind it, making Fox look frozen.
 - Eliminated the 15-second silent freeze during Docker startup on Windows reboot. The launcher now shows "Docker Desktop is starting up — waiting for it to initialize…" during the settle delay instead of stalling on the last message.
 - Tailscale timeout path now shows actionable guidance: "Open the Tailscale app, sign in if prompted, and wait until it shows Connected." Fox still opens locally regardless.
@@ -330,6 +378,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 **Consistent dark error window + Windows build pipeline fix.**
 
 ### Fixed
+
 - Error window now matches the progress window style: dark navy background, Sora font, branded red accent bar, collapsible diagnostics pane. Previously the error window used a white/Segoe UI layout via an inline `data:` URL, creating a jarring two-style launcher.
 - Windows NSIS installer build: corrected `!include` path for `mode-page.nsh`. electron-builder already adds `build/` to the NSIS include path, so `!include "build\mode-page.nsh"` resolved to the nonexistent `build/build/mode-page.nsh`. This was the root cause of Windows CI failures in v0.7.32–v0.7.33.
 - `packages/electron/package.json` version synchronized to 0.7.34 (was stuck at 0.7.31 since the batch release commit in v0.7.22–31).
@@ -341,11 +390,13 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 **Polished installer + progress window + startup loop fix.**
 
 ### Added
+
 - Windows installer mode-selection (#353): reinstall shows Express upgrade (keeps data) vs Clean install (wipes container + image + userData). Skipped on fresh installs.
 - Polished progress window (#362): Sora font, gold bar, spinning circle on active step, green check on done, dimmed pending. Collapsible diagnostics pane. Loaded via `loadFile` + IPC preload.
 - `requestedExecutionLevel: asInvoker` in NSIS config (reduces unnecessary UAC elevation).
 
 ### Fixed
+
 - Startup reboot loop: RunOnce/reboot now only fires on fresh Docker install (`action=install`). Start-path timeout throws `DAEMON_NOT_READY` with actionable copy instead of re-registering RunOnce.
 - Network access dialog buttons: "This PC only (port access)", "This PC + other devices (Tailscale)", "Both (port + Tailscale)".
 
@@ -720,7 +771,7 @@ Dead container recovery (HTTP 409).
 ### Behind the scenes
 
 - Total Playwright smoke suite: **7 specs** (was 6 — added the wizard-renders redirect-fires + Fox-wizard-HTML-serves assertions).
-- v0.7.15 itself ships with a `qa/SMOKE_LOG.md` bypass entry — the release that *adds* the SMOKE_LOG gate can't pre-exist its own gate. Forward, v0.7.16+ must have real entries (no more pure-bypass releases).
+- v0.7.15 itself ships with a `qa/SMOKE_LOG.md` bypass entry — the release that _adds_ the SMOKE_LOG gate can't pre-exist its own gate. Forward, v0.7.16+ must have real entries (no more pure-bypass releases).
 
 ### What's next
 
@@ -805,7 +856,7 @@ Windows users no longer cycle through a 4-minute WSL repair + reboot loop when D
 
 ### Fixed
 
-- **Windows-containers-mode detection + actionable error (#291 — closes; also resolves #286 follow-up).** When Docker Desktop is running but set to Windows-containers mode, both Linux engine pipes return ENOENT. Pre-v0.7.11, Fox couldn't tell the difference between "Docker not installed" and "Docker installed but wrong mode," so it ran the WSL-repair flow — a ~4-minute UAC dance that ends in a reboot prompt. The user reboots, comes back, and hits the same failure because the mode persists across reboots. Real user impact, reported live during the v0.7.10 release window. Now: after both Linux pipes return ENOENT, Fox runs `docker info --format "{{.OSType}}"` (3s timeout). If `OSType` ends with `windows`, sets a new error code `DOCKER_WINDOWS_CONTAINERS_MODE`; the startup orchestrator short-circuits the recovery flow and surfaces a non-recoverable error dialog with the exact tray-menu steps: *"Right-click the Docker Desktop tray icon → 'Switch to Linux containers...' → wait for it to finish, then relaunch Fox in the box."* No more reboot loop.
+- **Windows-containers-mode detection + actionable error (#291 — closes; also resolves #286 follow-up).** When Docker Desktop is running but set to Windows-containers mode, both Linux engine pipes return ENOENT. Pre-v0.7.11, Fox couldn't tell the difference between "Docker not installed" and "Docker installed but wrong mode," so it ran the WSL-repair flow — a ~4-minute UAC dance that ends in a reboot prompt. The user reboots, comes back, and hits the same failure because the mode persists across reboots. Real user impact, reported live during the v0.7.10 release window. Now: after both Linux pipes return ENOENT, Fox runs `docker info --format "{{.OSType}}"` (3s timeout). If `OSType` ends with `windows`, sets a new error code `DOCKER_WINDOWS_CONTAINERS_MODE`; the startup orchestrator short-circuits the recovery flow and surfaces a non-recoverable error dialog with the exact tray-menu steps: _"Right-click the Docker Desktop tray icon → 'Switch to Linux containers...' → wait for it to finish, then relaunch Fox in the box."_ No more reboot loop.
 
 ### Heads-up
 
@@ -1021,6 +1072,7 @@ Fox gets its own voice. New users meet **Fox in the Box** the agent — laid-bac
 ### Heads-up for existing installs
 
 The new persona ships in the container but only seeds into your home directory on **first run** (it doesn't overwrite an existing `SOUL.md`). If you've been running Fox already, your `$HERMES_HOME/SOUL.md` is the older / customized version — to pick up the new Fox persona, either:
+
 - Delete `$HERMES_HOME/SOUL.md` (or `/data/SOUL.md` inside the container) and restart, OR
 - Edit your existing `SOUL.md` manually with the new content (see the source at `packages/fox-overlay/agent_overlay/SOUL.md`)
 
@@ -1088,9 +1140,9 @@ A commit-message convention. The merge step in `build-container.yml` now auto-bu
 
 ### Practical effect
 
-| Change type | What happens | What gets bumped |
-|---|---|---|
-| Fox-code release (overlay change, bug fix, feature) | Tag `vX.Y.Z` → `release.yml` → DMG + exe + container + GitHub Release | `VERSION`, `package.json`, CHANGELOG, `:stable`, `:vX.Y.Z` |
+| Change type                                           | What happens                                                                           | What gets bumped                                                |
+| ----------------------------------------------------- | -------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| Fox-code release (overlay change, bug fix, feature)   | Tag `vX.Y.Z` → `release.yml` → DMG + exe + container + GitHub Release                  | `VERSION`, `package.json`, CHANGELOG, `:stable`, `:vX.Y.Z`      |
 | Upstream-only bump (just submodule + `versions.toml`) | Merge PR with `bump(upstream): …` subject → `build-container.yml` auto-bumps `:stable` | `:stable` only (no version bump, no DMG/exe, no GitHub Release) |
 
 ### What you'll notice
@@ -1112,6 +1164,7 @@ See [`docs/architecture/upstream-overlay.md`](docs/architecture/upstream-overlay
 ### What's next
 
 Future improvements (deferred):
+
 - Auto-bump workflow that opens the `bump(upstream): …` PR automatically when an `upstream-update-available` issue is labeled. Today it's still manual: read the auto-issue from `upstream-watch.yml`, run the few commands it lists, open a PR with the right subject. ~5 minutes.
 - Date-stamped container tags (e.g. `:container-20260520-abc1234`) for forensic traceability between `:stable` advances.
 
@@ -1200,6 +1253,7 @@ A universal retry surface for streaming errors. Closes the two v0.7.x carry-over
 ### Verified
 
 Manual smoke against `:latest` candidate post-merge:
+
 - Force `auth_mismatch`: set OpenRouter key to garbage in Settings → Providers → send message → upstream's inline error suppressed, Fox panel appears, Retry restores the prompt
 - Force `interrupted`: kill the agent mid-stream via `docker exec ... pkill -KILL ...` → panel appears, partial assistant tokens wiped, Retry works
 - Cancel button (`type: cancelled`): panel does NOT appear — user-initiated, no retry surface needed
@@ -1244,6 +1298,7 @@ Two Fox features that depended on heavy in-place patches of upstream's streaming
 ### Verified
 
 Full smoke checklist sections A–L re-run on a clean container built from main post-migration:
+
 - All v0.5.0/v0.5.1/v0.5.2/v0.5.3/v0.5.4 baseline checks (carry-forward)
 - New Section L v0.6.0 row: webui boots with `[fox-overlay] bootstrap installed: dispatcher frozen, N GET + M POST handlers registered`, agent boots without `fox-overlay-failed` warnings, mem0_oss installed in `/app/hermes-agent/plugins/memory/`, every Fox-claimed `/api/*` endpoint returns 200
 - The two regressions above were verified intentional (not crashes) — UX degrades to upstream's defaults rather than failing
@@ -1267,6 +1322,7 @@ Three stabilization fixes surfaced by real-world users in the days after v0.5.3 
 ### Verified
 
 Full smoke checklist sections A–L re-run on a clean candidate container against `:latest`:
+
 - All v0.5.0/v0.5.1/v0.5.2/v0.5.3 baseline + stabilization checks (carry-forward)
 - New v0.5.4 #138 check: Ollama "Use" → chat picker immediately reflects the new model
 - New v0.5.4 #139 check: Tailscale Connect in Safari → link visible + clickable, full auth completes
@@ -1293,6 +1349,7 @@ Fox finds Ollama wherever it lives. Small focused release: one new feature, one 
 ### Verified
 
 Full smoke checklist sections A–L re-run on a clean candidate container against `:latest`:
+
 - All v0.5.0 baseline checks (#114-#117, README HTTPS toggle)
 - All v0.5.1 #122 stabilization checks (wizard option-B flow, Tailscale Serve state, failover modal eligibility, recovery banner late-enable, `:stable` release-tag-only, FITB_VERSION populated)
 - All v0.5.2 #127/#128/#129 stabilization checks (operator watchdog, timeout modal, auto-failover, download-on-demand)
@@ -1418,7 +1475,7 @@ Hotfix release. Comprehensive QA pass on the v0.4.4–v0.4.6 features after the 
 
 ### Fixed (P1 — concurrency, lifecycle, secrets)
 
-- **Six race conditions in the Tailscale state machine.** `_up_proc` and `_up_log` were mutated outside `_up_lock`, the daemon thread used the *global* `_up_proc` mid-loop (capture-by-reference bug — a second Connect could redirect the first thread's `wait()` to the new subprocess), `logout()` didn't kill the in-flight subprocess (orphan could resurrect "running" state minutes after the user disconnected), `start_up()` from terminal `failed`/`running` didn't reset the previous `_up_proc`, and `get_up_progress()` could write `state="running"` over a concurrent `logout()`'s reset because it didn't pass an `attempt_id`. Fix: introduce an `attempt_id` rotation pattern — each daemon thread captures its id on spawn; `_set_up_state(attempt_id, ...)` silently drops stale-thread updates; all `_up_proc`/`_up_log` access goes through `_up_lock`; `_up_subprocess` uses a local `proc` variable for all subprocess ops; `logout()` actively kills in-flight; `get_up_progress()` passes the snapshot's attempt_id.
+- **Six race conditions in the Tailscale state machine.** `_up_proc` and `_up_log` were mutated outside `_up_lock`, the daemon thread used the _global_ `_up_proc` mid-loop (capture-by-reference bug — a second Connect could redirect the first thread's `wait()` to the new subprocess), `logout()` didn't kill the in-flight subprocess (orphan could resurrect "running" state minutes after the user disconnected), `start_up()` from terminal `failed`/`running` didn't reset the previous `_up_proc`, and `get_up_progress()` could write `state="running"` over a concurrent `logout()`'s reset because it didn't pass an `attempt_id`. Fix: introduce an `attempt_id` rotation pattern — each daemon thread captures its id on spawn; `_set_up_state(attempt_id, ...)` silently drops stale-thread updates; all `_up_proc`/`_up_log` access goes through `_up_lock`; `_up_subprocess` uses a local `proc` variable for all subprocess ops; `logout()` actively kills in-flight; `get_up_progress()` passes the snapshot's attempt_id.
 - **Hostname dropped on Reconnect.** `_load_persisted_opts` returned the six power-user fields but not hostname — so a saved `FOX_HOSTNAME` was silently replaced with whatever Tailscale's default-naming chose (typically the container ID) on every Reconnect. Fix: include hostname (read from `/data/config/hermes.env` via the existing #44 helper).
 - **`logout()` didn't clean Tailscale Serve config + Reconnect didn't auto-Serve.** Stale Serve binding pointed at the now-disconnected tunnel; after a fresh Connect under a new tailnet identity, Serve was missing until manual recovery. Fix: `logout()` runs `tailscale serve reset` (with `tailscale serve / off` fallback for older builds), and the daemon thread auto-calls `configure_serve()` after detecting `BackendState=Running`.
 - **`use_model` leaked stale provider keys.** Only `api_key` was popped from the existing `model_cfg`, leaving `azure_endpoint`/`azure_api_version`/`aws_region`/`aws_access_key_id`/`aws_secret_access_key`/`vertex_project`/`openai_organization`/custom headers in place when switching to local Ollama. At minimum a stale-secrets exposure in a config the user thought they had switched away from; at worst those keys riding along on Ollama requests. Fix: replace the model block wholesale.
@@ -1459,14 +1516,14 @@ Final v0.4.x release. Closes the loose ends on the local-AI fallback story (#9 p
 
 - **Tailscale power-user fields in Settings → Network → Advanced (#96 phase 2).** Surfaces the 6 flags that #96 Phase 1's argv builder already accepted but the UI didn't expose: login server (custom control plane / headscale), advertise routes (subnet-router CIDRs), advertise tags (ACL identity), exit node (route via tailnet peer), accept routes (consume peers' subnet routes), accept DNS (MagicDNS toggle, default on). Persistence via `settings.json`; `start_up()` merges body opts on top of persisted (body wins per-key, empty falls through). Closes Persona 3 of #96.
 
-- **Reactive modal when remote provider fails and local fallback is OFF (#9 polish).** When a chat stream fails on a remote provider AND the user has not opted into local fallback, a one-time modal offers to enable it: *"Your provider is having trouble. Want to enable a local AI model as a fallback?"* Filters by error type — fires only for `stream_interrupted`, `rate_limit`, `no_response`, `unknown` (skips `auth_mismatch` / `model_not_found` / `quota_exhausted` since local can't fix those). One click → POST `/api/local-fallback/enable`, modal closes, the next remote failure silently uses local. The modal won't re-fire in the same session even if more errors arrive.
+- **Reactive modal when remote provider fails and local fallback is OFF (#9 polish).** When a chat stream fails on a remote provider AND the user has not opted into local fallback, a one-time modal offers to enable it: _"Your provider is having trouble. Want to enable a local AI model as a fallback?"_ Filters by error type — fires only for `stream_interrupted`, `rate_limit`, `no_response`, `unknown` (skips `auth_mismatch` / `model_not_found` / `quota_exhausted` since local can't fix those). One click → POST `/api/local-fallback/enable`, modal closes, the next remote failure silently uses local. The modal won't re-fire in the same session even if more errors arrive.
 
-- **Recovery banner when local fallback is ON and remote is reachable again (#9 polish).** When local fallback is enabled, a top banner appears once `openrouter.ai/api/v1/models` becomes reachable from the container — *"Your remote provider looks reachable again. Switch off local fallback to use it?"* One click → POST `/api/local-fallback/disable`. Implementation: new `GET /api/local-fallback/remote-health` endpoint probes OpenRouter's public `/models` with a 5s timeout (30s in-process cache so multi-tab polling stays cheap); frontend polls every 90s only when `local_fallback_enabled === true`. Both modal and banner use `sessionStorage` flags so the UI doesn't pester — state resets on page reload.
+- **Recovery banner when local fallback is ON and remote is reachable again (#9 polish).** When local fallback is enabled, a top banner appears once `openrouter.ai/api/v1/models` becomes reachable from the container — _"Your remote provider looks reachable again. Switch off local fallback to use it?"_ One click → POST `/api/local-fallback/disable`. Implementation: new `GET /api/local-fallback/remote-health` endpoint probes OpenRouter's public `/models` with a 5s timeout (30s in-process cache so multi-tab polling stays cheap); frontend polls every 90s only when `local_fallback_enabled === true`. Both modal and banner use `sessionStorage` flags so the UI doesn't pester — state resets on page reload.
 
 ### Architecture notes
 
 - The reactive modal hooks into the `apperror` SSE event via a surgical one-line `window.dispatchEvent(new CustomEvent('fitb:stream-error', ...))` in `messages.js`. The polish module (`static/fallback-polish.js`) listens via the public `window` event — no monkey-patching of upstream code.
-- The recovery banner intentionally probes a *generic remote-healthy* signal (OpenRouter's public `/models` endpoint) rather than per-provider probing. If that endpoint is up, the user has internet and the most common provider is reachable; their actual provider is *probably* up too. If not, the next chat will fail and the modal re-fires — self-healing UX.
+- The recovery banner intentionally probes a _generic remote-healthy_ signal (OpenRouter's public `/models` endpoint) rather than per-provider probing. If that endpoint is up, the user has internet and the most common provider is reachable; their actual provider is _probably_ up too. If not, the next chat will fail and the modal re-fires — self-healing UX.
 
 ### Why this is the last v0.4.x release
 
@@ -1496,7 +1553,7 @@ macOS Docker Desktop runs everything inside its own VM with predictable networki
 
 ## [0.4.4] - 2026-05-05
 
-Closes the desktop-Tailscale gap. Until v0.4.3, the only way to authenticate Tailscale on a fresh install was either `install.sh` (Linux/macOS host-script users) or `docker exec` into the container manually. Windows .exe and macOS DMG users — the primary distribution path on the GitHub Release page — had no way to wire up Tailscale from inside the app despite the README explicitly promising *"Optional secure HTTPS access from your phone or another laptop via Tailscale"*. v0.4.4 closes both ends of this:
+Closes the desktop-Tailscale gap. Until v0.4.3, the only way to authenticate Tailscale on a fresh install was either `install.sh` (Linux/macOS host-script users) or `docker exec` into the container manually. Windows .exe and macOS DMG users — the primary distribution path on the GitHub Release page — had no way to wire up Tailscale from inside the app despite the README explicitly promising _"Optional secure HTTPS access from your phone or another laptop via Tailscale"_. v0.4.4 closes both ends of this:
 
 ### Added
 
@@ -1509,7 +1566,7 @@ Closes the desktop-Tailscale gap. Until v0.4.3, the only way to authenticate Tai
 
 ### Why this matters for the README's headline promise
 
-Top of README: *"Reachable from anywhere. Optional secure HTTPS access from your phone or another laptop via Tailscale."* Until today, that was true only for `install.sh` users. With v0.4.4, the promise extends to Release-page binary users on Windows and macOS — the primary distribution channel.
+Top of README: _"Reachable from anywhere. Optional secure HTTPS access from your phone or another laptop via Tailscale."_ Until today, that was true only for `install.sh` users. With v0.4.4, the promise extends to Release-page binary users on Windows and macOS — the primary distribution channel.
 
 ### Deferred to follow-up phases (#96)
 
@@ -1586,7 +1643,7 @@ The local-AI fallback experience now actually works end-to-end. v0.4.0 shipped t
 ### Caveats
 
 - **First-run download is ~2.5 GB.** Honestly displayed in the toggle copy. Users on slow connections will wait. The download persists on `/data/models/` across container restarts; second-run is instant.
-- **Reactive modal not yet shipped.** When a remote-provider call fails and the user *hasn't* opted in, today they see the existing remote error. v0.4.2 will add a one-time "Try local model? (downloads ~2.5 GB once)" prompt with a "Always do this" checkbox.
+- **Reactive modal not yet shipped.** When a remote-provider call fails and the user _hasn't_ opted in, today they see the existing remote error. v0.4.2 will add a one-time "Try local model? (downloads ~2.5 GB once)" prompt with a "Always do this" checkbox.
 - **No recovery banner yet.** When the remote provider comes back, the user stays on the local model until they manually toggle off. v0.4.2 polish will add a passive "Remote is back — switch?" banner.
 
 ### Closes
@@ -1605,7 +1662,7 @@ Also includes the **multi-arch container image** (#82, P0) that landed earlier t
 
 - **Local model download manager (#10).** Settings → System → "Local AI models" lists registered models with their on-disk status, expected size, and a single context-sensitive button (Download / Cancel / Delete). Downloads are server-side: closing the browser tab doesn't interrupt the download — re-opening Settings picks up the live progress. Resumes across container restarts because the partial file lives on the `/data` volume. New REST surface: `GET /api/local-models`, `POST /api/local-models/<id>/download`, `POST /api/local-models/<id>/cancel`, `POST /api/local-models/<id>/delete`, `GET /api/local-models/<id>/progress` (SSE). Distinct from the existing `/api/models` chat-input picker — no collision.
 
-- **Phi-4-mini Q4_K_M registered as the first downloadable model.** 2.49 GB, sha256-pinned (`01999f17c39cc307…`), sourced from `bartowski/microsoft_Phi-4-mini-instruct-GGUF`. The URL, sha256, and size are all `MODEL_*_PHI4MINI` env-overridable so we can flip to a mirror without a code release if HuggingFace ever has an outage. The model isn't *used* anywhere yet — that's #9 in v0.4.1.
+- **Phi-4-mini Q4_K_M registered as the first downloadable model.** 2.49 GB, sha256-pinned (`01999f17c39cc307…`), sourced from `bartowski/microsoft_Phi-4-mini-instruct-GGUF`. The URL, sha256, and size are all `MODEL_*_PHI4MINI` env-overridable so we can flip to a mirror without a code release if HuggingFace ever has an outage. The model isn't _used_ anywhere yet — that's #9 in v0.4.1.
 
 - **Multi-arch container image (#82, P0).** Cross-runner build pattern: native amd64 on `ubuntu-latest`, native arm64 on `ubuntu-24.04-arm` (GitHub-hosted, free for public repos). Per-platform digests are pushed to GHCR by digest, then assembled into a manifest list via `docker buildx imagetools create`. Verify-both-arches step fails the build hard if either platform's manifest is missing — won't let a single-platform image ship as `:latest`. Per-platform GHA cache scopes (`cloud-amd64`, `cloud-arm64`) prevent cross-arch layer contamination. Smoke test runs on each native runner: pulls by index digest, asserts the registry auto-selected the matching child manifest, validates `/health` returns 200 **and** body contains `"status": "ok"` (per #57's lesson).
 

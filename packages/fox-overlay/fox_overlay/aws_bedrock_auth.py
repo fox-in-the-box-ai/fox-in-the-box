@@ -14,6 +14,7 @@ Explicit sources still count: bearer token, access keys, ``AWS_PROFILE``,
 ECS container URI, IRSA web identity, and non-IMDS boto3 methods
 (``shared-credentials-file``, ``container-role``, etc.).
 """
+
 from __future__ import annotations
 
 import logging
@@ -45,11 +46,8 @@ def _boto3_credential_method() -> Optional[str]:
         if credentials is None:
             return None
         method = getattr(credentials, "method", None)
-        if method:
-            return str(method)
-        # Frozen credentials sometimes lose method; probe provider name.
-        provider = getattr(credentials, "method", None)
-        return str(provider) if provider else ""
+        # Empty/missing method returns "" so the caller gates conservatively.
+        return str(method) if method else ""
     except Exception:
         return None
 
@@ -94,8 +92,7 @@ def apply_bedrock_adapter_patches() -> None:
     ba.has_aws_credentials = has_aws_credentials
     setattr(ba, _ADAPTER_SENTINEL, True)
     _log.info(
-        "[fox-overlay] Bedrock IMDS instance-role gate enabled "
-        "(opt-in via %s=1)",
+        "[fox-overlay] Bedrock IMDS instance-role gate enabled (opt-in via %s=1)",
         _ALLOW_ENV,
     )
 
@@ -137,4 +134,6 @@ def apply_auth_status_patch() -> None:
     get_auth_status.__name__ = upstream.__name__
     get_auth_status.__doc__ = upstream.__doc__
     auth_mod.get_auth_status = get_auth_status
-    _log.info("[fox-overlay] hermes_cli.auth.get_auth_status aws_sdk key_source enrich enabled")
+    _log.info(
+        "[fox-overlay] hermes_cli.auth.get_auth_status aws_sdk key_source enrich enabled"
+    )
