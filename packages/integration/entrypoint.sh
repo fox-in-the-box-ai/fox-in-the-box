@@ -158,6 +158,29 @@ chown root:root /data/run /data/data/tailscale
 mkdir -p /app/workspace
 chown -R foxinthebox:foxinthebox /app/workspace
 
+# ── 4a. Dev toolbelt self-heal ────────────────────────────────────────────────
+# Best-effort: if a stale or partial image is missing ssh/rsync (built before
+# openssh-client was baked, interrupted installs), install them at boot. Never
+# fail boot on apt problems — the tools are optional for the core service.
+_ensure_dev_toolbelt() {
+    local missing_apt=() missing_names=()
+    command -v ssh   >/dev/null 2>&1 || { missing_apt+=(openssh-client); missing_names+=(ssh);   }
+    command -v rsync >/dev/null 2>&1 || { missing_apt+=(rsync);          missing_names+=(rsync); }
+    if [ "${#missing_apt[@]}" -eq 0 ]; then
+        echo "[entrypoint] Dev toolbelt: ssh + rsync present."
+        return 0
+    fi
+    echo "[entrypoint] Installing missing dev tools: ${missing_names[*]}"
+    if apt-get update -qq 2>/dev/null && \
+       apt-get install -y --no-install-recommends "${missing_apt[@]}" -qq 2>/dev/null; then
+        echo "[entrypoint] Installed: ${missing_names[*]}"
+    else
+        echo "[entrypoint] WARN: apt-get failed — dev tools unavailable: ${missing_names[*]}" >&2
+    fi
+}
+_ensure_dev_toolbelt
+unset -f _ensure_dev_toolbelt
+
 # ── 5. Load environment ────────────────────────────────────────────────────────
 HERMES_ENV="/data/config/hermes.env"
 if [ -f "$HERMES_ENV" ]; then
