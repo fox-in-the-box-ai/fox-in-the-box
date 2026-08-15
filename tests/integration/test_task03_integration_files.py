@@ -137,6 +137,15 @@ class TestEntrypoint(unittest.TestCase):
             ),
         )
 
+    def test_dev_toolbelt_self_heal(self) -> None:
+        """Entrypoint self-heals missing ssh/rsync on stale images (best-effort)."""
+        self.assertIn("_ensure_dev_toolbelt", self.sh)
+        self.assertIn("openssh-client", self.sh)
+        self.assertIn("rsync", self.sh)
+        self.assertIn("apt-get install -y --no-install-recommends", self.sh)
+        # Must never fail boot when apt is unavailable
+        self.assertIn("WARN: apt-get failed", self.sh)
+
 
 if __name__ == "__main__":
     unittest.main()
