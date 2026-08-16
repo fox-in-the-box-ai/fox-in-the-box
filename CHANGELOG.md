@@ -9,6 +9,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+---
+
+## [0.7.60] — 2026-08-14
+
 ### Added
 
 - Long-term memory is enabled by default on fresh installs. Facts are extracted with your configured chat provider and stored locally (self-hosted mem0 + embedded Qdrant under the instance data volume). Embeddings are computed entirely on-device by a bundled local model (nomic-embed-text-v1.5, llama.cpp) — no extra API key required; works with any provider, including OpenRouter-only, Anthropic-only, direct OpenAI (openai-api), AWS Bedrock, and local Ollama/LM Studio/vLLM setups
@@ -19,6 +23,9 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Changed
 
 - protobuf 7.35.1 → 6.33.6 image-wide (required by mem0ai). On Debian installs the pin applies via a constraints file (`FITB_PIP_CONSTRAINTS`) on hosts where python 3.11 is available; 3.12/3.13 hosts install unconstrained within mem0ai's supported range (`>=5.29.6,<7`) with a logged notice — both paths are exercised by the release deb smoke, and the Google provider serialization path is probed in-image on every PR
+- Bundled desktop Electron 42.4.1 → 42.8.0, electron-updater 6.8.3 → 6.8.9 (auto-update flow hardening), electron-log 5.4.4, dockerode 5.0.1
+- Bumped 11 CI actions (setup-node v6→v7, setup-python v6→v7, checkout v7.0.1, codeql-action v4.37.6, docker/login-action v4.6.0, action-gh-release 3.0.2, azure/login 3.0.1, and others; all SHA-pinned and verified against their claimed tags); the validate-overlay CI job now runs under Python 3.11 to match the container runtime
+- Playwright test runner 1.61.1 → 1.62.1 with the root pnpm lockfile resynced for the qa workspace
 - If you previously enabled memory with a remote embedder (OpenAI or Bedrock), the new local-embedder default does not match your existing memory store. Memory reports an explicit error with two options: keep your store by restoring your previous embedder settings (in mem0_oss.json under your Hermes data directory — /data/data/hermes/mem0_oss.json in the container, $HERMES_HOME/mem0_oss.json on bare metal — if that file exists, else via MEM0_OSS_EMBEDDER_* variables), or start fresh by deleting the mem0_oss data directory. Nothing is deleted automatically
 - Debian/apt downgrades from this release to 0.7.59 require removing the `memory: provider:` line from hermes.yaml first (or purging the Fox venv): the older release's memory plugin predates the fail-loud rework and would otherwise run against the newer installed dependencies. See docs/MEMORY.md
 - Default WebUI theme is now light (brand palette `#FAF7F0`), replacing the previous dark default; existing installs keep their saved theme preference
@@ -26,6 +33,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Security
 
 - mem0's built-in PostHog telemetry is disabled at every Fox-managed process boundary (MEM0_TELEMETRY=False). No memory content or usage events leave the machine; the only network traffic memory adds is the fact-extraction call to the chat provider you already use — and that routing follows your chat configuration exactly, never overridden by stray environment variables. (If you separately configure the upstream `mem0` provider from a bare-metal shell, export MEM0_TELEMETRY=False there too — see docs/MEMORY.md.)
+- Dependency security batch across both lockfiles: undici 7.29.0/6.28.0 (one HIGH advisory — cache poisoning in shared caches), fast-uri 3.1.5 (three advisories), tar 7.5.22 (five DoS-class advisories), brace-expansion 1.1.18/2.1.4/5.0.9 (ReDoS family, seven high-severity alerts), js-yaml 4.3.1 (two high alerts); the root pnpm lockfile — the one CI installs from — was resynced so the fixes reach built artifacts, not just the Windows release path
 - Closed Dependabot HIGH alerts #87/#88 by evicting the app-builder-lib 24.13.3 / builder-util-runtime 9.2.4 subtree from the lockfiles: `electron-builder-squirrel-windows` is now an explicit devDependency pinned exactly at 26.15.3 so pnpm no longer auto-installs the old version to satisfy app-builder-lib's exact peer. Note the coupling: `electron-builder` (^26.15.3) and the squirrel pin must be bumped together — bumping one without the other reintroduces the peer mismatch
 
 ### Fixed

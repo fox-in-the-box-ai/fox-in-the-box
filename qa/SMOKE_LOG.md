@@ -25,6 +25,38 @@ Skipped sections are OK as long as they're explicitly noted with reason. Empty e
 
 ---
 
+## v0.7.60 — 2026-08-14 (DV — mem0 memory default-on)
+
+HARD GATE per docs/RELEASE_WORKFLOW.md — real-container smoke with a real OpenRouter-only key against the release-candidate image. No bypass permitted for these steps.
+
+Executed 2026-08-14/16 on a local Docker host (colima) against `ghcr.io/fox-in-the-box-ai/cloud:latest` (main @ the v0.7.60 release cut), real OpenRouter key.
+
+- [x] 1. Boot + `memory: READY — llm=openrouter, embedder=local:nomic-embed-text-v1.5` status line — exact line observed; state.json ready/openrouter/local
+- [x] 2. Sleep-idle wake: 768-dim response after the 120 s idle unload — `--sleep-idle-seconds 120` confirmed; no fallback needed
+- [x] 3. Store/recall round trip — fact extracted via OpenRouter, embedded locally, recalled semantically ("favorite animal is the red fox… Lisbon")
+- [x] 4. embed-server stop → `state=error` with the exact unreachable reason; supervisorctl start → ready, prior data recalled
+- [x] 5. Keyless boot → visible OFF with the finish-onboarding reason; /readyz memory component ok:true with the reason as detail
+- [ ] 6. Anthropic-only round trip ← skipped, no Anthropic key on hand. Per closeout convention: Anthropic path verified at unit + resolution level only (explicit row-2 arm, subset+first-var sync assertion in image-selftest); live wire path not exercised. Follow-up: run on next release or when a key is available
+- [x] 7. Zero PostHog egress (no connections, zero log traces); MEM0_TELEMETRY=False in supervisord children, entrypoint, and docker-exec contexts
+- [x] 8. Anti-hijack: `openai-api` target with OPENROUTER_API_KEY exported → PinnedOpenAILLM client base_url stays `https://api.openai.com/v1`
+- [x] 9. Dims mismatch (fabricated 1536 legacy store) → breaker-wrapped op flips state=error with the exact "1536-dim vectors but the configured embedder produces 768-dim" reason; reset path restores a working 768 store. File-override continuity mechanism exercised (the 1536 override applied via mem0_oss.json)
+- [x] 10. `--network none`: 768-dim embeddings fully offline; preflight bounded, correct OFF line keyless
+- [x] 11. Playwright vs RC: standard smoke 41 passed / 7 conditional skips; release project 1/1 passed (/readyz memory component)
+- [x] 12. Deb legs: executed by release.yml (test_deb_install.sh 22.04 constrained + 24.04 unconstrained) at tag time — verified in the release-run CI status below
+- [x] 13. Catalog blackout + key → immediate READY via the well-known table; `deepseek` under blackout → explicit catalog-unreachable reason with the override guidance
+- [x] 14. Pool-only: `hermes auth add openrouter` → READY within one is_available cycle with NO gateway restart (watched-mtime self-heal) + full store/recall round trip
+
+Findings:
+
+- Post-idle wake behavior (the design's last open runtime question) settles cleanly — keep `--sleep-idle-seconds 120`
+- Raw `Memory.add` bypasses the breaker by design (harness detail); the plugin's own op wrappers surface errors correctly
+- spaCy/fastembed optional-extras notices appear on plugin ops — cosmetic, semantic search unaffected
+- Smoke-run OpenRouter key passed through the session transcript; rotate after the release
+
+Startup-delta and CI-status sections: populated at closeout after the tag run.
+
+---
+
 ## v0.7.59 — 2026-07-10 (DV — upstream bump v0.52.0)
 
 CI-verified: Build & Push (amd64+arm64), Smoke (amd64+arm64), validate-overlay, CodeQL, Trivy, Electron smoke (macOS+Windows), .deb smoke all green on PR #645. Container image promoted to :stable. Adversarial 4-perspective review panel (SECURITY/CORRECTNESS/TEST DISCIPLINE/CODE QUALITY) run against full v0.7.58..HEAD diff — 6 findings identified and fixed in-pass before merge.
@@ -81,6 +113,7 @@ Bypass reason: Tagged from main immediately after v0.7.52 — contains the same 
 - [ ] (h) **POST-RELEASE:** On-device Lightsail deployment — pull `cloud:stable`, verify chat + onboarding + model picker
 
 Findings:
+
 - None pre-release; on-device verification pending deployment
 
 ---
@@ -94,6 +127,7 @@ Findings:
 - [x] (e) CI checks: Build & Push (amd64 + arm64), Smoke (amd64 + arm64), CodeQL, Trivy, check-overlay-basis all green on main (commit c89302b)
 
 Findings:
+
 - CSRF bypass was hot-patched via `docker cp` to running containers before this release — v0.7.50 ships the proper image with the fix baked in
 - 14 regression tests for CSRF patch cover all branches (valid/wrong/empty/missing secret, standalone mode, idempotency, signature drift)
 
@@ -280,9 +314,11 @@ Bypass reason: Two infrastructure/visual-only changes. (1) NSIS `!include` path 
 - [ ] (f) **POST-RELEASE:** Visual confirmation on Win11 — verify green check appears and holds for ~1.5s before image pull begins
 
 Findings:
+
 - Pure UX change — no behavioral logic changed, no new failure modes.
 
 Action items:
+
 - @bsgdigital: confirm green check visible on next Win11 test run
 
 ---
@@ -297,9 +333,11 @@ Action items:
 - [ ] (f) **POST-RELEASE — REQUIRED:** @bsgdigital to confirm Docker starts cleanly on Win11 reboot with v0.7.30
 
 Findings:
+
 - Stan's log confirmed: Docker process alive + all pipes present, but daemon pipe not answering yet when Fox first probed. The 15s settle + longer streak tolerance directly addresses this.
 
 Action items:
+
 - @bsgdigital: reboot Win11, let Fox start automatically via RunOnce, confirm no ENOENT error
 
 ---
@@ -316,6 +354,7 @@ Action items:
 - [ ] (h) **POST-RELEASE:** Live smoke on chat with/without configured providers — verify model picker filter hides unconfigured groups and "Show all" restores them
 
 Action items:
+
 - @roadhero: run (h) and confirm filter behavior
 
 ---
@@ -329,9 +368,11 @@ Action items:
 - [x] (e) No production code changes — only test files and CHANGELOG/VERSION
 
 Findings:
+
 - Test count milestones: Jest 90, Playwright 27 live.
 
 Action items:
+
 - None.
 
 ---
@@ -347,6 +388,7 @@ Action items:
 - [ ] (g) **POST-RELEASE — REQUIRED:** Live Windows smoke: (1) progress steps illuminate correctly during fresh install, (2) ToS dialog appears before Docker install, not before relaunch, (3) uninstall with no other Docker images → Docker Desktop removal offer appears
 
 Action items:
+
 - @roadhero or @bsgdigital: run (g) on Windows post-merge
 
 ---
@@ -364,10 +406,12 @@ NSIS-only release: mode-selection dialog + branding BMPs + uninstall data-cleanu
 - [ ] (g) **POST-RELEASE — REQUIRED:** Live Windows smoke: (1) fresh install shows no mode dialog, (2) reinstall shows Express/Clean dialog, (3) Clean install wipes container+data, (4) uninstall with data-cleanup checkbox works, (5) branding renders in installer wizard chrome
 
 Findings:
+
 - `customInstallMode` is an electron-builder hook called between the directory selection page and the install page — correct placement for pre-wipe.
 - NSIS `nsDialogs` plugin is bundled with electron-builder's NSIS distribution — no extra dependency.
 
 Action items:
+
 - @roadhero or @bsgdigital: run (g) on Windows post-merge
 
 ---
@@ -382,9 +426,11 @@ Copy-only release: network access dialog strings rewritten in docker-manager.js.
 - [x] (d) `defaultId: 1` unchanged — Tailscale still the recommended default
 
 Findings:
+
 - Pure string change. No runtime behavior change.
 
 Action items:
+
 - None.
 
 ---
@@ -401,9 +447,11 @@ Electron-only release: `openFox()` + `pollTailscaleUrl()` helpers in main.js. No
 - [ ] (f) **POST-RELEASE — REQUIRED:** Live smoke on mode 2 or 3 with Tailscale connected — verify dialog appears with correct URLs and "Copy Tailscale URL" button works
 
 Findings:
+
 - No new test written for the new `openFox`/`pollTailscaleUrl` helpers — these require Electron dialog mocking which is heavier than the existing jest harness. Acceptable for a UI-dialog helper; post-release smoke covers it.
 
 Action items:
+
 - @roadhero or @bsgdigital: run (f) on a machine with Tailscale configured
 
 ---
@@ -420,9 +468,11 @@ Overlay-only release: 3 new webui patches (bot name, Fox avatar, empty-state cop
 - [x] (f) Jest count unchanged (no Electron source changes)
 
 Findings:
+
 - Patches 004/005/006 were authored in commit 7c5a8a9 (2026-05-23) but never made it to a release — they were in git history but not on disk. This release restores them with the path bug in 005 fixed.
 
 Action items:
+
 - None blocking. v0.7.24 Tailscale URL surfacing can begin.
 
 ---
@@ -439,9 +489,11 @@ CSS-only release: setup.css reskinned from zinc/orange to Hermes upstream dark p
 - [x] (f) `git diff` reviewed: 61 insertions, 45 deletions, all within expected color/font-swap scope
 
 Findings:
+
 - The wizard's color language is now consistent with what users see post-onboarding. Stan's "wizard looks odd" feedback addressed.
 
 Action items:
+
 - None blocking. v0.7.23 install UX overhaul can begin.
 
 ---
@@ -460,9 +512,11 @@ Tooling-only release: `check-overlay-basis.sh` (stash leak fix + orphan-patch de
 - [ ] (h) **POST-RELEASE optional:** v0.7.22 first commit can validate that `regen-patch.sh` actually produces a valid patch when used in anger.
 
 Findings:
+
 - The patch-system hygiene work from the v0.7.15 audit (Architect C's risk register top item) lands here. Sustainability story improved: silent-destruction of dev WIP closed; orphan-patch class of v0.7.13 #331 bugs now caught at commit time, not at next-CI cycle.
 
 Action items:
+
 - None blocking. v0.7.22 wizard styling work can begin immediately after this ships.
 
 ---
@@ -487,10 +541,12 @@ Releases the load-bearing P0 Docker detection race fix unblocking @bsgdigital's 
 - [ ] (g) **POST-RELEASE:** macOS DMG regression clean
 
 Findings:
+
 - Engineering side: all `[x]` checks completed without surprises. New tests landed for #340/#341/#361 closing SWE C's coverage gaps.
 - Post-tag Win11 smoke (a)-(b) is the load-bearing verification — Stan's blog gates on a successful fresh-install end-to-end.
 
 Action items:
+
 - @roadhero or @bsgdigital to run (a)-(g) post-tag; update this entry in-place with results
 - If #361 still bails: file as P0 hotfix candidate, root-cause beyond the WSL-transient fix
 
@@ -513,10 +569,12 @@ Substrate-only release: no new features, only `productName` rename + migration s
 - [ ] (d) **POST-RELEASE:** Verify branch protection — open a PR with intentional Playwright smoke failure, confirm can't merge
 
 Findings:
+
 - Engineering-side checks all pass. node + jest green. Migration shim logic reviewed: handles both-exist case (keeps new, leaves legacy for manual review), absent-legacy case (no-op), rename-fails case (logs warn, app continues with empty new dir).
 - The gate-teeth release.yml change is the first commit ever where the SMOKE_LOG check would CATCH a placeholder-only entry. v0.7.17 + v0.7.18 entries (just shipped this morning) would have failed this gate.
 
 Action items:
+
 - @roadhero to run items (a)-(d) on Win11 post-tag; update entry in-place once verified
 - v0.7.20 first commit will append the migration-smoke results to this entry, closing the substrate cycle
 
@@ -538,9 +596,11 @@ Pre-tag smoke on PR-built container image + Mac DMG + Win11 install. Fill in `[x
 - [ ] (j) Playwright CI: test-hooks-safety unskip passes + wizard-renders 5 specs all pass
 
 Findings:
+
 - (fill in pre-tag)
 
 Action items:
+
 - (fill in pre-tag)
 
 ---
@@ -562,9 +622,11 @@ Section L row "v0.7.17 Anthropic+Gemini+Bedrock provider extras…" run results 
 - [ ] (i) Regression: OpenRouter + OpenAI + Codex + Ollama still work
 
 Findings:
+
 - (fill in pre-tag)
 
 Action items:
+
 - (fill in pre-tag)
 
 ---
@@ -583,7 +645,7 @@ Action items:
 
 This release ships the SMOKE_LOG gate itself + a permanent regression spec for #331. It is intentionally an infrastructure-only release with no user-visible product change.
 
-- **Bypass reason:** the release that *adds* the SMOKE_LOG enforcement gate can't itself wait for the gate to have been pre-existing. Future product-change releases (v0.7.16+) must run an actual smoke section before tagging.
+- **Bypass reason:** the release that _adds_ the SMOKE_LOG enforcement gate can't itself wait for the gate to have been pre-existing. Future product-change releases (v0.7.16+) must run an actual smoke section before tagging.
 - **CI gates verified:** validate-overlay green, Playwright smoke green (now includes the deferred wizard-renders redirect-fires spec — proves patch 003 from v0.7.13 actually wired the onboarding redirect against live `:stable` = v0.7.14).
 - **Action items for v0.7.16:** the Windows installer UX bundle (#324 + #325 + #330). That release MUST have a real Section H / Section L smoke gate run logged here.
 
@@ -593,7 +655,7 @@ This release ships the SMOKE_LOG gate itself + a permanent regression spec for #
 
 First entry. Pre-v0.7.14 releases shipped without entries here because this log didn't exist — #331 (onboarding missing since v0.7.0) was the consequence of that gap. v0.7.13 hotfixed #331 itself; v0.7.14 establishes the audit trail so the next #331-class regression surfaces immediately.
 
-- Smoke checklist gates run for v0.7.14: still N/A on the retrospective release itself (it's the *infrastructure* release that makes this log meaningful, not a user-facing change worth running 80 boxes against).
+- Smoke checklist gates run for v0.7.14: still N/A on the retrospective release itself (it's the _infrastructure_ release that makes this log meaningful, not a user-facing change worth running 80 boxes against).
 - Forward commitment: starting v0.7.15, this log must have a matching entry for every tagged release. Empty/missing entry = the smoke didn't actually run = the release shouldn't ship.
 
 ---
