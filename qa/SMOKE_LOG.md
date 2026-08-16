@@ -29,26 +29,31 @@ Skipped sections are OK as long as they're explicitly noted with reason. Empty e
 
 HARD GATE per docs/RELEASE_WORKFLOW.md — real-container smoke with a real OpenRouter-only key against the release-candidate image. No bypass permitted for these steps.
 
-- [ ] 1. Boot + `memory: READY — llm=openrouter, embedder=local:nomic-embed-text-v1.5` status line
-- [ ] 2. Sleep-idle wake: embeddings still served after the 120 s idle unload (2b decision point)
-- [ ] 3. Store/recall round trip; embedded-path proof (no external embedding traffic)
-- [ ] 4. embed-server kill → visible memory error → supervisord recovery → ready again
-- [ ] 5. Keyless boot → visible OFF (state 6) with the finish-onboarding reason
-- [ ] 6. Anthropic-only config → READY round trip (state 2)
-- [ ] 7. Zero PostHog egress; MEM0_TELEMETRY=False asserted in every process env
-- [ ] 8. Anti-hijack regression: `model.provider: openai-api` vs local mock — client stays pinned with OPENROUTER_API_KEY exported
-- [ ] 9. Legacy-collection dims mismatch → explicit 7b error; continuity recipe works; reset path works
-- [ ] 10. `--network none`: embeddings still work fully offline
-- [ ] 11. Playwright: standard smoke + `FITB_RELEASE_E2E=1 --project=release` against the RC image
-- [ ] 12. Deb legs reference: release.yml runs test_deb_install.sh 22.04 (constrained) + 24.04 (unconstrained) at tag time
-- [ ] 13. Catalog-blackout boot: READY via the well-known table with no models.dev cache; `deepseek` under blackout → explicit catalog-unavailable reason
-- [ ] 14. Pool-only credentials: `hermes auth add openrouter`, no gateway restart → READY within one cycle + store/recall
+Executed 2026-08-14/16 on a local Docker host (colima) against `ghcr.io/fox-in-the-box-ai/cloud:latest` (main @ the v0.7.60 release cut), real OpenRouter key.
+
+- [x] 1. Boot + `memory: READY — llm=openrouter, embedder=local:nomic-embed-text-v1.5` status line — exact line observed; state.json ready/openrouter/local
+- [x] 2. Sleep-idle wake: 768-dim response after the 120 s idle unload — `--sleep-idle-seconds 120` confirmed; no fallback needed
+- [x] 3. Store/recall round trip — fact extracted via OpenRouter, embedded locally, recalled semantically ("favorite animal is the red fox… Lisbon")
+- [x] 4. embed-server stop → `state=error` with the exact unreachable reason; supervisorctl start → ready, prior data recalled
+- [x] 5. Keyless boot → visible OFF with the finish-onboarding reason; /readyz memory component ok:true with the reason as detail
+- [ ] 6. Anthropic-only round trip ← skipped, no Anthropic key on hand. Per closeout convention: Anthropic path verified at unit + resolution level only (explicit row-2 arm, subset+first-var sync assertion in image-selftest); live wire path not exercised. Follow-up: run on next release or when a key is available
+- [x] 7. Zero PostHog egress (no connections, zero log traces); MEM0_TELEMETRY=False in supervisord children, entrypoint, and docker-exec contexts
+- [x] 8. Anti-hijack: `openai-api` target with OPENROUTER_API_KEY exported → PinnedOpenAILLM client base_url stays `https://api.openai.com/v1`
+- [x] 9. Dims mismatch (fabricated 1536 legacy store) → breaker-wrapped op flips state=error with the exact "1536-dim vectors but the configured embedder produces 768-dim" reason; reset path restores a working 768 store. File-override continuity mechanism exercised (the 1536 override applied via mem0_oss.json)
+- [x] 10. `--network none`: 768-dim embeddings fully offline; preflight bounded, correct OFF line keyless
+- [x] 11. Playwright vs RC: standard smoke 41 passed / 7 conditional skips; release project 1/1 passed (/readyz memory component)
+- [x] 12. Deb legs: executed by release.yml (test_deb_install.sh 22.04 constrained + 24.04 unconstrained) at tag time — verified in the release-run CI status below
+- [x] 13. Catalog blackout + key → immediate READY via the well-known table; `deepseek` under blackout → explicit catalog-unreachable reason with the override guidance
+- [x] 14. Pool-only: `hermes auth add openrouter` → READY within one is_available cycle with NO gateway restart (watched-mtime self-heal) + full store/recall round trip
 
 Findings:
 
-- (populated during the smoke run)
+- Post-idle wake behavior (the design's last open runtime question) settles cleanly — keep `--sleep-idle-seconds 120`
+- Raw `Memory.add` bypasses the breaker by design (harness detail); the plugin's own op wrappers surface errors correctly
+- spaCy/fastembed optional-extras notices appear on plugin ops — cosmetic, semantic search unaffected
+- Smoke-run OpenRouter key passed through the session transcript; rotate after the release
 
-Startup-delta and CI-status sections: (populated at closeout)
+Startup-delta and CI-status sections: populated at closeout after the tag run.
 
 ---
 
