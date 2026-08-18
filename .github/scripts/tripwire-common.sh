@@ -7,6 +7,11 @@ set -eu
 
 REPO="${GITHUB_REPOSITORY:-fox-in-the-box-ai/fox-in-the-box}"
 RUN_URL="${GITHUB_SERVER_URL:-https://github.com}/${REPO}/actions/runs/${GITHUB_RUN_ID:-local}"
+# Actions sets GITHUB_WORKFLOW to the calling workflow's name; issues and
+# labels created by the helpers cite it so callers outside
+# upstream-tripwires.yml (e.g. build-container.yml's main_push_health)
+# carry correct provenance.
+SOURCE_WORKFLOW="${GITHUB_WORKFLOW:-upstream-tripwires.yml}"
 
 # Open or re-fire an issue. De-dupe by exact title match.
 #
@@ -77,13 +82,13 @@ tripwire_fire() {
         # permissions issue (the issue creation will surface the error).
         gh label create "$l" --repo "$REPO" --force \
             --color "$(tripwire_label_color "$l")" \
-            --description "auto-created by upstream-tripwires.yml" >/dev/null 2>&1 || true
+            --description "auto-created by $SOURCE_WORKFLOW" >/dev/null 2>&1 || true
         label_args+=("--label" "$l")
     done
 
     gh issue create --repo "$REPO" \
         --title "$title" \
-        --body "$(printf '%s\n\n_Fired by upstream-tripwires.yml run %s_' "$body" "$RUN_URL")" \
+        --body "$(printf '%s\n\n_Fired by %s run %s_' "$body" "$SOURCE_WORKFLOW" "$RUN_URL")" \
         "${label_args[@]}"
 }
 
@@ -112,7 +117,7 @@ tripwire_clear() {
 
     echo "$numbers" | while read -r num; do
         gh issue comment "$num" --repo "$REPO" \
-            --body "$(printf 'Condition cleared: %s\n\n_Auto-closed by upstream-tripwires.yml run %s_' "$reason" "$RUN_URL")" \
+            --body "$(printf 'Condition cleared: %s\n\n_Auto-closed by %s run %s_' "$reason" "$SOURCE_WORKFLOW" "$RUN_URL")" \
             || echo "[tripwire] warning: failed to comment on #$num"
         gh issue close "$num" --repo "$REPO" --reason "completed" \
             || echo "[tripwire] warning: failed to close #$num"
@@ -125,6 +130,7 @@ tripwire_label_color() {
     case "$1" in
         tripwire-fire)         echo "d73a4a" ;;  # red
         tripwire-self-health)  echo "fbca04" ;;  # yellow
+        ci-health)             echo "b60205" ;;  # dark red — main-push pipeline failures
         tripwire/cve|security) echo "b60205" ;;  # dark red
         tripwire/license)      echo "5319e7" ;;  # purple
         tripwire/branch|tripwire/nous-ui) echo "d93f0b" ;;  # orange
