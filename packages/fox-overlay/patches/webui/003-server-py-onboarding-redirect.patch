@@ -1,5 +1,5 @@
 diff --git a/server.py b/server.py
-index dcf26b0d..cebad311 100644
+index ecb3c8eb..d6a86647 100644
 --- a/server.py
 +++ b/server.py
 @@ -110,6 +110,20 @@ except ModuleNotFoundError as _fox_e:
@@ -20,7 +20,7 @@ index dcf26b0d..cebad311 100644
 +    redirect_to_setup = None
 +
 +
- from api.auth import check_auth
+ from api.auth import check_auth, reset_trusted_auth_request_state
  from api.config import HOST, PORT, STATE_DIR, SESSION_DIR, DEFAULT_WORKSPACE
  from api.helpers import (
 @@ -389,6 +403,10 @@ class Handler(BaseHTTPRequestHandler):

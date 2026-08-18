@@ -1,8 +1,8 @@
 diff --git a/static/ui.js b/static/ui.js
-index e2c38488..29054f7f 100644
+index 809563e7..d6b9fcac 100644
 --- a/static/ui.js
 +++ b/static/ui.js
-@@ -2634,12 +2634,12 @@ function _getOptionProviderId(opt){
+@@ -2830,12 +2830,12 @@ function _getOptionProviderId(opt){
      return group.dataset.provider;
    }
    const value=String(opt.value||'');
@@ -16,8 +16,8 @@ index e2c38488..29054f7f 100644
 +  if(value.startsWith('@')&&value.includes(':')) return value.slice(1,value.indexOf(':'));
    return '';
  }
- function _providerSkipsModelMismatchWarning(providerId){
-@@ -2876,7 +2876,7 @@ function _findModelInDropdown(modelId, sel, preferredProviderId){
+ function _modelPickerOptionIdentity(modelId, providerId){
+@@ -3190,7 +3190,7 @@ function _findModelInDropdown(modelId, sel, preferredProviderId){
    let explicitProvider='';
    const rawModel=String(modelId||'');
    if(rawModel.startsWith('@')&&rawModel.includes(':')){
@@ -26,7 +26,7 @@ index e2c38488..29054f7f 100644
    }
    const preferred=String(preferredProviderId||explicitProvider||'').toLowerCase();
    if(preferred){
-@@ -6235,7 +6235,7 @@ function getModelLabel(modelId){
+@@ -6939,7 +6939,7 @@ function getModelLabel(modelId){
    //   @custom:qwen397b-64k               -> qwen397b-64k
    if(rawId.startsWith('@custom:')){
      const rest=rawId.slice('@custom:'.length);
