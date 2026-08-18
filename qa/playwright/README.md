@@ -2,14 +2,9 @@
 
 Replacing the manual smoke checklist (`qa/SMOKE_CHECKLIST.md`) as the release gate over the v0.7.x cycle.
 
-## Phase status
+## Suite status (as of v0.7.60)
 
-| Phase | Scope | Status |
-|---|---|---|
-| 0 | Infra: workflow + workspace + 1 trivial spec | v0.7.7 (shipped) |
-| 1 partial | 5 of ~12 smoke specs (4 integration: endpoints sweep, /health deep, static-overlay assets, test-hooks safety + 1 mobile UI: avatar swap #299) | v0.7.8 + v0.7.10 |
-| 1 full | Remaining specs: wizard flows + retry-panel + settings-persist + sentinel checks + .fox-removals — plus testid retrofit + smoke-job-becomes-required (#265) | v0.7.9+ |
-| 2 | ~30 critical-path specs: failover/recovery/Ollama/Tailscale/fallback + Electron parity (#266) | deferred |
+**57 tests across 18 smoke spec files** plus a 1-test `release` project. The smoke suite covers contract endpoints (capabilities, endpoints-sweep, readyz, skillset, version), Fox branding, hostname overlay, model picker, onboarding API, provider settings, wizard flows (renders + local-fallback), health (basic + deep), static overlay assets, mobile avatar, and test-hook safety. Historical phase plan (0 → 1 partial → 1 full, #263–#266): shipped through the v0.7.x cycle; Phase 2's Electron-parity specs remain the open deferral (the CI `electron-parity` job is still a Phase 0 stub).
 
 ## Run locally
 
@@ -35,18 +30,9 @@ pnpm --filter @fox-in-the-box/playwright test:e2e:smoke
 docker stop fitb-playwright && docker rm fitb-playwright && docker volume rm fitb-playwright-data
 ```
 
-## Required CI checks (v0.7.15+)
+## Required CI checks
 
-The `smoke` job is **intended-required** as of v0.7.15. The deferral pattern that let `#331` ship broken for 6 releases is what closed this — the spec count has grown to 7 with the `wizard-renders` redirect-fires assertion now in place, which is enough to start gating merges.
-
-Branch-protection enforcement is a GitHub-UI setting the workflow can't toggle itself. To complete the flip:
-
-1. Repo settings → Branches → Edit `main` protection rule
-2. Under "Require status checks to pass before merging," add:
-   - `smoke` (the Playwright job)
-   - `validate` (the overlay-validation job from v0.7.14)
-
-After the flip, every PR must pass both before merge. Pre-existing PRs may need a rebase to pick up the new gate.
+`smoke` and `validate` are **enforced required status checks** on `main` (flipped shortly after v0.7.15; the deferral pattern that let #331 ship broken for 6 releases is what forced it). Every PR must pass both before merge.
 
 ## File layout
 
@@ -56,8 +42,13 @@ qa/playwright/
 ├── playwright.config.ts      workers/retries/reporter; project = "smoke" for Phase 0
 ├── global-setup.ts           Phase 0 stub (waits for /health); Phase 1+ adds orchestration
 ├── tests/
-│   └── smoke/
-│       └── health-loads.spec.ts   the one Phase 0 spec
+│   ├── smoke/                18 spec files, 57 tests (contract-*,
+│   │                         fox-branding, health-*, hostname-overlay,
+│   │                         mobile-avatar, model-picker, onboarding-api,
+│   │                         provider-settings, static-overlay,
+│   │                         test-hooks-safety, wizard-*, endpoints-sweep)
+│   └── release/
+│       └── memory-state.spec.ts   release project — /readyz memory component
 ├── mocks/
 │   ├── openrouter.ts         Phase 1 entry point — OpenRouter SSE + key responses
 │   └── ollama.ts             Phase 1 entry point — Ollama daemon probe + tags
@@ -80,9 +71,17 @@ checks the env var and bails when not set.
 |---|---|---|---|
 | `smoke` | PR | chromium only | ~5 min |
 | `full` | nightly cron 04:00 UTC | chromium + firefox + webkit × 4 shards | ~12 min/shard |
-| `electron-parity` | weekly cron Sun 04:00 UTC | macos + windows | ~8 min/OS |
+| `electron-parity` | weekly cron Sun 04:00 UTC | macos + windows | ~1 min/OS (Phase 0 stub) |
 
-`smoke` becomes a required check in Phase 1 — for Phase 0 it runs but isn't blocking, so we can iterate on the infrastructure without breaking everyone's PRs.
+`electron-parity` is a **Phase 0 stub**: it verifies Playwright installs and lists tests on the macOS/Windows runners — it does not launch the Electron app (real parity specs are the open Phase 2 deferral). The `windows-real-smoke` workflow is likewise v1 container-only. `smoke` and `validate` are enforced required checks (see above).
+
+### The `release` project
+
+`playwright.config.ts` registers a `release` project (testDir `./tests/release`) only when `FITB_RELEASE_E2E` is set. Run at release time against the candidate image:
+
+```bash
+FITB_RELEASE_E2E=1 pnpm exec playwright test --project=release
+```
 
 ## See also
 

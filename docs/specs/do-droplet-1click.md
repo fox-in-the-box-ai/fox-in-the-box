@@ -2,7 +2,7 @@
 
 *Decision-ready. No monetization — decoupled from ADR-0001. 2026-06-01.*
 
-*Builds on: `docs/explorations/do-marketplace.md`*
+*Builds on: `docs/archive/explorations-do-marketplace.md`*
 
 ---
 
@@ -26,8 +26,8 @@ who want Tailscale can configure it after deploy — it works as-is).
 | # | File | Purpose | Headless? |
 |---|------|---------|-----------|
 | 1 | `packages/integration/Dockerfile` | Multi-stage build: python:3.11-slim, qdrant, llama-server, hermes-agent+webui, fox-overlay, supervisord. `EXPOSE 8787 6333` (line 164). | Yes |
-| 2 | `packages/integration/entrypoint.sh` (296 lines) | First-run bootstrap: /data tree, app symlinks, version migration, loads `hermes.env` (line 161–167), Tailscale Serve (line 220–280), exec supervisord. Does NOT set or generate `HERMES_WEBUI_PASSWORD`. | Yes |
-| 3 | `packages/integration/supervisord.conf` | 6 services: tailscaled (:10), ts-operator-watchdog (:15), qdrant (:20), hermes-gateway (:30), hermes-webui (:40), llama-server (:50, autostart=false). WebUI env: `HERMES_WEBUI_HOST="0.0.0.0"` (line 142). | Yes |
+| 2 | `packages/integration/entrypoint.sh` (352 lines as of v0.7.60 — line cites below predate the v0.52.113 pins; re-verify before implementation) | First-run bootstrap: /data tree, app symlinks, version migration, loads `hermes.env` (line 161–167), Tailscale Serve (line 220–280), exec supervisord. Does NOT set or generate `HERMES_WEBUI_PASSWORD`. | Yes |
+| 3 | `packages/integration/supervisord.conf` | 7 services: tailscaled, ts-operator-watchdog, qdrant, embed-server (mem0 local embedder :8644, idle-unload 120s — added v0.7.60, RUNNING by default), hermes-gateway, hermes-webui, llama-server (autostart=false). WebUI env: `HERMES_WEBUI_HOST="0.0.0.0"` (line 142). | Yes |
 | 4 | `packages/integration/default-configs/hermes.yaml` | Agent config: `server.host: 0.0.0.0`, `server.port: 8787` (lines 9–11). | Yes |
 | 5 | `packages/integration/default-configs/qdrant.yaml` | `host: 0.0.0.0`, `http_port: 6333`, `grpc_port: 6334` (lines 5–8). Internal only — not host-mapped. | Yes |
 | 6 | `packages/integration/default-configs/onboarding.json` | First-run marker `{"completed": false}`. | Yes |
@@ -331,7 +331,7 @@ Source: https://github.com/digitalocean/marketplace-partners/blob/master/scripts
 | Field | Value | Status |
 |-------|-------|--------|
 | App name | Fox in the Box | Ready |
-| Version | 0.7.59 (or current at submission) | Ready |
+| Version | 0.7.60 (or current at submission) | Ready |
 | OS | Ubuntu 24.04 LTS | Ready |
 | Software included | Docker CE, Caddy, Fox in the Box (list with versions) | To build |
 | Short description | Private AI assistant with memory, local AI, and secure remote access | Ready |
@@ -339,7 +339,7 @@ Source: https://github.com/digitalocean/marketplace-partners/blob/master/scripts
 | Logo | Fox logo (512x512 PNG) | Ready (exists in `packages/electron/assets/`) |
 | Support URL | `https://github.com/fox-in-the-box-ai/fox-in-the-box/issues` | Ready |
 | Documentation URL | `https://github.com/fox-in-the-box-ai/fox-in-the-box` | Ready |
-| Min Droplet size | 2 GB RAM / 1 vCPU / 50 GB disk (TO RATIFY — needs benchmarking) | TO RATIFY |
+| Min Droplet size | 2 GB RAM / 1 vCPU / 50 GB disk (TO RATIFY — needs benchmarking; NOTE: since v0.7.60 memory is default-on, so the floor must be re-benchmarked with the embed-server running — idle-unload keeps at-rest RAM low but first-op warm-up spikes) | TO RATIFY |
 | Category | AI Agents | Ready |
 
 ### 5.3 Listing assets

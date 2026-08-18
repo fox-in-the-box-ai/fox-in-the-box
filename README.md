@@ -36,7 +36,7 @@ There are several good self-hosted AI assistants. Here's how Fox compares on the
 ## What you get
 
 - **Runs on your computer.** Conversations, memory, and files stay on your machine.
-- **Remembers across sessions.** Your assistant picks up where you left off.
+- **Remembers across sessions.** Your assistant picks up where you left off. Memory is on by default for fresh installs, with embeddings computed entirely on-device — no extra API key needed.
 - **Reachable from anywhere.** Optional secure HTTPS access from your phone or another laptop via Tailscale.
 - **Setup in the browser.** No terminal needed for the desktop app. Paste your API key — or skip the wizard entirely if you already have a local model running.
 - **Local AI in one click.** Got Ollama installed? Fox auto-detects it on first launch and lets you chat with a local model — no API key, no terminal.
@@ -60,7 +60,7 @@ When you send a message, the app forwards it to your chosen AI provider (like Op
 
 ## Features
 
-A practical tour of what's in the box. Most of this is wired up by the bundled [Hermes Agent](https://github.com/NousResearch/hermes-agent) and [Hermes WebUI](https://github.com/NousResearch/hermes-webui); Fox in the Box adds the desktop wrapper, the Docker packaging, the onboarding wizard, Tailscale integration, and the auto-update channel.
+A practical tour of what's in the box. Most of this is wired up by the bundled [Hermes Agent](https://github.com/NousResearch/hermes-agent) and [Hermes WebUI](https://github.com/nesquena/hermes-webui); Fox in the Box adds the desktop wrapper, the Docker packaging, the onboarding wizard, Tailscale integration, and the auto-update channel.
 
 ### Chat
 
@@ -73,7 +73,11 @@ A practical tour of what's in the box. Most of this is wired up by the bundled [
 
 ### Memory and personalization
 
-- Persistent memory across sessions, stored locally in **Qdrant** (vector DB) + **mem0**
+- Persistent memory across sessions, stored locally in **Qdrant** (vector DB) + **mem0** — **on by default** for fresh installs
+- Embeddings computed entirely on-device by a bundled local model (nomic-embed-text-v1.5 via llama.cpp) — no extra API key, works with any provider; facts are extracted via your configured chat provider
+- Memory state visible in **Settings** and on `/readyz` — active, off with a reason, or error. Fail-loud: memory is never a silent no-op.
+- Existing installs opt in with one line (`memory: provider: mem0_oss`) — see [docs/MEMORY.md](docs/MEMORY.md)
+- mem0's telemetry is disabled (`MEM0_TELEMETRY=False`)
 - Read, edit, and prune entries from the Memory panel
 - Per-profile personality (`SOUL.md`) — give your assistant a different voice in different profiles
 
@@ -213,7 +217,7 @@ The setup wizard runs once. After that the app handles itself — but a few thin
 
 **Update the app.** The desktop app pulls new versions automatically. For the install script, re-run the same `curl … | bash` line; it replaces the running container without touching your data.
 
-**Memory.** Conversation memory persists automatically across sessions. To wipe it (start fresh, troubleshoot, or hand off the install) see [docs/RESET.md](docs/RESET.md).
+**Memory.** Conversation memory persists automatically across sessions (on by default for fresh installs). Memory status is visible in **Settings** and on `/readyz` — active, off with a reason, or error. Some keyless / OAuth-only provider setups show memory off; you can override which provider handles memory fact extraction. See [docs/MEMORY.md](docs/MEMORY.md) for defaults, provider requirements, and migration. To wipe memory (start fresh, troubleshoot, or hand off the install) see [docs/RESET.md](docs/RESET.md).
 
 ---
 
@@ -248,7 +252,8 @@ Most users start with **OpenRouter** — one key, hundreds of models. Add more f
 | ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
 | [Hermes Agent](https://github.com/NousResearch/hermes-agent) | AI agent core — LLM orchestration, tools, skills (Fox tracks virgin upstream via overlay; see `docs/architecture/upstream-overlay.md`) |
 | [Hermes WebUI](https://github.com/nesquena/hermes-webui)     | Browser-based chat interface (Fox tracks virgin upstream via overlay; see `docs/architecture/upstream-overlay.md`)                     |
-| mem0 + Qdrant                                                | Persistent memory with local vector search                                                                                             |
+| mem0 + Qdrant                                                | Persistent memory with local vector search (on by default)                                                                             |
+| llama.cpp (local embeddings)                                 | Bundled nomic-embed-text-v1.5 embedder — on-device embeddings on port 8644 inside the container, idle-unload after 120s                |
 | Tailscale                                                    | Optional VPN tunneling and automatic HTTPS                                                                                             |
 | supervisord                                                  | Process management inside the container                                                                                                |
 
@@ -256,7 +261,7 @@ Most users start with **OpenRouter** — one key, hundreds of models. Add more f
 
 **Container vs. data:** the published Docker image bundles Hermes agent and webui source (from `forks/` submodules) at **build** time. The container's `/data` volume holds your config, databases, logs, and Tailscale state. Updating Hermes for end users means pulling a newer image, not re-cloning at runtime.
 
-**Tech stack:** Electron 43 (desktop wrapper) · Python 3.11 (Hermes Agent + WebUI) · Qdrant (vector DB) · mem0 (memory layer) · supervisord (process management) · Tailscale (remote access) · Docker (packaging). Hermes WebUI is intentionally vanilla — Python `http.server` + plain JavaScript, no SPA framework — so the chat UI loads instantly on any device.
+**Tech stack:** Electron 43 (desktop wrapper) · Python 3.11 (Hermes Agent + WebUI) · Qdrant (vector DB) · mem0 (memory layer) · llama.cpp (local embeddings) · supervisord (process management) · Tailscale (remote access) · Docker (packaging). Hermes WebUI is intentionally vanilla — Python `http.server` + plain JavaScript, no SPA framework — so the chat UI loads instantly on any device.
 
 ---
 
@@ -273,6 +278,7 @@ See **[docs/RESET.md](docs/RESET.md)** for the full reset procedure (Windows and
 - [CONTRIBUTING.md](CONTRIBUTING.md) — how to contribute
 - [SECURITY.md](SECURITY.md) — vulnerability reporting
 - [docs/DEV_MODE.md](docs/DEV_MODE.md) — local development with bind-mounted submodules
+- [docs/MEMORY.md](docs/MEMORY.md) — long-term memory: defaults, provider requirements, migration and reset
 - [docs/RELEASE_WORKFLOW.md](docs/RELEASE_WORKFLOW.md) — how releases are cut
 - [docs/RESET.md](docs/RESET.md) — full reset / clean install
 - [qa/SMOKE_CHECKLIST.md](qa/SMOKE_CHECKLIST.md) — pre-release verification gate
@@ -304,7 +310,9 @@ What we're working on next. No promises on dates — this is a small team — bu
 
 **Recently shipped**
 
-- **Upstream bump** — hermes-webui v0.52.0, hermes-agent v2026.7.7.2 (v0.7.59)
+- **Long-term memory on by default** — fresh installs get persistent memory out of the box: local nomic-embed-text-v1.5 embedder (llama.cpp), self-hosted mem0 + embedded Qdrant, memory state in Settings and `/readyz` (v0.7.60)
+- **Fox branding, Bedrock credentials card, ssh + rsync in the image** — canonical app icons and favicons, AWS Bedrock credentials in Settings, openssh-client and rsync baked in (v0.7.60)
+- **Upstream bump** — hermes-webui v0.52.113, hermes-agent v2026.8.16.2 (container-only Option B update)
 - **Security alert triage** — resolved 24 supply-chain alerts via npm overrides + Dockerfile upgrade (v0.7.55–v0.7.57)
 - **Apt repository** — `.deb` packages published to `apt.foxinthebox.ai` for headless Linux installs (v0.7.59)
 - **Playwright smoke specs** — automated E2E tests for critical Fox surfaces (v0.7.55)
@@ -342,7 +350,7 @@ Open an [issue](https://github.com/fox-in-the-box-ai/fox-in-the-box/issues/new/c
 Fox in the Box stands on the shoulders of:
 
 - **[Hermes Agent](https://github.com/NousResearch/hermes-agent)** by NousResearch — the agent core.
-- **[Hermes WebUI](https://github.com/NousResearch/hermes-webui)** — the browser chat interface.
+- **[Hermes WebUI](https://github.com/nesquena/hermes-webui)** by nesquena — the browser chat interface.
 - **[Qdrant](https://qdrant.tech)** — vector database powering memory.
 - **[mem0](https://github.com/mem0ai/mem0)** — memory layer.
 - **[Tailscale](https://tailscale.com)** — secure remote access and HTTPS.

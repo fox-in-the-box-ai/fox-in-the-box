@@ -65,13 +65,13 @@ root as `gpg`).
 
 Add these secrets to the `fox-in-the-box` repository:
 
-| Secret Name | Value | Where from |
-|-------------|-------|-----------|
-| `APT_GPG_PRIVATE_KEY` | Contents of `apt-signing-key.asc` | Step 2 |
-| `APT_GPG_KEY_ID` | 16-char key ID (e.g., `ABCDEF1234567890`) | Step 2 |
-| `R2_ACCOUNT_ID` | Cloudflare account ID (Dashboard → Account Home → right sidebar) | Cloudflare |
-| `R2_ACCESS_KEY` | R2 API token Access Key ID | Step 1 |
-| `R2_SECRET_KEY` | R2 API token Secret Access Key | Step 1 |
+| Secret Name           | Value                                                            | Where from |
+| --------------------- | ---------------------------------------------------------------- | ---------- |
+| `APT_GPG_PRIVATE_KEY` | Contents of `apt-signing-key.asc`                                | Step 2     |
+| `APT_GPG_KEY_ID`      | 16-char key ID (e.g., `ABCDEF1234567890`)                        | Step 2     |
+| `R2_ACCOUNT_ID`       | Cloudflare account ID (Dashboard → Account Home → right sidebar) | Cloudflare |
+| `R2_ACCESS_KEY`       | R2 API token Access Key ID                                       | Step 1     |
+| `R2_SECRET_KEY`       | R2 API token Secret Access Key                                   | Step 1     |
 
 Path: Repository → Settings → Secrets and variables → Actions → New repository secret
 
@@ -86,10 +86,13 @@ build-deb (amd64 + arm64)
     ↓
 deb-smoke-test (dpkg install verification)
     ↓
-publish-apt (reprepro → R2 sync)
-    ↓
-release (GitHub Release with .deb attached)
+    ├── publish-apt (reprepro → R2 sync; continue-on-error until #539 secrets land)
+    └── release (GitHub Release with .deb attached — needs wait-for-electron,
+                 deb-smoke-test, promote-container; does NOT depend on publish-apt)
 ```
+
+The GitHub Release deliberately does not gate on the apt publish: a broken
+apt sync must not block the release artifacts, and vice versa.
 
 ### publish-apt.sh flow
 
@@ -113,8 +116,8 @@ apt.foxinthebox.ai/
 ├── pool/
 │   └── main/
 │       └── f/foxinthebox/
-│           ├── foxinthebox_0.7.59_amd64.deb
-│           └── foxinthebox_0.7.59_arm64.deb
+│           ├── foxinthebox_X.Y.Z_amd64.deb
+│           └── foxinthebox_X.Y.Z_arm64.deb
 ├── gpg                              ← public signing key
 └── conf/                            ← reprepro metadata (not user-facing)
 ```
