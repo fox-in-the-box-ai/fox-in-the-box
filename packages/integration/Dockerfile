@@ -42,6 +42,7 @@ ARG FITB_DEV=0
 # for the vps-patch-sync flow. Baking BOTH keeps the entrypoint tool-heal
 # a true no-op on fresh images (~15-20 MB installed with the krb5/gnutls
 # dependency train — shared in part with git).
+#
 # `upgrade -y` first: the python:3.11-slim base is a point-in-time
 # snapshot, and without it Debian security fixes published after that
 # snapshot never reach the image — this was most of the fixable Trivy
