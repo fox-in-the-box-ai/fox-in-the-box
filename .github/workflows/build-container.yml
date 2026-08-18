@@ -188,9 +188,19 @@ jobs:
           # Capture the index digest from the freshly-pushed manifest list.
           # `inspect --raw` returns the canonical bytes; their content
           # digest IS the manifest-list digest. Use --format for stability.
-          DIGEST=$(docker buildx imagetools inspect "${IMAGE}:${TAG}" --format '{{json .Manifest}}' | jq -r '.digest')
+          # Retry: GHCR reads-after-write occasionally lag the push by a
+          # few seconds, returning 404/empty on the immediate inspect.
+          DIGEST=""
+          for attempt in 1 2 3 4 5; do
+            DIGEST=$(docker buildx imagetools inspect "${IMAGE}:${TAG}" --format '{{json .Manifest}}' 2>/dev/null | jq -r '.digest' || true)
+            if [[ -n "$DIGEST" && "$DIGEST" != "null" ]]; then
+              break
+            fi
+            echo "inspect attempt $attempt returned no digest; retrying in 10s"
+            sleep 10
+          done
           if [[ -z "$DIGEST" || "$DIGEST" == "null" ]]; then
-            echo "::error::Could not determine index digest from manifest-list inspect"
+            echo "::error::Could not determine index digest from manifest-list inspect after 5 attempts"
             exit 1
           fi
           echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
@@ -199,8 +209,18 @@ jobs:
       - name: Verify both architectures present in manifest list
         run: |
           set -euo pipefail
-          INSPECT=$(docker buildx imagetools inspect "${IMAGE}:${{ steps.tag.outputs.tag }}" \
-            --format '{{range .Manifest.Manifests}}{{.Platform.OS}}/{{.Platform.Architecture}}{{"\n"}}{{end}}')
+          # Same GHCR read-after-write lag as the digest inspect above:
+          # retry before concluding a platform is genuinely missing.
+          INSPECT=""
+          for attempt in 1 2 3 4 5; do
+            INSPECT=$(docker buildx imagetools inspect "${IMAGE}:${{ steps.tag.outputs.tag }}" \
+              --format '{{range .Manifest.Manifests}}{{.Platform.OS}}/{{.Platform.Architecture}}{{"\n"}}{{end}}' 2>/dev/null || true)
+            if grep -qx 'linux/amd64' <<<"$INSPECT" && grep -qx 'linux/arm64' <<<"$INSPECT"; then
+              break
+            fi
+            echo "inspect attempt $attempt incomplete; retrying in 10s"
+            sleep 10
+          done
           echo "Platforms found in manifest list:"
           echo "$INSPECT"
           # Both must be present. `attestation-manifest` entries (with
