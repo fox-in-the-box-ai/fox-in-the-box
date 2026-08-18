@@ -2,8 +2,11 @@
 # Tripwire #209 — branch-creation watch.
 #
 # Lists upstream branches; fires on any branch name matching the rewrite-
-# regex. Stateless — dedupe is by branch name in the issue title, so once
-# fired for "react", the issue gets re-fired (comment) not re-created.
+# regex. Stateless — dedupe is by branch name in the issue title: an OPEN
+# same-title issue gets a re-fire comment; a CLOSED one is a standing
+# acknowledgement of that branch (ack_dedupe) and suppresses re-fire.
+# Accepted tradeoff: a dispositioned branch deleted and later re-created
+# under the same name will not alert again.
 
 set -eu
 source "$(dirname "$0")/tripwire-common.sh"
@@ -66,7 +69,8 @@ EOF
         tripwire_fire \
             "[tripwire/branch] $repo has rewrite-regex branch: $branch" \
             "$body" \
-            "tripwire-fire,tripwire/branch,P1"
+            "tripwire-fire,tripwire/branch,P1" \
+            ack_dedupe
     done <<<"$matches"
 }
 
