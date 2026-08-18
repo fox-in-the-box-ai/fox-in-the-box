@@ -8,14 +8,27 @@
 set -eu
 source "$(dirname "$0")/tripwire-common.sh"
 
-REWRITE_REGEX='react|vue|svelte|preact|rewrite|^v[0-9]+$|^next$|major'
+# Rewrite-signal regexes, tightened after three false positives on
+# 2026-08-14 (#722 'centaur-port/slack-reaction-context' — 'react' inside
+# 'reaction'; #724 'feat/skill-react-best-practices' — a skill doc, not a
+# frontend rewrite of a Python backend; #726 'fix/electron-41-major' — a
+# fix branch, not a major rewrite):
+# - tokens must be whole path segments (bounded by / _ - or string edge),
+# - frontend-framework tokens apply only to the webui repo — the agent
+#   repo is a Python backend where such branch names are docs/skills,
+# - conventional maintenance prefixes are excluded outright.
+COMMON_REGEX='(^|[/_-])(rewrite|major)([/_-]|$)|^v[0-9]+$|^next$'
+WEBUI_REGEX="$COMMON_REGEX|(^|[/_-])(react|vue|svelte|preact)([/_-]|\$)"
+EXCLUDE_REGEX='^(fix|chore|docs|test|ci)/'
 
 check_repo() {
     local repo="$1"
+    local regex="$2"
     local matches
     matches=$(git ls-remote --heads "https://github.com/$repo.git" 2>/dev/null \
               | awk '{sub("refs/heads/", "", $2); print $2}' \
-              | grep -iE "$REWRITE_REGEX" \
+              | grep -ivE "$EXCLUDE_REGEX" \
+              | grep -iE "$regex" \
               | grep -vE '^(master|main)$' \
               || true)
 
@@ -31,7 +44,7 @@ check_repo() {
 
 Branch: **\`$branch\`**
 
-The regex \`$REWRITE_REGEX\` flags branches that historically signal:
+The regex \`$regex\` flags branches that historically signal:
 - A framework rewrite (\`react\`, \`vue\`, \`svelte\`, \`preact\`)
 - A major version bump (\`v2\`, \`v3\`, etc.)
 - A long-running rewrite (\`rewrite\`, \`major\`)
@@ -55,5 +68,5 @@ EOF
     done <<<"$matches"
 }
 
-check_repo "$WEBUI_REPO"
-check_repo "$AGENT_REPO"
+check_repo "$WEBUI_REPO" "$WEBUI_REGEX"
+check_repo "$AGENT_REPO" "$COMMON_REGEX"
