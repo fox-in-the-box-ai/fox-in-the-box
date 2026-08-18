@@ -1,33 +1,54 @@
-'use strict';
+"use strict";
 
-const { app, BrowserWindow, dialog, shell, clipboard, ipcMain, globalShortcut } = require('electron');
-const { spawn, exec } = require('child_process');
-const path = require('path');
-const fs = require('fs');
-const os = require('os');
-const log = require('electron-log');
-const docker = require('./docker-manager');
-const { waitUntilHealthy } = require('./health-check');
-const { createTray, setRunning } = require('./tray-manager');
-const updater = require('./updater');
-const updateWindow = require('./update-window');
+// Must run before anything can write to the console (#748): a closed
+// stdout pipe otherwise crashes the app on the first log line.
+const { installStdioGuard } = require("./stdio-guard");
+installStdioGuard();
+
+const {
+  app,
+  BrowserWindow,
+  dialog,
+  shell,
+  clipboard,
+  ipcMain,
+  globalShortcut,
+} = require("electron");
+const { spawn, exec } = require("child_process");
+const path = require("path");
+const fs = require("fs");
+const os = require("os");
+const log = require("electron-log");
+const docker = require("./docker-manager");
+const { waitUntilHealthy } = require("./health-check");
+const { createTray, setRunning } = require("./tray-manager");
+const updater = require("./updater");
+const updateWindow = require("./update-window");
 const {
   waitForDaemon: _waitForDaemon,
   ensureDockerWindows: _ensureDockerWindows,
   runCommandVerbose: _runCommandVerbose,
-} = require('./startup');
-const { runStartup, ensureContainerHealthy, StartupPhaseError } = require('./startup-orchestrator');
-const { registerWindowsRunOnceResume } = require('./windows-run-once');
-const { APP_HOME_URL } = require('./app-urls');
-const diagnosticReport = require('./diagnostic-report');
-const APP_ICON = process.platform === 'win32'
-  ? path.join(__dirname, '..', 'assets', 'icon.ico')
-  : path.join(__dirname, '..', 'assets', 'icon.png');
+} = require("./startup");
+const {
+  runStartup,
+  ensureContainerHealthy,
+  StartupPhaseError,
+} = require("./startup-orchestrator");
+const { registerWindowsRunOnceResume } = require("./windows-run-once");
+const { APP_HOME_URL } = require("./app-urls");
+const diagnosticReport = require("./diagnostic-report");
+const APP_ICON =
+  process.platform === "win32"
+    ? path.join(__dirname, "..", "assets", "icon.ico")
+    : path.join(__dirname, "..", "assets", "icon.png");
 let _fatalStartup = false;
 let _setupInProgress = false;
 
-const resumeAfterReboot = process.platform === 'win32'
-  && process.argv.some((arg) => arg === '--resume-setup' || arg === '--resume-setup=true');
+const resumeAfterReboot =
+  process.platform === "win32" &&
+  process.argv.some(
+    (arg) => arg === "--resume-setup" || arg === "--resume-setup=true",
+  );
 
 // Prevent multiple instances
 if (!app.requestSingleInstanceLock()) {
@@ -36,7 +57,7 @@ if (!app.requestSingleInstanceLock()) {
 }
 
 // Keep app alive when all windows are closed (tray-only)
-app.on('window-all-closed', (e) => {
+app.on("window-all-closed", (e) => {
   if (_fatalStartup) return;
   e.preventDefault();
 });
@@ -49,24 +70,34 @@ app.on('window-all-closed', (e) => {
 // locks), we log and continue — Electron will create a fresh `fox-in-the-box`
 // dir and the user can manually salvage `@fox-in-the-box` via Tray → Reset.
 function migrateLegacyUserData() {
-  const newPath = app.getPath('userData');  // resolves to .../fox-in-the-box
+  const newPath = app.getPath("userData"); // resolves to .../fox-in-the-box
   let legacyPath;
   switch (process.platform) {
-    case 'win32':
-      legacyPath = path.join(os.homedir(), 'AppData', 'Roaming', '@fox-in-the-box');
+    case "win32":
+      legacyPath = path.join(
+        os.homedir(),
+        "AppData",
+        "Roaming",
+        "@fox-in-the-box",
+      );
       break;
-    case 'darwin':
-      legacyPath = path.join(os.homedir(), 'Library', 'Application Support', '@fox-in-the-box');
+    case "darwin":
+      legacyPath = path.join(
+        os.homedir(),
+        "Library",
+        "Application Support",
+        "@fox-in-the-box",
+      );
       break;
     default:
-      legacyPath = path.join(os.homedir(), '.config', '@fox-in-the-box');
+      legacyPath = path.join(os.homedir(), ".config", "@fox-in-the-box");
       break;
   }
   if (!fs.existsSync(legacyPath)) return;
   if (fs.existsSync(newPath)) {
     log.info(
       `[migration] Both legacy (${legacyPath}) and new (${newPath}) userData dirs exist — ` +
-      `keeping new, leaving legacy alone for manual review.`,
+        `keeping new, leaving legacy alone for manual review.`,
     );
     return;
   }
@@ -76,7 +107,7 @@ function migrateLegacyUserData() {
   } catch (err) {
     log.warn(
       `[migration] Failed to rename legacy userData (${legacyPath} -> ${newPath}): ` +
-      `${err.message}. Manual cleanup may be needed via Tray → Reset Fox completely…`,
+        `${err.message}. Manual cleanup may be needed via Tray → Reset Fox completely…`,
     );
   }
 }
@@ -84,8 +115,10 @@ function migrateLegacyUserData() {
 migrateLegacyUserData();
 
 app.whenReady().then(main).catch(handleStartupError);
-app.on('will-quit', () => { globalShortcut.unregisterAll(); });
-app.setAppUserModelId('io.foxinthebox.desktop');
+app.on("will-quit", () => {
+  globalShortcut.unregisterAll();
+});
+app.setAppUserModelId("io.foxinthebox.desktop");
 // v0.7.19: `app.setName('Fox in the box')` removed — `productName: fox-in-the-box`
 // in package.json now drives the userData path, which is what we want
 // (drops the `@` prefix that came from the npm scope `@fox-in-the-box/electron`).
@@ -93,16 +126,16 @@ app.setAppUserModelId('io.foxinthebox.desktop');
 // ─── Progress window ─────────────────────────────────────────────────────────
 
 let _progressWin = null;
-let _progressState = { title: '', detail: '' };
+let _progressState = { title: "", detail: "" };
 
 const INSTALL_STEPS = [
-  { label: 'Checking system',        match: 'Check system' },
-  { label: 'Installing Docker',      match: 'Install Docker' },
-  { label: 'Starting Docker',        match: 'Start Docker' },
-  { label: 'Downloading Fox image',  match: 'Download image' },
-  { label: 'Starting container',     match: 'Start container' },
-  { label: 'Waiting for services',   match: 'Wait for services' },
-  { label: 'Connecting to network',  match: 'Connect network' },
+  { label: "Checking system", match: "Check system" },
+  { label: "Installing Docker", match: "Install Docker" },
+  { label: "Starting Docker", match: "Start Docker" },
+  { label: "Downloading Fox image", match: "Download image" },
+  { label: "Starting container", match: "Start container" },
+  { label: "Waiting for services", match: "Wait for services" },
+  { label: "Connecting to network", match: "Connect network" },
 ];
 
 function _activeStepIndex(title) {
@@ -110,41 +143,65 @@ function _activeStepIndex(title) {
   for (let i = INSTALL_STEPS.length - 1; i >= 0; i--) {
     if (title.includes(INSTALL_STEPS[i].match)) return i;
   }
-  if (title.includes('Installing') || title.includes('install')) return 1;
-  if (title.includes('Starting Docker') || title.includes('Launching Docker') || title.includes('daemon')) return 2;
-  if (title.includes('image') || title.includes('pull') || title.includes('Pull')) return 3;
-  if (title.includes('container') || title.includes('Container')) return 4;
-  if (title.includes('health') || title.includes('ready') || title.includes('healthy')) return 5;
-  if (title.includes('Tailscale') || title.includes('network') || title.includes('Opening')) return 6;
+  if (title.includes("Installing") || title.includes("install")) return 1;
+  if (
+    title.includes("Starting Docker") ||
+    title.includes("Launching Docker") ||
+    title.includes("daemon")
+  )
+    return 2;
+  if (
+    title.includes("image") ||
+    title.includes("pull") ||
+    title.includes("Pull")
+  )
+    return 3;
+  if (title.includes("container") || title.includes("Container")) return 4;
+  if (
+    title.includes("health") ||
+    title.includes("ready") ||
+    title.includes("healthy")
+  )
+    return 5;
+  if (
+    title.includes("Tailscale") ||
+    title.includes("network") ||
+    title.includes("Opening")
+  )
+    return 6;
   return 0;
 }
 
 function progressDiagnosticsLine(title, explicitDetail) {
-  if (typeof explicitDetail === 'string' && explicitDetail.trim().length > 0) {
+  if (typeof explicitDetail === "string" && explicitDetail.trim().length > 0) {
     return explicitDetail.trim();
   }
-  const m = String(title || '').match(/^Step \d+\/\d+ - [^:]+: (.+)$/);
-  return m ? m[1].trim() : String(title || '').trim();
+  const m = String(title || "").match(/^Step \d+\/\d+ - [^:]+: (.+)$/);
+  return m ? m[1].trim() : String(title || "").trim();
 }
 
 function showProgress(message) {
-  const update = (typeof message === 'object' && message !== null)
-    ? message
-    : { title: String(message || '') };
-  if (typeof update.title === 'string' && update.title.trim().length > 0) {
+  const update =
+    typeof message === "object" && message !== null
+      ? message
+      : { title: String(message || "") };
+  if (typeof update.title === "string" && update.title.trim().length > 0) {
     _progressState.title = update.title;
   }
-  if (typeof update.detail === 'string') {
+  if (typeof update.detail === "string") {
     _progressState.detail = update.detail;
   }
 
   const idx = _activeStepIndex(_progressState.title);
 
   if (_progressWin) {
-    _progressWin.webContents.send('progress:step', idx);
-    const logLine = progressDiagnosticsLine(_progressState.title, update.detail);
+    _progressWin.webContents.send("progress:step", idx);
+    const logLine = progressDiagnosticsLine(
+      _progressState.title,
+      update.detail,
+    );
     if (logLine) {
-      _progressWin.webContents.send('progress:log', logLine);
+      _progressWin.webContents.send("progress:log", logLine);
     }
     return;
   }
@@ -158,61 +215,64 @@ function showProgress(message) {
     closable: true,
     alwaysOnTop: true,
     frame: true,
-    title: 'Fox in the Box — Setting up',
+    title: "Fox in the Box — Setting up",
     icon: APP_ICON,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      preload: path.join(__dirname, 'preload-progress.js'),
+      preload: path.join(__dirname, "preload-progress.js"),
     },
   });
 
-  _progressWin.on('closed', async () => {
+  _progressWin.on("closed", async () => {
     _progressWin = null;
     if (_setupInProgress && !_fatalStartup) {
-      log.info('[startup] Setup progress window closed during installation');
+      log.info("[startup] Setup progress window closed during installation");
       const parent = getDialogParent();
       const { response } = await dialog.showMessageBox(parent, {
-        type: 'warning',
-        title: 'Quit setup?',
-        message: 'Fox in the box setup is still in progress.',
+        type: "warning",
+        title: "Quit setup?",
+        message: "Fox in the box setup is still in progress.",
         detail:
-          'Docker may still be starting in the background. If you quit now, reopen Fox from the Start menu to continue.',
-        buttons: ['Quit setup', 'Keep waiting'],
+          "Docker may still be starting in the background. If you quit now, reopen Fox from the Start menu to continue.",
+        buttons: ["Quit setup", "Keep waiting"],
         defaultId: 1,
         cancelId: 1,
       });
       if (response !== 0) {
-        showProgress(_progressState.title || 'Setting up…');
+        showProgress(_progressState.title || "Setting up…");
         return;
       }
     }
     app.quit();
   });
 
-  _progressWin.loadFile(path.join(__dirname, '..', 'assets', 'progress.html'));
+  _progressWin.loadFile(path.join(__dirname, "..", "assets", "progress.html"));
   _progressWin.setMenu(null);
 
   // Send current state once the page is ready. Use _progressState at fire time,
   // not the idx captured at window-creation time (startup may have advanced).
-  _progressWin.webContents.once('did-finish-load', () => {
+  _progressWin.webContents.once("did-finish-load", () => {
     if (!_progressWin || _progressWin.isDestroyed()) return;
     const currentIdx = _activeStepIndex(_progressState.title);
-    _progressWin.webContents.send('progress:step', currentIdx);
-    const logLine = progressDiagnosticsLine(_progressState.title, _progressState.detail);
+    _progressWin.webContents.send("progress:step", currentIdx);
+    const logLine = progressDiagnosticsLine(
+      _progressState.title,
+      _progressState.detail,
+    );
     if (logLine) {
-      _progressWin.webContents.send('progress:log', logLine);
+      _progressWin.webContents.send("progress:log", logLine);
     }
   });
 }
 
 function closeProgress() {
   if (_progressWin) {
-    _progressWin.removeAllListeners('closed');
+    _progressWin.removeAllListeners("closed");
     _progressWin.destroy();
     _progressWin = null;
   }
-  _progressState = { title: '', detail: '' };
+  _progressState = { title: "", detail: "" };
 }
 
 // v0.7.16 #324: when external installers (Docker Desktop, winget, UAC) are
@@ -225,7 +285,7 @@ function setForegroundYield(shouldYield) {
   try {
     _progressWin.setAlwaysOnTop(!shouldYield);
   } catch (err) {
-    log.debug('setForegroundYield failed:', err.message);
+    log.debug("setForegroundYield failed:", err.message);
   }
 }
 
@@ -242,42 +302,48 @@ function buildDiagnosticsText({
   diagnostics,
 }) {
   return [
-    `Session ID: ${sessionId || 'n/a'}`,
-    `Phase: ${phase || 'unknown'}`,
-    `Error code: ${code || 'UNSPECIFIED'}`,
-    `Message: ${message || 'Unknown error'}`,
+    `Session ID: ${sessionId || "n/a"}`,
+    `Phase: ${phase || "unknown"}`,
+    `Error code: ${code || "UNSPECIFIED"}`,
+    `Message: ${message || "Unknown error"}`,
     `Remediation: ${remediation}`,
-    `Log path: ${path.join(app.getPath('logs'), 'main.log')}`,
-    '',
-    'Docker diagnostics:',
+    `Log path: ${path.join(app.getPath("logs"), "main.log")}`,
+    "",
+    "Docker diagnostics:",
     JSON.stringify(diagnostics || {}, null, 2),
-  ].join('\n');
+  ].join("\n");
 }
 
 // Error data stored here so the preload's ipcMain.handle can return it synchronously.
 let _errorData = null;
 
 function showError(details) {
-  if (typeof details === 'string') {
+  if (typeof details === "string") {
     details = {
       message: details,
-      remediation: 'Install Docker Desktop manually and relaunch Fox in the box.',
+      remediation:
+        "Install Docker Desktop manually and relaunch Fox in the box.",
       diagnosticsText: details,
     };
   }
   const {
-    sessionId = 'n/a',
-    phase = 'unknown',
-    code = 'UNSPECIFIED',
-    message = 'Unknown startup error',
-    remediation = 'Check diagnostics and retry.',
-    diagnosticsText = '',
+    sessionId = "n/a",
+    phase = "unknown",
+    code = "UNSPECIFIED",
+    message = "Unknown startup error",
+    remediation = "Check diagnostics and retry.",
+    diagnosticsText = "",
   } = details;
   closeProgress();
 
   _errorData = {
-    sessionId, phase, code, message, remediation, diagnosticsText,
-    logPath: path.join(app.getPath('logs'), 'main.log'),
+    sessionId,
+    phase,
+    code,
+    message,
+    remediation,
+    diagnosticsText,
+    logPath: path.join(app.getPath("logs"), "main.log"),
   };
 
   const win = new BrowserWindow({
@@ -289,32 +355,32 @@ function showError(details) {
     closable: true,
     alwaysOnTop: true,
     frame: true,
-    title: 'Fox in the Box — Error',
+    title: "Fox in the Box — Error",
     icon: APP_ICON,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      preload: path.join(__dirname, 'preload-error.js'),
+      preload: path.join(__dirname, "preload-error.js"),
     },
   });
 
-  ipcMain.handleOnce('error:get-data', () => _errorData);
-  ipcMain.once('error:copy', () => {
+  ipcMain.handleOnce("error:get-data", () => _errorData);
+  ipcMain.once("error:copy", () => {
     clipboard.writeText(diagnosticsText);
     dialog.showMessageBox(win, {
-      type: 'info',
-      message: 'Diagnostics copied to clipboard.',
-      buttons: ['OK'],
+      type: "info",
+      message: "Diagnostics copied to clipboard.",
+      buttons: ["OK"],
     });
   });
-  ipcMain.once('error:close', () => win.close());
-  ipcMain.once('error:open-diagnostic', () => openDiagnosticWindow());
+  ipcMain.once("error:close", () => win.close());
+  ipcMain.once("error:open-diagnostic", () => openDiagnosticWindow());
 
-  win.loadFile(path.join(__dirname, '..', 'assets', 'error.html'));
+  win.loadFile(path.join(__dirname, "..", "assets", "error.html"));
   win.setMenu(null);
 
-  win.on('closed', () => {
-    ipcMain.removeAllListeners('error:open-diagnostic');
+  win.on("closed", () => {
+    ipcMain.removeAllListeners("error:open-diagnostic");
     _errorData = null;
     if (_fatalStartup) app.exit(1);
   });
@@ -330,9 +396,9 @@ function openDiagnosticWindow() {
     return;
   }
 
-  ipcMain.removeHandler('diagnostic:gather');
-  ipcMain.removeAllListeners('diagnostic:copy');
-  ipcMain.removeAllListeners('diagnostic:close');
+  ipcMain.removeHandler("diagnostic:gather");
+  ipcMain.removeAllListeners("diagnostic:copy");
+  ipcMain.removeAllListeners("diagnostic:close");
 
   _diagnosticWin = new BrowserWindow({
     width: 640,
@@ -343,51 +409,53 @@ function openDiagnosticWindow() {
     closable: true,
     alwaysOnTop: true,
     frame: true,
-    title: 'Fox in the Box — Diagnostic Report',
+    title: "Fox in the Box — Diagnostic Report",
     icon: APP_ICON,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      preload: path.join(__dirname, 'preload-diagnostic.js'),
+      preload: path.join(__dirname, "preload-diagnostic.js"),
     },
   });
 
-  ipcMain.handle('diagnostic:gather', async () => {
+  ipcMain.handle("diagnostic:gather", async () => {
     try {
       const report = await diagnosticReport.gatherDiagnosticReport({
         dockerManager: docker,
-        logPath: path.join(app.getPath('logs'), 'main.log'),
+        logPath: path.join(app.getPath("logs"), "main.log"),
         foxVersion: app.getVersion(),
       });
       return diagnosticReport.formatAsMarkdown(report);
     } catch (err) {
-      log.error('Diagnostic report gather failed:', err);
+      log.error("Diagnostic report gather failed:", err);
       return null;
     }
   });
 
-  ipcMain.once('diagnostic:copy', (_event, text) => {
+  ipcMain.once("diagnostic:copy", (_event, text) => {
     clipboard.writeText(text);
     if (_diagnosticWin && !_diagnosticWin.isDestroyed()) {
       dialog.showMessageBox(_diagnosticWin, {
-        type: 'info',
-        message: 'Diagnostic report copied to clipboard.',
-        buttons: ['OK'],
+        type: "info",
+        message: "Diagnostic report copied to clipboard.",
+        buttons: ["OK"],
       });
     }
   });
 
-  ipcMain.once('diagnostic:close', () => {
+  ipcMain.once("diagnostic:close", () => {
     if (_diagnosticWin && !_diagnosticWin.isDestroyed()) _diagnosticWin.close();
   });
 
-  _diagnosticWin.loadFile(path.join(__dirname, '..', 'assets', 'diagnostic.html'));
+  _diagnosticWin.loadFile(
+    path.join(__dirname, "..", "assets", "diagnostic.html"),
+  );
   _diagnosticWin.setMenu(null);
 
-  _diagnosticWin.on('closed', () => {
-    ipcMain.removeHandler('diagnostic:gather');
-    ipcMain.removeAllListeners('diagnostic:copy');
-    ipcMain.removeAllListeners('diagnostic:close');
+  _diagnosticWin.on("closed", () => {
+    ipcMain.removeHandler("diagnostic:gather");
+    ipcMain.removeAllListeners("diagnostic:copy");
+    ipcMain.removeAllListeners("diagnostic:close");
     _diagnosticWin = null;
   });
 }
@@ -397,48 +465,60 @@ function openDiagnosticWindow() {
 // main.js wires up the Electron-specific deps (showProgress, showRebootRequired, spawn).
 
 function spawnDetached(exe) {
-  spawn(exe, [], { detached: true, stdio: 'ignore', shell: true }).unref();
+  spawn(exe, [], { detached: true, stdio: "ignore", shell: true }).unref();
 }
 
 async function ensureDockerWindows(progressCb = showProgress) {
   // #356: Show a one-time heads-up before Docker Desktop's first launch.
   // Docker requires ToS acceptance + free account sign-up on first run,
   // which pops up unexpectedly and confuses users into thinking Fox broke.
-  const dockerTosFlag = path.join(app.getPath('userData'), '.docker-tos-shown');
+  const dockerTosFlag = path.join(app.getPath("userData"), ".docker-tos-shown");
   if (!fs.existsSync(dockerTosFlag)) {
-    const dockerConfigPath = path.join(os.homedir(), 'AppData', 'Roaming', 'Docker', 'settings.json');
+    const dockerConfigPath = path.join(
+      os.homedir(),
+      "AppData",
+      "Roaming",
+      "Docker",
+      "settings.json",
+    );
     const dockerAlreadyConfigured = fs.existsSync(dockerConfigPath);
     if (!dockerAlreadyConfigured) {
       await dialog.showMessageBox(getDialogParent(), {
-        type: 'info',
-        title: 'Fox in the Box — Docker setup',
-        message: 'Docker Desktop is about to start.',
+        type: "info",
+        title: "Fox in the Box — Docker setup",
+        message: "Docker Desktop is about to start.",
         detail:
-          'Docker Desktop will ask you to accept their Terms of Service and sign up for a free Docker account.\n\n'
-          + 'This is normal — just follow the Docker window that appears. '
-          + 'Once you\'re done, Fox will continue automatically.',
-        buttons: ['Got it'],
+          "Docker Desktop will ask you to accept their Terms of Service and sign up for a free Docker account.\n\n" +
+          "This is normal — just follow the Docker window that appears. " +
+          "Once you're done, Fox will continue automatically.",
+        buttons: ["Got it"],
         defaultId: 0,
       });
-      try { fs.writeFileSync(dockerTosFlag, '1'); } catch (_) {}
+      try {
+        fs.writeFileSync(dockerTosFlag, "1");
+      } catch (_) {}
     }
   }
 
   return _ensureDockerWindows({
     isDaemonRunning: () => docker.isDaemonRunning(),
-    waitForDaemon: (ms, sp, phaseStartedAt) => _waitForDaemon(
-      () => docker.isDaemonRunning(),
-      ms || 90_000,
-      1_000,
-      Date.now,
-      (t) => new Promise((r) => setTimeout(r, t)),
-      sp || progressCb,
-      phaseStartedAt
-    ),
-    runCommand: (cmd, opts) => _runCommandVerbose(cmd, { windowsHide: true, ...opts }, (line) => showProgress({ detail: line })),
+    waitForDaemon: (ms, sp, phaseStartedAt) =>
+      _waitForDaemon(
+        () => docker.isDaemonRunning(),
+        ms || 90_000,
+        1_000,
+        Date.now,
+        (t) => new Promise((r) => setTimeout(r, t)),
+        sp || progressCb,
+        phaseStartedAt,
+      ),
+    runCommand: (cmd, opts) =>
+      _runCommandVerbose(cmd, { windowsHide: true, ...opts }, (line) =>
+        showProgress({ detail: line }),
+      ),
     spawnDetached,
     showProgress: progressCb,
-    showRebootRequired: () => showDaemonRecoveryRequired('win32'),
+    showRebootRequired: () => showDaemonRecoveryRequired("win32"),
     showError,
     setForegroundYield,
     resumeAfterReboot,
@@ -448,48 +528,84 @@ async function ensureDockerWindows(progressCb = showProgress) {
 // ─── macOS Docker install (kept separate) ────────────────────────────────────
 
 async function installDockerMac(progressCb = showProgress) {
+  // #749: if Docker Desktop is already installed, never touch Homebrew —
+  // `brew install --cask docker` upgrades an existing outdated cask,
+  // which restarts Docker and stops running containers without consent.
+  // A present-but-stopped Docker just needs to be started; if it's
+  // genuinely broken, the existing MAC_DOCKER_LAUNCH_FAILED /
+  // DAEMON_NOT_READY paths tell the user what to do. Homebrew (with its
+  // implicit upgrade of stale cask remnants) runs only when Docker
+  // Desktop is absent.
+  if (fs.existsSync("/Applications/Docker.app")) {
+    log.info(
+      "Docker Desktop already installed — starting it instead of (re)installing",
+    );
+    progressCb({ detail: "Docker Desktop already installed — starting it…" });
+    try {
+      await _runCommandVerbose("open -a Docker", { timeout: 20_000 }, (line) =>
+        showProgress({ detail: line }),
+      );
+    } catch (err) {
+      const openErr = new Error(
+        "Docker Desktop is installed but could not be started automatically. Open Docker Desktop manually and approve any security/helper prompts.",
+      );
+      openErr.code = "MAC_DOCKER_LAUNCH_FAILED";
+      openErr.cause = err;
+      throw openErr;
+    }
+    await new Promise((r) => setTimeout(r, 1000));
+    return;
+  }
+
   const { response } = await dialog.showMessageBox(getDialogParent(), {
-    type: 'question',
-    buttons: ['Install Docker', 'Cancel'],
+    type: "question",
+    buttons: ["Install Docker", "Cancel"],
     defaultId: 0,
     cancelId: 1,
-    title: 'Docker not found',
-    message: 'Docker Desktop is required but was not found.',
-    detail: 'Fox in the box will install it via Homebrew.\n\nThis may take a few minutes.',
+    title: "Docker not found",
+    message: "Docker Desktop is required but was not found.",
+    detail:
+      "Fox in the box will install it via Homebrew.\n\nThis may take a few minutes.",
   });
 
-  if (response !== 0) throw new Error('User cancelled Docker installation');
+  if (response !== 0) throw new Error("User cancelled Docker installation");
 
   try {
-    await _runCommandVerbose('brew --version', { timeout: 20_000 });
+    await _runCommandVerbose("brew --version", { timeout: 20_000 });
   } catch (err) {
     const brewErr = new Error(
-      'Homebrew is not installed or not available in PATH.\nInstall Homebrew from https://brew.sh, then relaunch Fox in the box.'
+      "Homebrew is not installed or not available in PATH.\nInstall Homebrew from https://brew.sh, then relaunch Fox in the box.",
     );
-    brewErr.code = 'BREW_NOT_FOUND';
+    brewErr.code = "BREW_NOT_FOUND";
     brewErr.cause = err;
     throw brewErr;
   }
 
-  log.info('Installing Docker via Homebrew');
+  log.info("Installing Docker via Homebrew");
   try {
-    await _runCommandVerbose('brew install --cask docker', { timeout: 15 * 60 * 1000 }, (line) => showProgress({ detail: line }));
+    await _runCommandVerbose(
+      "brew install --cask docker",
+      { timeout: 15 * 60 * 1000 },
+      (line) => showProgress({ detail: line }),
+    );
   } catch (err) {
     const brewInstallErr = new Error(
-      'Failed to install Docker Desktop via Homebrew. Check your network/proxy settings and Homebrew health, then retry.'
+      "Failed to install Docker Desktop via Homebrew. Check your network/proxy settings and Homebrew health, then retry.",
     );
-    brewInstallErr.code = 'BREW_INSTALL_FAILED';
+    brewInstallErr.code = "BREW_INSTALL_FAILED";
     brewInstallErr.cause = err;
     throw brewInstallErr;
   }
 
   try {
-    await _runCommandVerbose('open -a Docker', { timeout: 20_000 }, (line) => showProgress({ detail: line }));
+    await _runCommandVerbose("open -a Docker", { timeout: 20_000 }, (line) =>
+      showProgress({ detail: line }),
+    );
   } catch (err) {
     const openErr = new Error(
-      'Docker Desktop installed but could not be opened automatically. Open Docker Desktop manually and approve any security/helper prompts.'
+      "Docker Desktop installed but could not be opened automatically. Open Docker Desktop manually and approve any security/helper prompts.",
     );
-    openErr.code = 'MAC_DOCKER_LAUNCH_FAILED';
+    openErr.code = "MAC_DOCKER_LAUNCH_FAILED";
     openErr.cause = err;
     throw openErr;
   }
@@ -502,22 +618,23 @@ async function showDaemonRecoveryRequired(platform) {
   // close it first so the prompt is visible and not stacked underneath.
   closeProgress();
 
-  if (platform === 'win32') {
+  if (platform === "win32") {
     // v0.7.16 #325: register the RunOnce resume BEFORE the user sees the
     // dialog, so the "will continue automatically after restart" line is
     // truthful at the moment we make the promise. If the registration
     // fails, the dialog copy below would be a lie — registerWindowsRunOnceResume
     // logs but does not throw, so detect that we have an exe path at least.
-    await registerWindowsRunOnceResume(app.getPath('exe'));
+    await registerWindowsRunOnceResume(app.getPath("exe"));
     const { response } = await dialog.showMessageBox(getDialogParent(), {
-      type: 'warning',
-      title: 'Restart required to finish Docker setup',
-      message: 'Docker Desktop needs a restart before Fox in the box can continue.',
+      type: "warning",
+      title: "Restart required to finish Docker setup",
+      message:
+        "Docker Desktop needs a restart before Fox in the box can continue.",
       detail:
-        'Fox in the box will resume installation automatically after your PC restarts — '
-        + 'you do not need to re-launch the installer manually.\n\n'
-        + 'Save any unsaved work in other apps before clicking Restart now.',
-      buttons: ['Restart now', 'I\'ll restart later'],
+        "Fox in the box will resume installation automatically after your PC restarts — " +
+        "you do not need to re-launch the installer manually.\n\n" +
+        "Save any unsaved work in other apps before clicking Restart now.",
+      buttons: ["Restart now", "I'll restart later"],
       defaultId: 0,
       cancelId: 1,
     });
@@ -528,64 +645,72 @@ async function showDaemonRecoveryRequired(platform) {
     return;
   }
 
-  if (platform === 'darwin') {
+  if (platform === "darwin") {
     const { response } = await dialog.showMessageBox(getDialogParent(), {
-      type: 'warning',
-      title: 'Docker not ready',
-      message: 'Docker Desktop is installed but daemon is not ready yet.',
-      detail: 'Open Docker Desktop and wait until it says it is running. Approve any helper/Gatekeeper prompts in System Settings, then reopen Fox in the box.',
-      buttons: ['Open Docker Desktop', 'Close'],
+      type: "warning",
+      title: "Docker not ready",
+      message: "Docker Desktop is installed but daemon is not ready yet.",
+      detail:
+        "Open Docker Desktop and wait until it says it is running. Approve any helper/Gatekeeper prompts in System Settings, then reopen Fox in the box.",
+      buttons: ["Open Docker Desktop", "Close"],
       defaultId: 0,
       cancelId: 1,
     });
     if (response === 0) {
       try {
-        await shell.openExternal('docker-desktop://dashboard');
+        await shell.openExternal("docker-desktop://dashboard");
       } catch (_) {
-        exec('open -a Docker');
+        exec("open -a Docker");
       }
     }
   }
 }
 
 function getRemediationForCode(code, platform) {
-  if (code === 'DAEMON_LOST_DURING_HEALTH') {
-    return 'Docker daemon stopped while services were starting. Restart Docker Desktop and relaunch Fox in the box.';
+  if (code === "DAEMON_LOST_DURING_HEALTH") {
+    return "Docker daemon stopped while services were starting. Restart Docker Desktop and relaunch Fox in the box.";
   }
-  if (code === 'CONTAINER_MISSING_DURING_HEALTH' || code === 'CONTAINER_NOT_RUNNING_DURING_HEALTH') {
-    return 'Container stopped unexpectedly during startup. Check Docker Desktop container logs and retry.';
+  if (
+    code === "CONTAINER_MISSING_DURING_HEALTH" ||
+    code === "CONTAINER_NOT_RUNNING_DURING_HEALTH"
+  ) {
+    return "Container stopped unexpectedly during startup. Check Docker Desktop container logs and retry.";
   }
-  if (code === 'BREW_NOT_FOUND') {
-    return 'Install Homebrew from https://brew.sh, then relaunch Fox in the box.';
+  if (code === "BREW_NOT_FOUND") {
+    return "Install Homebrew from https://brew.sh, then relaunch Fox in the box.";
   }
-  if (code === 'BREW_INSTALL_FAILED') {
-    return 'Run brew doctor and brew install --cask docker manually, then relaunch Fox in the box.';
+  if (code === "BREW_INSTALL_FAILED") {
+    return "Run brew doctor and brew install --cask docker manually, then relaunch Fox in the box.";
   }
-  if (code === 'MAC_DOCKER_LAUNCH_FAILED') {
-    return 'Open Docker Desktop manually from Applications and approve security/helper prompts.';
+  if (code === "MAC_DOCKER_LAUNCH_FAILED") {
+    return "Open Docker Desktop manually from Applications and approve security/helper prompts.";
   }
-  if (code === 'WSL_NOT_INITIALIZED' || code === 'WSL_BACKEND_MISSING') {
-    return 'Open an elevated PowerShell and run: wsl --install --no-distribution && wsl --update, reboot, then launch Docker Desktop and retry.';
+  if (code === "WSL_NOT_INITIALIZED" || code === "WSL_BACKEND_MISSING") {
+    return "Open an elevated PowerShell and run: wsl --install --no-distribution && wsl --update, reboot, then launch Docker Desktop and retry.";
   }
-  if (code === 'DOCKER_DESKTOP_NOT_RUNNING') {
-    return 'Open Docker Desktop manually and wait until it shows Docker Engine running, then relaunch Fox in the box.';
+  if (code === "DOCKER_DESKTOP_NOT_RUNNING") {
+    return "Open Docker Desktop manually and wait until it shows Docker Engine running, then relaunch Fox in the box.";
   }
-  if (code === 'DOCKER_DESKTOP_LAUNCH_FAILED') {
-    return 'Docker Desktop launch failed. Start Docker Desktop manually (as Administrator if needed), then retry.';
+  if (code === "DOCKER_DESKTOP_LAUNCH_FAILED") {
+    return "Docker Desktop launch failed. Start Docker Desktop manually (as Administrator if needed), then retry.";
   }
-  if (code === 'DAEMON_NOT_READY') {
-    if (platform === 'win32') return 'Start Docker Desktop manually, wait until it reports running, then relaunch Fox in the box.';
-    return 'Open Docker Desktop and wait for daemon readiness, then relaunch Fox in the box.';
+  if (code === "DAEMON_NOT_READY") {
+    if (platform === "win32")
+      return "Start Docker Desktop manually, wait until it reports running, then relaunch Fox in the box.";
+    return "Open Docker Desktop and wait for daemon readiness, then relaunch Fox in the box.";
   }
-  if (code === 'DOCKER_WINDOWS_CONTAINERS_MODE') {
+  if (code === "DOCKER_WINDOWS_CONTAINERS_MODE") {
     // v0.7.11 #291: Docker IS running but in the wrong mode. There's no
     // recovery to attempt — the user has to flip the switch themselves.
     return 'Docker Desktop is in Windows-containers mode. Fox needs Linux containers. Right-click the Docker Desktop tray icon → "Switch to Linux containers..." → wait for it to finish, then relaunch Fox in the box.';
   }
-  if (code === 'IMAGE_PULL_TIMEOUT') return 'Check network connectivity and retry. Corporate proxies/firewalls can block container pulls.';
-  if (code === 'HEALTH_TIMEOUT') return 'Container started but app is not healthy yet. Wait a bit longer or restart Docker and try again.';
-  if (code === 'ACCESS_MODE_CANCELLED') return 'Relaunch Fox in the box and pick a network option, or set FOX_ACCESS_MODE=1|2|3 before starting.';
-  return 'Check diagnostics and logs, then retry.';
+  if (code === "IMAGE_PULL_TIMEOUT")
+    return "Check network connectivity and retry. Corporate proxies/firewalls can block container pulls.";
+  if (code === "HEALTH_TIMEOUT")
+    return "Container started but app is not healthy yet. Wait a bit longer or restart Docker and try again.";
+  if (code === "ACCESS_MODE_CANCELLED")
+    return "Relaunch Fox in the box and pick a network option, or set FOX_ACCESS_MODE=1|2|3 before starting.";
+  return "Check diagnostics and logs, then retry.";
 }
 
 // Poll /api/tailscale/status until it returns a tailnet_url or we time out.
@@ -594,12 +719,14 @@ async function pollTailscaleUrl(timeoutMs = 30_000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     try {
-      const res = await fetch('http://127.0.0.1:8787/api/tailscale/status');
+      const res = await fetch("http://127.0.0.1:8787/api/tailscale/status");
       if (res.ok) {
         const data = await res.json();
         if (data && data.tailnet_url) return data.tailnet_url;
       }
-    } catch (_) { /* not yet */ }
+    } catch (_) {
+      /* not yet */
+    }
     await new Promise((r) => setTimeout(r, 2_000));
   }
   return null;
@@ -607,26 +734,28 @@ async function pollTailscaleUrl(timeoutMs = 30_000) {
 
 async function openFox(tailnetUrl) {
   const mode = docker.getEffectiveAccessMode();
-  if ((mode === '2' || mode === '3') && tailnetUrl) {
-    const lines = mode === '3'
-      ? `Local access: http://localhost:8787\nFrom other devices: ${tailnetUrl}`
-      : `From other devices: ${tailnetUrl}`;
+  if ((mode === "2" || mode === "3") && tailnetUrl) {
+    const lines =
+      mode === "3"
+        ? `Local access: http://localhost:8787\nFrom other devices: ${tailnetUrl}`
+        : `From other devices: ${tailnetUrl}`;
     const { response } = await dialog.showMessageBox(getDialogParent(), {
-      type: 'info',
-      title: 'Fox in the box — Ready',
-      message: 'Fox in the box is ready!',
-      detail: lines + '\n\nClick OK to open Fox.',
-      buttons: ['OK', 'Copy Tailscale URL'],
+      type: "info",
+      title: "Fox in the box — Ready",
+      message: "Fox in the box is ready!",
+      detail: lines + "\n\nClick OK to open Fox.",
+      buttons: ["OK", "Copy Tailscale URL"],
       defaultId: 0,
     });
     if (response === 1) clipboard.writeText(tailnetUrl);
-  } else if ((mode === '2' || mode === '3') && !tailnetUrl) {
+  } else if ((mode === "2" || mode === "3") && !tailnetUrl) {
     await dialog.showMessageBox(getDialogParent(), {
-      type: 'info',
-      title: 'Fox in the box — Tailscale not connected yet',
-      message: 'Tailscale hasn\'t connected yet.',
-      detail: 'Open the Tailscale app, sign in if prompted, and wait until it shows "Connected".\n\nFox is opening locally in the meantime. Once Tailscale connects, your tailnet URL will be available from the Tailscale menu.',
-      buttons: ['OK'],
+      type: "info",
+      title: "Fox in the box — Tailscale not connected yet",
+      message: "Tailscale hasn't connected yet.",
+      detail:
+        'Open the Tailscale app, sign in if prompted, and wait until it shows "Connected".\n\nFox is opening locally in the meantime. Once Tailscale connects, your tailnet URL will be available from the Tailscale menu.',
+      buttons: ["OK"],
       defaultId: 0,
     });
   }
@@ -635,15 +764,15 @@ async function openFox(tailnetUrl) {
 
 async function waitForTailscale(progressCb) {
   const mode = docker.getEffectiveAccessMode();
-  if (mode !== '2' && mode !== '3') return null;
-  if (progressCb) progressCb('Waiting for Tailscale to connect…');
+  if (mode !== "2" && mode !== "3") return null;
+  if (progressCb) progressCb("Waiting for Tailscale to connect…");
   return pollTailscaleUrl(30_000);
 }
 
 async function startFromTray() {
-  showProgress('Starting Fox in the box…');
+  showProgress("Starting Fox in the box…");
   try {
-    if (typeof docker.ensureDockerAccessModeChosen === 'function') {
+    if (typeof docker.ensureDockerAccessModeChosen === "function") {
       await docker.ensureDockerAccessModeChosen({ parent: getDialogParent() });
     }
     await ensureContainerHealthy({
@@ -660,11 +789,12 @@ async function startFromTray() {
 async function handleStartupError(err) {
   _fatalStartup = true;
   closeProgress();
-  log.error('Fatal startup error:', err);
+  log.error("Fatal startup error:", err);
 
-  const phase = err instanceof StartupPhaseError ? err.phase : 'unknown';
-  const code = err.code || (err.cause && err.cause.code) || 'UNSPECIFIED';
-  const sessionId = err.details && err.details.sessionId ? err.details.sessionId : 'n/a';
+  const phase = err instanceof StartupPhaseError ? err.phase : "unknown";
+  const code = err.code || (err.cause && err.cause.code) || "UNSPECIFIED";
+  const sessionId =
+    err.details && err.details.sessionId ? err.details.sessionId : "n/a";
   const diagnostics = await docker.getDiagnostics().catch(() => ({}));
   if (err.meta) diagnostics.startupDiagnostics = err.meta;
   const remediation = getRemediationForCode(code, process.platform);
@@ -690,15 +820,16 @@ async function handleStartupError(err) {
 // ─── Main startup sequence ───────────────────────────────────────────────────
 
 async function main() {
-  log.info('Fox in the box starting up');
+  log.info("Fox in the box starting up");
   if (resumeAfterReboot) {
-    log.info('[startup] Post-reboot resume (--resume-setup)');
+    log.info("[startup] Post-reboot resume (--resume-setup)");
   }
 
-  const shortcutOk = globalShortcut.register('CommandOrControl+Shift+D', () => {
+  const shortcutOk = globalShortcut.register("CommandOrControl+Shift+D", () => {
     openDiagnosticWindow();
   });
-  if (!shortcutOk) log.warn('Failed to register diagnostic shortcut Ctrl+Shift+D');
+  if (!shortcutOk)
+    log.warn("Failed to register diagnostic shortcut Ctrl+Shift+D");
 
   _setupInProgress = true;
   let _tailnetUrl = null;
@@ -708,14 +839,15 @@ async function main() {
       waitUntilHealthy,
       ensureDockerWindows,
       installDockerMac,
-      waitForDaemon: (ms, sp) => _waitForDaemon(
-        () => docker.isDaemonRunning(),
-        ms || 180_000,
-        1_000,
-        Date.now,
-        (t) => new Promise((r) => setTimeout(r, t)),
-        sp || showProgress
-      ),
+      waitForDaemon: (ms, sp) =>
+        _waitForDaemon(
+          () => docker.isDaemonRunning(),
+          ms || 180_000,
+          1_000,
+          Date.now,
+          (t) => new Promise((r) => setTimeout(r, t)),
+          sp || showProgress,
+        ),
       showProgress,
       closeProgress,
       openOnboarding: () => openFox(_tailnetUrl),
@@ -726,7 +858,7 @@ async function main() {
       getDialogParent,
       platform: process.platform,
     });
-    if (startupOutcome && startupOutcome.outcome === 'reboot-required') {
+    if (startupOutcome && startupOutcome.outcome === "reboot-required") {
       _setupInProgress = false;
       app.quit();
       return;
