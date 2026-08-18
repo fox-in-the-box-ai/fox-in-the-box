@@ -51,7 +51,7 @@ Findings:
 - Post-idle wake behavior (the design's last open runtime question) settles cleanly — keep `--sleep-idle-seconds 120`
 - Raw `Memory.add` bypasses the breaker by design (harness detail); the plugin's own op wrappers surface errors correctly
 - spaCy/fastembed optional-extras notices appear on plugin ops — cosmetic, semantic search unaffected
-- Smoke-run OpenRouter key passed through the session transcript; rotate after the release
+- Smoke-run OpenRouter key passed through the session transcript; rotate after the release — tracked as #746 (still pending at closeout, founder action)
 
 Startup delta (measured 2026-08-18, keyless boot to `/readyz` `ready:true`, fresh volume, two runs per tag on the same Docker host):
 
@@ -61,10 +61,10 @@ CI status (release tag run 32086093272, `v0.7.60`, 2026-08-18, conclusion **succ
 
 - Build & Push amd64+arm64, Merge into manifest list, Smoke amd64+arm64, Image self-test: success
 - Build Electron macOS + Windows (signed): success
-- Build .deb amd64+arm64, .deb smoke test (22.04 constrained + 24.04 unconstrained legs — step 12 above): success
+- Build .deb amd64+arm64: success; `.deb smoke test (amd64)` (a single job — the 22.04-constrained and 24.04-unconstrained legs of step 12 run as steps inside `test_deb_install.sh`): success
 - Publish to apt.foxinthebox.ai: success; Promote container image (`:v0.7.60` + `:stable`, both multi-arch verified): success; Create GitHub Release (7 assets): success
 
-Post-release addendum (2026-08-18): the pinned-upstream note in step 11's context changed the same day — #740 advanced the container pins to webui v0.52.113 / agent v2026.8.16.2 as a container-only Option B update (`:stable` auto-advanced; no DMG/exe rebuild). Desktop v0.7.60 artifacts are unaffected.
+Post-release addendum (2026-08-18): the upstream pins this entry's smoke ran against (the entry preamble's "main @ the v0.7.60 release cut") advanced the same day — #740 moved the container to webui v0.52.113 / agent v2026.8.16.2 as a container-only Option B update (`:stable` auto-advanced; no DMG/exe rebuild). Desktop v0.7.60 artifacts are unaffected.
 
 ---
 
