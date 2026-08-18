@@ -144,7 +144,7 @@ async function runStartup({
         return { outcome: 'reboot-required' };
       }
     } else if (platform === 'darwin') {
-      installProgress('Installing Docker Desktop…');
+      installProgress('Setting up Docker Desktop…');
       await installDockerMac(installProgress);
     } else {
       throw Object.assign(new Error('Unsupported desktop platform for one-click setup'), {
