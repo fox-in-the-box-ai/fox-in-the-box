@@ -9,6 +9,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Changed
+
+- Bundled desktop Electron 42.8.0 → 43.4.0 (Chromium 150, Node 24). Verified with a packaged-app launch smoke on macOS arm64 (window renders, startup orchestrator runs, zero renderer errors, clean exit) plus the full startup test suite; Windows coverage is the CI dev-mode startup smoke — no packaged-exe install test exists yet
+
 ### Security
 
 - js-yaml resolved to 4.3.1 in both lockfiles (root pnpm-lock.yaml and packages/electron/package-lock.json), clearing all four open js-yaml advisories. Corrects the 0.7.60 record: that entry listed js-yaml 4.3.1 in its security batch, but the lockfiles still resolved 4.2.0 at release time — this change is what lands it.
