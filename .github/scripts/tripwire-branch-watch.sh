@@ -66,7 +66,8 @@ EOF
         tripwire_fire \
             "[tripwire/branch] $repo has rewrite-regex branch: $branch" \
             "$body" \
-            "tripwire-fire,tripwire/branch,P1"
+            "tripwire-fire,tripwire/branch,P1" \
+            ack_dedupe
     done <<<"$matches"
 }
 

@@ -11,14 +11,37 @@ RUN_URL="${GITHUB_SERVER_URL:-https://github.com}/${REPO}/actions/runs/${GITHUB_
 # Open or re-fire an issue. De-dupe by exact title match.
 #
 # Usage:
-#   tripwire_fire "<exact-title>" "<body markdown>" "<comma,sep,labels>"
+#   tripwire_fire "<exact-title>" "<body markdown>" "<comma,sep,labels>" [ack_dedupe]
 #
 # If an open issue with the same title exists, comment "Re-fired on
 # <RUN_URL>" + the new body on it. Otherwise create.
+#
+# Pass "ack_dedupe" as the 4th arg for tripwires whose titles name a
+# SPECIFIC subject (an upstream issue number, a branch name): a CLOSED
+# issue with the same title then counts as a human acknowledgement and
+# the fire is skipped instead of re-created (#747 re-fired nightly after
+# #723 was dispositioned). A different subject produces a different
+# title, so genuinely new conditions still fire. Do NOT use it for
+# recurring-condition tripwires with stable titles (absence, stage-batch)
+# — there a past closed issue must not suppress a future real fire.
 tripwire_fire() {
     local title="$1"
     local body="$2"
     local labels="$3"
+    local mode="${4:-}"
+
+    if [ "$mode" = "ack_dedupe" ]; then
+        local acked
+        acked=$(gh issue list --repo "$REPO" --state closed \
+                  --search "in:title \"$title\"" \
+                  --json number,title \
+                  -q ".[] | select(.title == \"$title\") | .number" \
+                  2>/dev/null | head -1)
+        if [ -n "$acked" ]; then
+            echo "[tripwire] condition previously acknowledged in closed #$acked — skipping re-fire"
+            return 0
+        fi
+    fi
 
     local existing
     existing=$(gh issue list --repo "$REPO" --state open \
