@@ -43,8 +43,10 @@
 # Install-time helper: strict anchored title/manifest patching plus canonical
 # WebUI asset copy. Invoked by install-core.sh only when WebUI overlay is enabled.
 "install_webui_branding.py" = "fox-only-additive"
-# Phase 3 — agent-side overlay. Three monkey-patch modules applied via
-# the `hermes_agent.plugins` entry-point group.
+# Phase 3 — agent-side overlay. Two monkey-patch modules applied via
+# the `hermes_agent.plugins` entry-point group. (runtime_provider was
+# deleted in the v0.52.113/v2026.8.16.2 bump — target_model routing is
+# native upstream as of v2026.8.16.2.)
 # Phase 5 and Phase 6 add webui-side entries below.
 #
 # mem0_oss relocation completed in Phase 8 follow-up #243 (2026-05-17):
@@ -54,7 +56,6 @@
 # provider discovery picks them up natively — no entry-point coupling.
 # FITB_DISABLE_AGENT_OVERLAY=1 also short-circuits this step.
 "fox_overlay.agent_plugins" = "fox-only-additive"  # register(ctx) entry-point
-"fox_overlay.agent_plugins.fox_overlay_plugin.monkey_patches.runtime_provider" = "fox-only-additive"
 "fox_overlay.agent_plugins.fox_overlay_plugin.monkey_patches.auxiliary_client" = "fox-only-additive"
 "fox_overlay.agent_plugins.fox_overlay_plugin.monkey_patches.cron_diagnostics" = "fox-only-additive"
 "fox_overlay.agent_plugins.fox_overlay_plugin.monkey_patches._helpers" = "fox-only-additive"
