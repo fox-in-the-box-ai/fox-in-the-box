@@ -15,6 +15,25 @@ source "$(dirname "$0")/tripwire-common.sh"
 
 THRESHOLD_DAYS=90
 
+# The freshness clock measures verification recency, not file churn: an
+# upstream bump re-validates the ENTIRE patch series against the new tags
+# (check-overlay-basis + CI), including patches whose files didn't need
+# regenerating. Floor every patch's age at versions.toml pinned_at so a
+# just-verified series doesn't fire on untouched files (#734 fired on a
+# patch verified the same week).
+pinned_at=$(grep -E '^pinned_at\s*=' packages/fox-overlay/versions.toml | awk -F'"' '{print $2}' || true)
+pinned_epoch=0
+if [ -n "$pinned_at" ]; then
+    pinned_epoch=$(date -u -j -f '%Y-%m-%d' "$pinned_at" +%s 2>/dev/null \
+                   || date -u -d "$pinned_at" +%s 2>/dev/null \
+                   || echo 0)
+fi
+if [ "$pinned_epoch" -eq 0 ]; then
+    # Fail loud in the log: without the floor the #734 false-positive
+    # class silently returns.
+    echo "[tripwire/rebase-clock] WARN: could not parse pinned_at from versions.toml — verification floor disabled, ages are raw file ages"
+fi
+
 stale=()
 for series_dir in packages/fox-overlay/patches/webui packages/fox-overlay/patches/agent; do
     [ -d "$series_dir" ] || continue
@@ -26,10 +45,11 @@ for series_dir in packages/fox-overlay/patches/webui packages/fox-overlay/patche
         last_epoch=$(date -u -j -f '%Y-%m-%dT%H:%M:%S%z' "$last_iso" +%s 2>/dev/null \
                      || date -u -d "$last_iso" +%s 2>/dev/null \
                      || echo 0)
+        [ "$pinned_epoch" -gt "$last_epoch" ] && last_epoch=$pinned_epoch
         now_epoch=$(date -u +%s)
         age_days=$(( (now_epoch - last_epoch) / 86400 ))
         if [ "$age_days" -gt "$THRESHOLD_DAYS" ]; then
-            stale+=("\`$patch\` ($age_days days since last touch)")
+            stale+=("\`$patch\` ($age_days days since last touch or pin-verification)")
         fi
     done
 done

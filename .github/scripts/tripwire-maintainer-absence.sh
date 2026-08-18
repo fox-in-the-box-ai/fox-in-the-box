@@ -9,27 +9,42 @@ set -eu
 source "$(dirname "$0")/tripwire-common.sh"
 
 MAINTAINER="nesquena"
+# The maintainer commits under two accounts: the human account and the
+# nesquena-hermes automation/release account (confirmed 2026-08-18 —
+# daily activity moved to nesquena-hermes while the human account went
+# quiet on 2026-07-31, firing #720 as a false positive). Either account
+# counts as presence.
+MAINTAINER_ACCOUNTS="nesquena nesquena-hermes"
 WINDOW_DAYS=5
 
 since=$(date -u -v-${WINDOW_DAYS}d +%Y-%m-%dT%H:%M:%SZ 2>/dev/null \
         || date -u -d "$WINDOW_DAYS days ago" +%Y-%m-%dT%H:%M:%SZ)
 
-count=$(gh api -X GET "repos/$WEBUI_REPO/commits" \
-          -f sha="$WEBUI_BRANCH" -f author="$MAINTAINER" -f since="$since" --paginate 2>/dev/null \
-          | jq -r '.[].sha' | wc -l | tr -d ' ')
+count=0
+for acct in $MAINTAINER_ACCOUNTS; do
+    # An API failure must read as "cannot evaluate", not as zero commits —
+    # otherwise a transient GitHub outage fires a false absence alarm.
+    if ! resp=$(gh api -X GET "repos/$WEBUI_REPO/commits" \
+          -f sha="$WEBUI_BRANCH" -f author="$acct" -f since="$since" --paginate 2>&1); then
+        echo "[tripwire/absence] gh api failed for $acct — cannot evaluate: $resp"
+        exit 0
+    fi
+    c=$(printf '%s' "$resp" | jq -r '.[].sha' | wc -l | tr -d ' ')
+    count=$((count + c))
+done
 
 if [ "$count" -gt 0 ]; then
     echo "[tripwire/absence] $MAINTAINER: $count commits in last $WINDOW_DAYS days; condition clear"
     tripwire_clear \
         "[tripwire/absence] $MAINTAINER silent for $WINDOW_DAYS+ days on $WEBUI_REPO" \
-        "$MAINTAINER has $count commits in the last $WINDOW_DAYS days."
+        "Maintainer accounts (nesquena + nesquena-hermes) have $count commits in the last $WINDOW_DAYS days."
     exit 0
 fi
 
 body=$(cat <<EOF
 ## \`$MAINTAINER\` silent for $WINDOW_DAYS+ days on \`$WEBUI_REPO\`
 
-Baseline at v0.6.0: zero gaps of $WINDOW_DAYS+ silent days in 48 observed days. Today's run finds zero \`$MAINTAINER\`-authored commits to \`$WEBUI_BRANCH\` since $since.
+Baseline at v0.6.0: zero gaps of $WINDOW_DAYS+ silent days in 48 observed days. Today's run finds zero commits authored by any maintainer account (\`nesquena\`, \`nesquena-hermes\`) to \`$WEBUI_BRANCH\` since $since.
 
 ## Why this matters
 
