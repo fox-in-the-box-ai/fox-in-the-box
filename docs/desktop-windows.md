@@ -49,10 +49,11 @@ container is healthy; first-run setup is the native hermes-webui flow. The
 former Fox custom setup wizard and its `/setup` route were removed in favor
 of the native flow.
 
-## Known desktop issues
+## Resolved desktop issues (fixed on main, ship with the next release)
 
 - **#748** — launching the packaged app from a terminal whose stdout closes
-  produces an `EPIPE` uncaught-exception dialog (electron-log console
-  transport). Finder/Start-menu launches are unaffected.
-- **#749** — on macOS, guided setup may run `brew upgrade` on an existing
-  Docker Desktop install without asking (design decision pending).
+  no longer crashes with an `EPIPE` dialog; stream errors are guarded before
+  the first log write.
+- **#749** — guided setup on macOS never touches Homebrew when Docker
+  Desktop is already installed: a present-but-stopped Docker is started,
+  not (re)installed or upgraded.

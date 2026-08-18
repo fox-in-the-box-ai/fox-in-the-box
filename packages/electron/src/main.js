@@ -1,5 +1,10 @@
 'use strict';
 
+// Must run before anything can write to the console (#748): a closed
+// stdout pipe otherwise crashes the app on the first log line.
+const { installStdioGuard } = require('./stdio-guard');
+installStdioGuard();
+
 const { app, BrowserWindow, dialog, shell, clipboard, ipcMain, globalShortcut } = require('electron');
 const { spawn, exec } = require('child_process');
 const path = require('path');
@@ -448,6 +453,37 @@ async function ensureDockerWindows(progressCb = showProgress) {
 // ─── macOS Docker install (kept separate) ────────────────────────────────────
 
 async function installDockerMac(progressCb = showProgress) {
+  // #749: if Docker Desktop is already installed, never touch Homebrew —
+  // `brew install --cask docker` upgrades an existing outdated cask,
+  // which restarts Docker and stops running containers without consent.
+  // A present-but-stopped Docker just needs to be started; if it's
+  // genuinely broken, the existing MAC_DOCKER_LAUNCH_FAILED /
+  // DAEMON_NOT_READY paths tell the user what to do. Homebrew (with its
+  // implicit upgrade of stale cask remnants) runs only when Docker
+  // Desktop is absent from both install locations.
+  const dockerAppPaths = [
+    '/Applications/Docker.app',
+    path.join(os.homedir(), 'Applications', 'Docker.app'),
+  ];
+  if (dockerAppPaths.some((p) => fs.existsSync(p))) {
+    log.info('Docker Desktop already installed — starting it instead of (re)installing');
+    progressCb({ detail: 'Docker Desktop already installed — starting it…' });
+    try {
+      await _runCommandVerbose('open -a Docker', { timeout: 20_000 }, (line) => showProgress({ detail: line }));
+    } catch (err) {
+      const openErr = new Error(
+        'Docker Desktop is installed but could not be started automatically. Open Docker Desktop manually and approve any security/helper prompts.'
+      );
+      openErr.code = 'MAC_DOCKER_LAUNCH_FAILED';
+      openErr.cause = err;
+      throw openErr;
+    }
+    // Give Docker.app a beat to register with launchd before the
+    // orchestrator's docker_start phase begins its 180s daemon wait.
+    await new Promise((r) => setTimeout(r, 1000));
+    return;
+  }
+
   const { response } = await dialog.showMessageBox(getDialogParent(), {
     type: 'question',
     buttons: ['Install Docker', 'Cancel'],

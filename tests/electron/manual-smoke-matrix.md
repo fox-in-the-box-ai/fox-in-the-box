@@ -18,7 +18,7 @@ This matrix validates that desktop users can reach web onboarding in one click.
 2. Docker installed but stopped:
    - Stop Docker Desktop.
    - Launch app and verify daemon wait/recovery flow, then onboarding opens.
-   - **Assert no unprompted upgrade:** with an existing Docker Desktop install, the guided setup must not run `brew upgrade`/installer flows without explicit consent (#749 — design decision pending; record observed behavior).
+   - **Assert no unprompted upgrade (fixed, #749):** with Docker Desktop installed, the guided setup must start it (`open -a Docker`) and must never invoke Homebrew — install/upgrade runs only when `/Applications/Docker.app` is absent.
 3. Slow image pull:
    - Clear local image `ghcr.io/fox-in-the-box-ai/cloud:stable`.
    - Throttle network.
@@ -29,9 +29,9 @@ This matrix validates that desktop users can reach web onboarding in one click.
 5. Existing stopped named container:
    - Leave stopped `fox-in-the-box` container present.
    - Launch app and verify container is reused/started (no name-conflict crash).
-6. Terminal launch with closed stdout (#748):
+6. Terminal launch with closed stdout (#748, fixed):
    - Launch the packaged binary from a shell, then close/kill the parent shell.
-   - Verify no `EPIPE` uncaught-exception dialog (currently FAILS — known issue #748; record until fixed).
+   - Verify no `EPIPE` uncaught-exception dialog (stdio guard swallows stream errors; file logging unaffected).
 
 ## One-Click Success Assertion
 
