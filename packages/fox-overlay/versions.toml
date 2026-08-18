@@ -10,20 +10,21 @@
 # for shell-friendly grepping.
 
 [upstream]
-hermes_webui_tag = "v0.52.0"
+hermes_webui_tag = "v0.52.113"
 hermes_webui_url = "https://github.com/nesquena/hermes-webui"
-hermes_agent_tag = "v2026.7.7.2"
+hermes_agent_tag = "v2026.8.16.2"
 hermes_agent_url = "https://github.com/NousResearch/hermes-agent"
 
 [meta]
-pinned_at = "2026-07-10"
-pinned_in_pr = "fox-in-the-box-ai/fox-in-the-box#644"
+pinned_at = "2026-08-17"
+pinned_in_pr = "fox-in-the-box-ai/fox-in-the-box#690"
 phase = "option-b-bump"
-notes = "Major upstream bump webui v0.51.537 to v0.52.0, agent v2026.6.19 to v2026.7.7.2. 7/9 webui patches regenerated; 2 colon-split fixes (007/008) apply cleanly unchanged. Agent patch unchanged."
+notes = "Post-freeze bump webui v0.52.0 to v0.52.113 (latest stable; exp-v0.52.2xx series is prerelease and excluded), agent v2026.7.7.2 to v2026.8.16.2. One webui patch regenerated (001-server-py-bootstrap); agent patch applies unchanged. Note: agent tag ships case-colliding contributors/emails files — macOS checkouts show phantom submodule dirt (upstream report pending)."
 
 [history]
 prior_pins = [
   # newest first
+  "webui=v0.52.0, agent=v2026.7.7.2 -- upstream bump #644 (2026-07-10)",
   "webui=v0.51.537, agent=v2026.6.19 -- patch refresh bump #604 (2026-06-20)",
   "webui=v0.51.528, agent=v2026.6.19 -- patch refresh bump #566 (2026-06-20)",
   "webui=v0.51.475, agent=v2026.6.5 -- patch refresh bump #546 (2026-06-17)",
