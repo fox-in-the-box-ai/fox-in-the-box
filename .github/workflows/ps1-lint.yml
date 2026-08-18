@@ -1,0 +1,70 @@
+# PowerShell lint for the support scripts (#759).
+#
+# packages/scripts/*.ps1 had zero CI exercise: a parse error or path
+# regression was invisible until a user ran the script on Windows —
+# #754/#758 shipped and reviewed blind because of it (and the arm64 dev
+# host has no pwsh). PSScriptAnalyzer runs on every PR touching the
+# scripts; parse errors and Error-severity findings fail the job.
+#
+# NOT a required branch-protection context (a path-filtered job never
+# reports on unrelated PRs and would sit "Expected" forever under strict
+# mode) — a red ps1-lint on a PR it runs on is a MERGE BLOCKER by team
+# policy, same as any red check.
+name: PowerShell Lint
+
+on:
+  pull_request:
+    paths:
+      - 'packages/scripts/**/*.ps1'
+      - '.github/workflows/ps1-lint.yml'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  ps1-lint:
+    name: PSScriptAnalyzer
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Run PSScriptAnalyzer
+        shell: pwsh
+        run: |
+          # Version pinned per the repo's supply-chain habit — bump
+          # deliberately, not via silent PSGallery drift.
+          Install-Module PSScriptAnalyzer -RequiredVersion 1.25.0 -Force -Scope CurrentUser
+          $scripts = Get-ChildItem packages/scripts -Recurse -Filter '*.ps1'
+          if ($scripts.Count -eq 0) {
+            # Fail loud: an empty match means the tree moved and this gate
+            # silently stopped covering anything.
+            Write-Host "::error::no .ps1 files found under packages/scripts — path filter and gate are out of sync"
+            exit 1
+          }
+          $failed = $false
+          foreach ($s in $scripts) {
+            # Repo-relative path so annotations anchor in the PR diff view.
+            $rel = [System.IO.Path]::GetRelativePath($env:GITHUB_WORKSPACE, $s.FullName)
+            Write-Host "── $rel"
+            # Parse gate first: a script that does not tokenize is an
+            # instant failure regardless of analyzer rules.
+            $tokens = $null; $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($s.FullName, [ref]$tokens, [ref]$errors) | Out-Null
+            if ($errors.Count -gt 0) {
+              $errors | ForEach-Object {
+                Write-Host "::error file=$rel,line=$($_.Extent.StartLineNumber)::PARSE: $($_.Message)"
+              }
+              $failed = $true
+              continue
+            }
+            $findings = Invoke-ScriptAnalyzer -Path $s.FullName -Severity Error,Warning
+            foreach ($f in $findings) {
+              $level = if ($f.Severity -eq 'Error') { 'error' } else { 'warning' }
+              Write-Host "::$level file=$rel,line=$($f.Line)::$($f.RuleName): $($f.Message)"
+              if ($f.Severity -eq 'Error') { $failed = $true }
+            }
+          }
+          if ($failed) { exit 1 }
+          Write-Host "All PowerShell scripts parse and pass Error-severity analysis"
