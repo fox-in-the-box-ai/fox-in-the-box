@@ -1,0 +1,50 @@
+# PowerShell lint for the support scripts (#759).
+#
+# packages/scripts/*.ps1 had zero CI exercise: a parse error or path
+# regression was invisible until a user ran the script on Windows —
+# #754/#758 shipped and reviewed blind because of it (and the arm64 dev
+# host has no pwsh). PSScriptAnalyzer runs on every PR touching the
+# scripts; parse errors and Error-severity findings fail the job.
+name: PowerShell Lint
+
+on:
+  pull_request:
+    paths:
+      - 'packages/scripts/**/*.ps1'
+      - '.github/workflows/ps1-lint.yml'
+  workflow_dispatch: {}
+
+jobs:
+  ps1-lint:
+    name: PSScriptAnalyzer
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Run PSScriptAnalyzer
+        shell: pwsh
+        run: |
+          Install-Module PSScriptAnalyzer -Force -Scope CurrentUser
+          $scripts = Get-ChildItem packages/scripts -Recurse -Filter '*.ps1'
+          $failed = $false
+          foreach ($s in $scripts) {
+            Write-Host "── $($s.FullName)"
+            # Parse gate first: a script that does not tokenize is an
+            # instant failure regardless of analyzer rules.
+            $tokens = $null; $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($s.FullName, [ref]$tokens, [ref]$errors) | Out-Null
+            if ($errors.Count -gt 0) {
+              $errors | ForEach-Object { Write-Host "::error file=$($s.FullName)::PARSE: $($_.Message)" }
+              $failed = $true
+              continue
+            }
+            $findings = Invoke-ScriptAnalyzer -Path $s.FullName -Severity Error,Warning
+            foreach ($f in $findings) {
+              $level = if ($f.Severity -eq 'Error') { 'error' } else { 'warning' }
+              Write-Host "::$level file=$($s.FullName),line=$($f.Line)::$($f.RuleName): $($f.Message)"
+              if ($f.Severity -eq 'Error') { $failed = $true }
+            }
+          }
+          if ($failed) { exit 1 }
+          Write-Host "All PowerShell scripts parse and pass Error-severity analysis"
