@@ -20,14 +20,14 @@ Fox in the Box bundles a full AI assistant — agent, chat UI, persistent memory
 
 There are several good self-hosted AI assistants. Here's how Fox compares on the dimensions that matter most for a personal, private setup:
 
-| | **Fox in the Box** | **Open WebUI** | **AnythingLLM** | **Jan** | **LibreChat** |
-|---|---|---|---|---|---|
-| **License** | MIT | Custom (branding clause, 50+ users) | MIT | Apache 2.0 | MIT |
-| **Desktop installer** | Windows, macOS, Linux | Alpha (v0.0.x) | Windows, macOS, Linux | Windows, macOS, Linux | No (Docker / npm) |
-| **No-terminal setup** | Guided wizard in browser | Docker or pip (terminal) | Guided desktop app | Guided desktop app | Docker Compose |
-| **Memory across sessions** | Semantic (mem0 + Qdrant) | Workspace + global memories | Workspace + global memories | Conversation history | Conversation history |
-| **Remote access built-in** | Tailscale (one toggle) | Manual setup | No | No | No |
-| **Local models** | Auto-detects Ollama, one-click switch | Built-in llama.cpp + Ollama | Built-in Ollama support | Native inference (llama.cpp) + model hub | Ollama supported |
+|                            | **Fox in the Box**                    | **Open WebUI**                      | **AnythingLLM**             | **Jan**                                  | **LibreChat**        |
+| -------------------------- | ------------------------------------- | ----------------------------------- | --------------------------- | ---------------------------------------- | -------------------- |
+| **License**                | MIT                                   | Custom (branding clause, 50+ users) | MIT                         | Apache 2.0                               | MIT                  |
+| **Desktop installer**      | Windows, macOS, Linux                 | Alpha (v0.0.x)                      | Windows, macOS, Linux       | Windows, macOS, Linux                    | No (Docker / npm)    |
+| **No-terminal setup**      | Guided wizard in browser              | Docker or pip (terminal)            | Guided desktop app          | Guided desktop app                       | Docker Compose       |
+| **Memory across sessions** | Semantic (mem0 + Qdrant)              | Workspace + global memories         | Workspace + global memories | Conversation history                     | Conversation history |
+| **Remote access built-in** | Tailscale (one toggle)                | Manual setup                        | No                          | No                                       | No                   |
+| **Local models**           | Auto-detects Ollama, one-click switch | Built-in llama.cpp + Ollama         | Built-in Ollama support     | Native inference (llama.cpp) + model hub | Ollama supported     |
 
 **Fox's angle:** a private assistant that just works — install it, paste a key, start talking. Semantic memory that carries across sessions, remote access without port forwarding, and a standard MIT license.
 
@@ -177,18 +177,18 @@ For local iteration on the bundled `hermes-agent` / `hermes-webui` submodules, s
 - **Windows: Linux-containers mode is required** (Docker Desktop's default). If you've previously switched to Windows-containers mode, Fox detects it and exits with an actionable error — right-click the Docker Desktop tray icon → **Switch to Linux containers...** and relaunch Fox.
 - **Windows: the WSL 2 backend is required.** Docker Desktop's installer enables it for you. In Docker Desktop settings make sure **General → "Use the WSL 2 based engine"** is checked. If WSL2 isn't installed when Fox launches, it'll attempt the repair automatically (may require a reboot).
 
-**CPU virtualization** *(Windows only)*
+**CPU virtualization** _(Windows only)_
 
 - **Hardware virtualization must be enabled in BIOS/UEFI** — `VT-x` on Intel CPUs, `AMD-V` / `SVM Mode` on AMD CPUs. Required by both Docker Desktop and WSL2.
 - Most consumer PCs ship with it enabled. If Docker reports "WSL2 backend not running" or "virtualization disabled," reboot into BIOS, look for **Intel Virtualization Technology** / **SVM Mode** / **VT-x**, enable it, save, reboot.
 - Apple Silicon and Intel Macs have virtualization on by default — nothing to configure.
 
-**Provider API key** *(at least one)*
+**Provider API key** _(at least one)_
 
 - An **[OpenRouter](https://openrouter.ai)** API key (recommended — one key gives you hundreds of models, no per-provider setup).
 - Or any other supported provider — Anthropic, OpenAI, Google Gemini, DeepSeek, Mistral, etc. Configurable in Settings after install. See [Supported providers](#supported-providers) below.
 
-**Ollama** *(optional — only if you want local models)*
+**Ollama** _(optional — only if you want local models)_
 
 - To run local AI models, install **[Ollama](https://ollama.com/download)** separately on your host machine — Ollama runs on your computer, not inside the Fox container.
 - Fox auto-detects a running Ollama daemon via `host.docker.internal:11434` and surfaces every installed model in **Settings → Providers → Local Ollama** with one-click switching.
@@ -221,42 +221,42 @@ The setup wizard runs once. After that the app handles itself — but a few thin
 
 Most users start with **OpenRouter** — one key, hundreds of models. Add more from Settings → Providers when you need direct access or specific pricing.
 
-| Provider | How to add | Notes |
-|---|---|---|
-| **OpenRouter** | Onboarding wizard, then Settings | Recommended starting point. Hundreds of models via a single API. |
-| **Anthropic** | Settings → Providers | Direct Claude API |
-| **OpenAI** | Settings → Providers | Direct GPT API |
-| **Google Gemini** | Settings → Providers | Google AI Studio |
-| **xAI (Grok)** | Settings → Providers | Direct xAI API |
-| **DeepSeek** | Settings → Providers | Direct |
-| **Mistral AI** | Settings → Providers | Direct |
-| **Z.ai (GLM)** | Settings → Providers | Direct |
-| **Kimi** | Settings → Providers | Coding-tuned models |
-| **MiniMax** | Settings → Providers | Global + China endpoints |
-| **NVIDIA NIM** | Settings → Providers | Hosted NIM endpoints |
-| **OpenCode-Zen / Go** | Settings → Providers | Code-specialized providers |
-| **Ollama Cloud** | Settings → Providers | Hosted Ollama (`ollama.com`) |
-| **Local Ollama** | Auto-detected — no key needed | Fox probes `host.docker.internal:11434` then `localhost:11434` on Settings open. If a daemon is running, it appears as its own tile with installed models, one-click switching, **one-click pull from a recommended set** when no models are installed, and delete from inside the chat (since v0.3.1). Linux requires Fox v0.3.0+ (containers built before then need to be re-created — they're missing the `--add-host=host.docker.internal:host-gateway` flag). |
-| **LM Studio** | Settings → Providers | Local OpenAI-compatible endpoint |
-| **GitHub Copilot, Nous Portal, Codex, Qwen** | `hermes` CLI inside the container | OAuth-only — managed via the bundled Hermes CLI, not the Settings UI |
+| Provider                                     | How to add                        | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| -------------------------------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **OpenRouter**                               | Onboarding wizard, then Settings  | Recommended starting point. Hundreds of models via a single API.                                                                                                                                                                                                                                                                                                                                                                                                   |
+| **Anthropic**                                | Settings → Providers              | Direct Claude API                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| **OpenAI**                                   | Settings → Providers              | Direct GPT API                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| **Google Gemini**                            | Settings → Providers              | Google AI Studio                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| **xAI (Grok)**                               | Settings → Providers              | Direct xAI API                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| **DeepSeek**                                 | Settings → Providers              | Direct                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| **Mistral AI**                               | Settings → Providers              | Direct                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| **Z.ai (GLM)**                               | Settings → Providers              | Direct                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| **Kimi**                                     | Settings → Providers              | Coding-tuned models                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| **MiniMax**                                  | Settings → Providers              | Global + China endpoints                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| **NVIDIA NIM**                               | Settings → Providers              | Hosted NIM endpoints                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| **OpenCode-Zen / Go**                        | Settings → Providers              | Code-specialized providers                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| **Ollama Cloud**                             | Settings → Providers              | Hosted Ollama (`ollama.com`)                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| **Local Ollama**                             | Auto-detected — no key needed     | Fox probes `host.docker.internal:11434` then `localhost:11434` on Settings open. If a daemon is running, it appears as its own tile with installed models, one-click switching, **one-click pull from a recommended set** when no models are installed, and delete from inside the chat (since v0.3.1). Linux requires Fox v0.3.0+ (containers built before then need to be re-created — they're missing the `--add-host=host.docker.internal:host-gateway` flag). |
+| **LM Studio**                                | Settings → Providers              | Local OpenAI-compatible endpoint                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| **GitHub Copilot, Nous Portal, Codex, Qwen** | `hermes` CLI inside the container | OAuth-only — managed via the bundled Hermes CLI, not the Settings UI                                                                                                                                                                                                                                                                                                                                                                                               |
 
 ---
 
 ## Architecture
 
-| Component | Purpose |
-|-----------|---------|
+| Component                                                    | Purpose                                                                                                                                |
+| ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
 | [Hermes Agent](https://github.com/NousResearch/hermes-agent) | AI agent core — LLM orchestration, tools, skills (Fox tracks virgin upstream via overlay; see `docs/architecture/upstream-overlay.md`) |
-| [Hermes WebUI](https://github.com/nesquena/hermes-webui) | Browser-based chat interface (Fox tracks virgin upstream via overlay; see `docs/architecture/upstream-overlay.md`) |
-| mem0 + Qdrant | Persistent memory with local vector search |
-| Tailscale | Optional VPN tunneling and automatic HTTPS |
-| supervisord | Process management inside the container |
+| [Hermes WebUI](https://github.com/nesquena/hermes-webui)     | Browser-based chat interface (Fox tracks virgin upstream via overlay; see `docs/architecture/upstream-overlay.md`)                     |
+| mem0 + Qdrant                                                | Persistent memory with local vector search                                                                                             |
+| Tailscale                                                    | Optional VPN tunneling and automatic HTTPS                                                                                             |
+| supervisord                                                  | Process management inside the container                                                                                                |
 
 > **Developer tools.** The `forks/figma-mcp` submodule is a [Figma MCP server](https://github.com/nicekid1/Figma-Context-MCP) fork used for design-to-code workflows during development. It is not part of the runtime — it's a developer tool for extracting Figma context into code. Initialize it separately if needed: `git submodule update --init forks/figma-mcp`.
 
 **Container vs. data:** the published Docker image bundles Hermes agent and webui source (from `forks/` submodules) at **build** time. The container's `/data` volume holds your config, databases, logs, and Tailscale state. Updating Hermes for end users means pulling a newer image, not re-cloning at runtime.
 
-**Tech stack:** Electron 42 (desktop wrapper) · Python 3.11 (Hermes Agent + WebUI) · Qdrant (vector DB) · mem0 (memory layer) · supervisord (process management) · Tailscale (remote access) · Docker (packaging). Hermes WebUI is intentionally vanilla — Python `http.server` + plain JavaScript, no SPA framework — so the chat UI loads instantly on any device.
+**Tech stack:** Electron 43 (desktop wrapper) · Python 3.11 (Hermes Agent + WebUI) · Qdrant (vector DB) · mem0 (memory layer) · supervisord (process management) · Tailscale (remote access) · Docker (packaging). Hermes WebUI is intentionally vanilla — Python `http.server` + plain JavaScript, no SPA framework — so the chat UI loads instantly on any device.
 
 ---
 
@@ -303,6 +303,7 @@ The app itself is free and open source. You only pay for AI usage at your provid
 What we're working on next. No promises on dates — this is a small team — but this is the direction.
 
 **Recently shipped**
+
 - **Upstream bump** — hermes-webui v0.52.0, hermes-agent v2026.7.7.2 (v0.7.59)
 - **Security alert triage** — resolved 24 supply-chain alerts via npm overrides + Dockerfile upgrade (v0.7.55–v0.7.57)
 - **Apt repository** — `.deb` packages published to `apt.foxinthebox.ai` for headless Linux installs (v0.7.59)
@@ -313,12 +314,14 @@ What we're working on next. No promises on dates — this is a small team — bu
 - **Upstream separation** — Fox overlays cleanly separated from upstream Hermes codebase (v0.6.0)
 
 **v0.8.0 — ships when these criteria are met:**
+
 - Playwright E2E covers all critical user paths (provider setup, chat, model switching, failover)
 - Zero open P0 bugs
 - Container image passes clean Trivy scan
 - On-device smoke checklist fully green for two consecutive releases
 
 **Beyond v0.8.0**
+
 - Network isolation mode for enterprise — air-gapped Docker deployment
 - Routines — teach Fox multi-step workflows via conversation, runs on a schedule
 - Knowledge RAG — batch-ingest document collections for semantic retrieval

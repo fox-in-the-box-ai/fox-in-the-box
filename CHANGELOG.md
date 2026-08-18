@@ -11,7 +11,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Changed
 
-- Bundled desktop Electron 42.8.0 → 43.4.0 (Chromium 150, Node 24). Verified with a packaged-app launch smoke on macOS arm64 (window renders, startup orchestrator runs, zero renderer errors, clean exit) plus the full startup test suite; Windows coverage is the CI dev-mode startup smoke — no packaged-exe install test exists yet
+- Bundled desktop Electron → 43.4.0 (Chromium 150, Node 24), from 42.8.0 in the npm lockfile and 42.5.1 in the pnpm lockfile — the bump also heals that pre-existing cross-lockfile skew. Verified with a packaged-app launch smoke on macOS arm64 (window renders, startup orchestrator runs, zero renderer errors, clean exit) plus the full startup test suite; Windows coverage is the CI dev-mode startup smoke — no packaged-exe install test exists yet
 
 ### Security
 
