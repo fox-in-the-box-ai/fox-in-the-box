@@ -7,6 +7,10 @@ on:
     branches: [main]
   schedule:
     - cron: '0 5 * * 1'
+  # On-demand re-scan — e.g. right after :stable advances, so the
+  # code-scanning alert set reflects the new image without waiting for
+  # the next push or the Monday cron.
+  workflow_dispatch: {}
 
 concurrency:
   group: trivy-${{ github.ref }}
