@@ -14,6 +14,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - js-yaml resolved to 4.3.1 in both lockfiles (root pnpm-lock.yaml and packages/electron/package-lock.json), clearing all four open js-yaml advisories. Corrects the 0.7.60 record: that entry listed js-yaml 4.3.1 in its security batch, but the lockfiles still resolved 4.2.0 at release time — this change is what lands it.
 - protobufjs resolved to 7.6.5 in both lockfiles, clearing the last two open dependabot alerts; with the js-yaml 4.3.1 bump this takes the open alert count to zero
 
+### Fixed
+
+- Upstream-watch and tripwire detectors no longer spam the issue tracker: nightly watch reports dedupe by title and supersede older reports (previously up to one duplicate per night), the branch rewrite-regex requires whole path segments with frontend-framework tokens scoped to the webui repo, maintainer-absence recognizes both maintainer accounts, stage-batch keys on published releases instead of the retired Stamp-CHANGELOG commit pattern, and the patch rebase-clock floors ages at the last upstream-pin verification date
+
 ---
 
 ## [0.7.60] — 2026-08-14

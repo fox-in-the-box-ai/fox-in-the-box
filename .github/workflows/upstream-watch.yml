@@ -199,8 +199,12 @@ jobs:
           title="[upstream-watch] Update available: webui ${{ steps.pinned.outputs.webui_tag }} → ${{ steps.latest.outputs.webui }}, agent ${{ steps.pinned.outputs.agent_tag }} → ${{ steps.latest.outputs.agent }}"
           # Dedupe: an open issue with this exact title means the same
           # update is already reported — re-fire as a comment, don't stack.
-          existing=$(gh issue list --label "upstream-update-available" --state open \
-                       --json number,title -q ".[] | select(.title == \"$title\") | .number" | head -1)
+          # Title goes to jq via the environment (env.WATCH_TITLE), not
+          # string-splicing — upstream tag names may contain jq-significant
+          # characters.
+          export WATCH_TITLE="$title"
+          existing=$(gh issue list --label "upstream-update-available" --state open --limit 100 \
+                       --json number,title -q '.[] | select(.title == env.WATCH_TITLE) | .number' | head -1)
           if [ -n "$existing" ]; then
               gh issue comment "$existing" --body "Still available as of run ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}."
               echo "[upstream-watch] re-fired existing issue #$existing"
@@ -230,12 +234,15 @@ jobs:
           gh issue create --title "$title" --body "$body" --label "upstream-update-available"
           # Supersede older update-available reports (different title =
           # older target versions) so exactly one stays open.
-          gh issue list --label "upstream-update-available" --state open \
-              --json number,title -q ".[] | select(.title != \"$title\") | .number" \
+          # A failing close must not fail the step (the primary issue is
+          # already created; a step failure here would trip the
+          # workflow-failed handler and open the very noise this fixes).
+          gh issue list --label "upstream-update-available" --state open --limit 100 \
+              --json number,title -q '.[] | select(.title != env.WATCH_TITLE) | .number' \
           | while read -r n; do
               [ -z "$n" ] && continue
               gh issue close "$n" --reason "not planned" \
-                  --comment "Superseded by a newer update-available report: $title"
+                  --comment "Superseded by a newer update-available report: $title" || true
           done
 
       - name: Open issue — basis drift (refresh required)
@@ -247,8 +254,10 @@ jobs:
           title="[upstream-drift] Overlay anchors drift against webui ${{ steps.latest.outputs.webui }} / agent ${{ steps.latest.outputs.agent }}"
           # Dedupe: same drift target already reported → re-fire as a
           # comment instead of stacking a duplicate issue per nightly run.
-          existing=$(gh issue list --label "upstream-drift" --state open \
-                       --json number,title -q ".[] | select(.title == \"$title\") | .number" | head -1)
+          # Title via env for jq — see the update-available step.
+          export WATCH_TITLE="$title"
+          existing=$(gh issue list --label "upstream-drift" --state open --limit 100 \
+                       --json number,title -q '.[] | select(.title == env.WATCH_TITLE) | .number' | head -1)
           if [ -n "$existing" ]; then
               gh issue comment "$existing" --body "Still drifted as of run ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}."
               echo "[upstream-watch] re-fired existing drift issue #$existing"
@@ -282,12 +291,12 @@ jobs:
           gh issue create --title "$title" --body "$body" --label "upstream-drift" --label "P2"
           # Supersede older drift reports (different title = older upstream
           # targets) so exactly one drift issue stays open.
-          gh issue list --label "upstream-drift" --state open \
-              --json number,title -q ".[] | select(.title != \"$title\") | .number" \
+          gh issue list --label "upstream-drift" --state open --limit 100 \
+              --json number,title -q '.[] | select(.title != env.WATCH_TITLE) | .number' \
           | while read -r n; do
               [ -z "$n" ] && continue
               gh issue close "$n" --reason "not planned" \
-                  --comment "Superseded by a newer drift report: $title"
+                  --comment "Superseded by a newer drift report: $title" || true
           done
 
       - name: Open issue — workflow itself failed

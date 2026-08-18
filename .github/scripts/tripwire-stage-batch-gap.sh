@@ -19,7 +19,7 @@ source "$(dirname "$0")/tripwire-common.sh"
 # what this tripwire watches (outage, not stable-promotion cadence).
 THRESHOLD_HOURS=48
 
-last_stamp_iso=$(gh api -X GET "repos/$WEBUI_REPO/releases" -f per_page=30 2>/dev/null \
+last_stamp_iso=$(gh api -X GET "repos/$WEBUI_REPO/releases" -f per_page=100 2>/dev/null \
                    | jq -r '[.[] | select(.draft == false)] | sort_by(.published_at) | last | .published_at // empty' \
                    || true)
 

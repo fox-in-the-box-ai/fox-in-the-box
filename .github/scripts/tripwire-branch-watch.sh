@@ -45,10 +45,12 @@ check_repo() {
 Branch: **\`$branch\`**
 
 The regex \`$regex\` flags branches that historically signal:
-- A framework rewrite (\`react\`, \`vue\`, \`svelte\`, \`preact\`)
 - A major version bump (\`v2\`, \`v3\`, etc.)
-- A long-running rewrite (\`rewrite\`, \`major\`)
+- A long-running rewrite (\`rewrite\`, \`major\` as a path segment)
 - An upstream "next-gen" branch (\`next\`)
+- On the webui repo only: a frontend-framework rewrite (\`react\`, \`vue\`, \`svelte\`, \`preact\`)
+
+Maintenance-prefixed branches (\`fix/\`, \`chore/\`, \`docs/\`, \`test/\`, \`ci/\`) are excluded.
 
 **Why this matters:** if upstream merges a rewrite branch to default, the Fox overlay's anchors will catastrophically fail — most or all monkey-patch substitutions will miss. Plan a strategic re-evaluation before that merge lands.
 

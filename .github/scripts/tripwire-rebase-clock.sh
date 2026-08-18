@@ -28,6 +28,11 @@ if [ -n "$pinned_at" ]; then
                    || date -u -d "$pinned_at" +%s 2>/dev/null \
                    || echo 0)
 fi
+if [ "$pinned_epoch" -eq 0 ]; then
+    # Fail loud in the log: without the floor the #734 false-positive
+    # class silently returns.
+    echo "[tripwire/rebase-clock] WARN: could not parse pinned_at from versions.toml — verification floor disabled, ages are raw file ages"
+fi
 
 stale=()
 for series_dir in packages/fox-overlay/patches/webui packages/fox-overlay/patches/agent; do

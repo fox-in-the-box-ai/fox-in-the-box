@@ -114,8 +114,9 @@ jobs:
         run: bash .github/scripts/tripwire-nous-ui-watch.sh
 
   # ── #211 — Maintainer absence canary (nesquena) ────────────────────────
-  # Baseline at v0.6.0: 0 gaps of 5+ silent days in 48 days. Fires if
-  # nesquena has zero commits to upstream/master for 5 consecutive days.
+  # Baseline at v0.6.0: 0 gaps of 5+ silent days in 48 days. Fires only if
+  # BOTH maintainer accounts (nesquena + the nesquena-hermes automation
+  # account) have zero commits to upstream/master for 5 consecutive days.
   # Debounce note: during 5-week migrations (rare), suppress manually by
   # closing the issue.
   maintainer_absence:
@@ -142,11 +143,11 @@ jobs:
         run: bash .github/scripts/tripwire-cve-feed.sh
 
   # ── #213 — Stage-batch monitoring ──────────────────────────────────────
-  # nesquena's release cadence stamps commits like
-  # "Stamp CHANGELOG for v0.51.84 (Release BH / stage-377)". If the gap
-  # between the most recent such stamp and now exceeds 48h while there
-  # is unreleased commit activity, the release pipeline likely broke —
-  # early signal of maintainer outage.
+  # Watches the release pipeline's pulse: if the newest published release
+  # (any kind — exp-series prereleases count as pipeline-alive) is older
+  # than 48h while commits keep landing, the release pipeline likely
+  # broke — early signal of maintainer outage. (Originally keyed on
+  # "Stamp CHANGELOG" commits; that pattern was retired upstream.)
   stage_batch_gap:
     if: github.event.inputs.only == '' || github.event.inputs.only == 'stage_batch_gap'
     name: "#213 stage-batch gap"

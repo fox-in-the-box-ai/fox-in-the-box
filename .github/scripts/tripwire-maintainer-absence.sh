@@ -22,9 +22,14 @@ since=$(date -u -v-${WINDOW_DAYS}d +%Y-%m-%dT%H:%M:%SZ 2>/dev/null \
 
 count=0
 for acct in $MAINTAINER_ACCOUNTS; do
-    c=$(gh api -X GET "repos/$WEBUI_REPO/commits" \
-          -f sha="$WEBUI_BRANCH" -f author="$acct" -f since="$since" --paginate 2>/dev/null \
-          | jq -r '.[].sha' | wc -l | tr -d ' ')
+    # An API failure must read as "cannot evaluate", not as zero commits —
+    # otherwise a transient GitHub outage fires a false absence alarm.
+    if ! resp=$(gh api -X GET "repos/$WEBUI_REPO/commits" \
+          -f sha="$WEBUI_BRANCH" -f author="$acct" -f since="$since" --paginate 2>&1); then
+        echo "[tripwire/absence] gh api failed for $acct — cannot evaluate: $resp"
+        exit 0
+    fi
+    c=$(printf '%s' "$resp" | jq -r '.[].sha' | wc -l | tr -d ' ')
     count=$((count + c))
 done
 
