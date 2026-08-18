@@ -162,8 +162,22 @@ jobs:
           # has somehow become single-platform (ships a broken release
           # before users find out).
           for TAG in "$VERSION" "stable"; do
-            PLATFORMS=$(docker buildx imagetools inspect "$IMG:$TAG" \
-              --format '{{range .Manifest.Manifests}}{{.Platform.OS}}/{{.Platform.Architecture}}{{"\n"}}{{end}}')
+            # GHCR reads occasionally lag the imagetools create above —
+            # retry before failing the release (same pattern as
+            # build-container.yml's merge-job inspects).
+            PLATFORMS=""
+            for attempt in 1 2 3 4 5; do
+              PLATFORMS=$(docker buildx imagetools inspect "$IMG:$TAG" \
+                --format '{{range .Manifest.Manifests}}{{.Platform.OS}}/{{.Platform.Architecture}}{{"\n"}}{{end}}' 2>&1) \
+                || PLATFORMS=""
+              if grep -qx 'linux/amd64' <<<"$PLATFORMS" && grep -qx 'linux/arm64' <<<"$PLATFORMS"; then
+                break
+              fi
+              if [[ "$attempt" -lt 5 ]]; then
+                echo "$IMG:$TAG inspect attempt $attempt incomplete; retrying in 10s"
+                sleep 10
+              fi
+            done
             echo "$IMG:$TAG platforms:"; echo "$PLATFORMS"
             grep -qx 'linux/amd64' <<<"$PLATFORMS" || { echo "::error::$IMG:$TAG missing linux/amd64"; exit 1; }
             grep -qx 'linux/arm64' <<<"$PLATFORMS" || { echo "::error::$IMG:$TAG missing linux/arm64"; exit 1; }
