@@ -53,7 +53,18 @@ Findings:
 - spaCy/fastembed optional-extras notices appear on plugin ops — cosmetic, semantic search unaffected
 - Smoke-run OpenRouter key passed through the session transcript; rotate after the release
 
-Startup-delta and CI-status sections: populated at closeout after the tag run.
+Startup delta (measured 2026-08-18, keyless boot to `/readyz` `ready:true`, fresh volume, two runs per tag on the same Docker host):
+
+- v0.7.59: 4s / 3s — v0.7.60: 3s / 4s. **No boot-latency regression from memory default-on** — the embed model loads lazily and idle-unloads (`--sleep-idle-seconds 120`), so keyless/idle boots pay nothing; the memory readiness component participates in `/readyz` from first boot.
+
+CI status (release tag run 32086093272, `v0.7.60`, 2026-08-18, conclusion **success** — every job green, none skipped):
+
+- Build & Push amd64+arm64, Merge into manifest list, Smoke amd64+arm64, Image self-test: success
+- Build Electron macOS + Windows (signed): success
+- Build .deb amd64+arm64, .deb smoke test (22.04 constrained + 24.04 unconstrained legs — step 12 above): success
+- Publish to apt.foxinthebox.ai: success; Promote container image (`:v0.7.60` + `:stable`, both multi-arch verified): success; Create GitHub Release (7 assets): success
+
+Post-release addendum (2026-08-18): the pinned-upstream note in step 11's context changed the same day — #740 advanced the container pins to webui v0.52.113 / agent v2026.8.16.2 as a container-only Option B update (`:stable` auto-advanced; no DMG/exe rebuild). Desktop v0.7.60 artifacts are unaffected.
 
 ---
 
