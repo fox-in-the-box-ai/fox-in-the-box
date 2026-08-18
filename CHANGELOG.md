@@ -15,7 +15,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
-- `openssh-client` is baked into the container image, giving agents `ssh`/`scp`/`sftp` for remote host management and git-over-ssh
+- `openssh-client` and `rsync` are baked into the container image, giving agents `ssh`/`scp`/`sftp`/`rsync` for remote host management, git-over-ssh, and patch-sync flows (~15–20 MB installed)
 - Long-term memory is enabled by default on fresh installs. Facts are extracted with your configured chat provider and stored locally (self-hosted mem0 + embedded Qdrant under the instance data volume). Embeddings are computed entirely on-device by a bundled local model (nomic-embed-text-v1.5, llama.cpp) — no extra API key required; works with any provider, including OpenRouter-only, Anthropic-only, direct OpenAI (openai-api), AWS Bedrock, and local Ollama/LM Studio/vLLM setups
 - Memory state is visible in Settings and on /readyz: active, off (with the reason), or error — never a silent no-op. Providers without a static API key (e.g. OAuth-based) show memory as off with a one-line override to use a different provider for memory. Existing installs opt in with one line: `memory: provider: mem0_oss`
 - Canonical Fox branding across all surfaces: new app icons (macOS/Windows/Linux), full WebUI favicon set (ico/svg/png + apple-touch), browser and PWA titles now read "Fox in the Box"

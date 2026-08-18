@@ -38,7 +38,10 @@ ARG FITB_DEV=0
 # libgomp1 + libcurl4 are runtime deps for the bundled llama.cpp llama-server
 # binary (issue #9). Both are small (libgomp1 ~150 KB, libcurl4 ~400 KB).
 # openssh-client gives agents ssh/scp/sftp for remote host management and
-# git-over-ssh (subagent VPS ops, demo box rollouts).
+# git-over-ssh (subagent VPS ops, demo box rollouts); rsync pairs with it
+# for the vps-patch-sync flow. Baking BOTH keeps the entrypoint tool-heal
+# a true no-op on fresh images (~15-20 MB installed with the krb5/gnutls
+# dependency train — shared in part with git).
 RUN apt-get update && apt-get install -y --no-install-recommends \
         curl \
         ca-certificates \
@@ -50,6 +53,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libgomp1 \
         libcurl4 \
         openssh-client \
+        rsync \
     && rm -rf /var/lib/apt/lists/*
 
 # ── Node.js (LTS) — required for npx-based MCP servers (e.g. Brave Search) ───
