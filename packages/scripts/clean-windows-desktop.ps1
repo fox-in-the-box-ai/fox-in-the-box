@@ -15,9 +15,10 @@
     3. Untag every known Fox cloud image (`:stable`, `:v0.7.*`, `:latest`)
     4. Prune dangling Docker volumes
     5. Run the bundled NSIS uninstaller silently if present
-    6. Remove `%APPDATA%\@fox-in-the-box` (Electron userData + container bind mount)
-    7. Remove `%LOCALAPPDATA%\@fox-in-the-boxelectron-updater` (auto-updater state)
-    8. Remove `%LOCALAPPDATA%\Programs\@fox-in-the-boxelectron` (install dir)
+    6. Remove the data dirs — `%APPDATA%\fox-in-the-box` (v0.7.19+) and
+       legacy `%APPDATA%\@fox-in-the-box` (Electron userData + container bind mount)
+    7. Remove the auto-updater state (both path generations)
+    8. Remove the install dirs (both path generations)
     9. Verify clean state and report
 
   After this script: Fox is GONE from the system. Reinstall fresh from
@@ -28,7 +29,7 @@
   in-app reset failed (e.g. cross-version upgrade gone wrong).
 
 .PARAMETER KeepData
-  Skip step 6 — preserve %APPDATA%\@fox-in-the-box (onboarding state, settings,
+  Skip step 6 — preserve the data dirs (onboarding state, settings,
   conversation history, local models). Useful when you want to reset Docker
   state only but keep your provider keys + chat history.
 
@@ -60,10 +61,10 @@
   Requires Docker Desktop installed (`docker` on PATH).
   Does NOT require Administrator privileges.
 
-  Issues #340 + #341 led to this rewrite. The previous version assumed
-  Fox was already quit, used the wrong data path (assumed `Fox in the box`
-  but Electron actually creates `@fox-in-the-box` because package.json has
-  no productName field), and didn't survive auto-restarting tray processes.
+  Issues #340 + #341 led to the original rewrite (at the time package.json
+  had no productName, so Electron created `@fox-in-the-box`). Since v0.7.19
+  productName is `fox-in-the-box` and the userData/install dirs moved with
+  it — #754 made this script clean both path generations.
 #>
 [CmdletBinding(SupportsShouldProcess = $true)]
 param(
@@ -77,9 +78,27 @@ $ErrorActionPreference = 'Continue'
 
 $containerName = 'fox-in-the-box'
 $imageBase     = 'ghcr.io/fox-in-the-box-ai/cloud'
-$dataDir       = Join-Path $env:APPDATA   '@fox-in-the-box'
-$updaterDir    = Join-Path $env:LOCALAPPDATA '@fox-in-the-boxelectron-updater'
-$installDir    = Join-Path $env:LOCALAPPDATA 'Programs\@fox-in-the-boxelectron'
+# Path generations (#754), each derived from electron-builder internals:
+# - userData follows the app productName: `fox-in-the-box` since v0.7.19,
+#   `@fox-in-the-box` before (npm-scope leak).
+# - the electron-updater cache dir follows sanitizeFileName(package.json
+#   name) — which never changed — so `@fox-in-the-boxelectron-updater` is
+#   the ONLY updater dir that has ever existed.
+# - the NSIS install dir follows executableName (`FoxInTheBox`, current)
+#   with the pre-productName `@fox-in-the-boxelectron` before it.
+# Modern first, legacy second — the script removes all of them; presence
+# of any counts in the final verification.
+$dataDirs    = @(
+  (Join-Path $env:APPDATA 'fox-in-the-box'),
+  (Join-Path $env:APPDATA '@fox-in-the-box')
+)
+$updaterDirs = @(
+  (Join-Path $env:LOCALAPPDATA '@fox-in-the-boxelectron-updater')
+)
+$installDirs = @(
+  (Join-Path $env:LOCALAPPDATA 'Programs\FoxInTheBox'),
+  (Join-Path $env:LOCALAPPDATA 'Programs\@fox-in-the-boxelectron')
+)
 
 Write-Host ''
 Write-Host '════════════════════════════════════════════════════' -ForegroundColor Cyan
@@ -113,10 +132,11 @@ if ($PSCmdlet.ShouldProcess($containerName, 'docker rm -f')) {
 if ($PSCmdlet.ShouldProcess($imageBase, 'docker rmi')) {
   Write-Host '[3/9] Untagging Fox container images...' -ForegroundColor Cyan
   $tags = @('stable','latest','dev')
-  # All versioned tags currently known (extend as releases ship)
-  for ($minor = 5; $minor -le 30; $minor++) {
-    $tags += "v0.7.$minor"
-  }
+  # Every locally-present tag of the Fox image, whatever the version —
+  # the old hardcoded v0.7.5..v0.7.30 range silently spared newer tags.
+  $tags += @(docker images $imageBase --format '{{.Tag}}' 2>$null) |
+    Where-Object { $_ -and $_ -ne '<none>' }
+  $tags = $tags | Select-Object -Unique
   foreach ($tag in $tags) {
     docker rmi -f "${imageBase}:${tag}" 2>$null | Out-Null
   }
@@ -132,9 +152,11 @@ if ($PSCmdlet.ShouldProcess('docker volumes', 'docker volume prune -f')) {
 # ─── 5. Run NSIS uninstaller (if installed and not -KeepInstall) ──────────
 if (-not $KeepInstall) {
   $uninstallExe = $null
-  if (Test-Path -LiteralPath $installDir) {
-    $uninstallExe = (Get-ChildItem -LiteralPath $installDir -Filter 'Uninstall *.exe' `
-        -ErrorAction SilentlyContinue | Select-Object -First 1).FullName
+  foreach ($dir in $installDirs) {
+    if (-not $uninstallExe -and (Test-Path -LiteralPath $dir)) {
+      $uninstallExe = (Get-ChildItem -LiteralPath $dir -Filter 'Uninstall *.exe' `
+          -ErrorAction SilentlyContinue | Select-Object -First 1).FullName
+    }
   }
   if ($uninstallExe) {
     if ($PSCmdlet.ShouldProcess($uninstallExe, 'Run uninstaller silently')) {
@@ -155,47 +177,53 @@ if (-not $KeepInstall) {
 # we use it because Chromium's LevelDB store inside userData sometimes
 # survives process kill by a few hundred ms.
 if (-not $KeepData) {
-  if (Test-Path -LiteralPath $dataDir) {
-    if ($PSCmdlet.ShouldProcess($dataDir, 'rd /s /q')) {
-      Write-Host '[6/9] Removing data dir...' -ForegroundColor Cyan
-      cmd /c "rd /s /q ""$dataDir""" 2>$null
-      if (Test-Path -LiteralPath $dataDir) {
-        Write-Host "      WARNING: $dataDir partially survived — try `wsl --shutdown` then re-run" -ForegroundColor Yellow
-      } else {
-        Write-Host "      removed: $dataDir"
+  Write-Host '[6/9] Removing data dirs...' -ForegroundColor Cyan
+  foreach ($dir in $dataDirs) {
+    if (Test-Path -LiteralPath $dir) {
+      if ($PSCmdlet.ShouldProcess($dir, 'rd /s /q')) {
+        cmd /c "rd /s /q ""$dir""" 2>$null
+        if (Test-Path -LiteralPath $dir) {
+          Write-Host "      WARNING: $dir partially survived — try 'wsl --shutdown' then re-run" -ForegroundColor Yellow
+        } else {
+          Write-Host "      removed: $dir"
+        }
       }
+    } else {
+      Write-Host "      not present: $dir" -ForegroundColor DarkGray
     }
-  } else {
-    Write-Host '[6/9] No data dir present — skipping' -ForegroundColor DarkGray
   }
 } else {
-  Write-Host '[6/9] -KeepData set — preserving data dir' -ForegroundColor DarkGray
+  Write-Host '[6/9] -KeepData set — preserving data dirs' -ForegroundColor DarkGray
 }
 
 # ─── 7. Remove auto-updater state ─────────────────────────────────────────
-if (Test-Path -LiteralPath $updaterDir) {
-  if ($PSCmdlet.ShouldProcess($updaterDir, 'rd /s /q')) {
-    Write-Host '[7/9] Removing auto-updater state...' -ForegroundColor Cyan
-    cmd /c "rd /s /q ""$updaterDir""" 2>$null
-    Write-Host "      removed: $updaterDir"
+Write-Host '[7/9] Removing auto-updater state...' -ForegroundColor Cyan
+foreach ($dir in $updaterDirs) {
+  if (Test-Path -LiteralPath $dir) {
+    if ($PSCmdlet.ShouldProcess($dir, 'rd /s /q')) {
+      cmd /c "rd /s /q ""$dir""" 2>$null
+      Write-Host "      removed: $dir"
+    }
+  } else {
+    Write-Host "      not present: $dir" -ForegroundColor DarkGray
   }
-} else {
-  Write-Host '[7/9] No auto-updater state present — skipping' -ForegroundColor DarkGray
 }
 
 # ─── 8. Remove install dir (unless -KeepInstall) ──────────────────────────
 if (-not $KeepInstall) {
-  if (Test-Path -LiteralPath $installDir) {
-    if ($PSCmdlet.ShouldProcess($installDir, 'rd /s /q')) {
-      Write-Host '[8/9] Removing install dir...' -ForegroundColor Cyan
-      cmd /c "rd /s /q ""$installDir""" 2>$null
-      Write-Host "      removed: $installDir"
+  Write-Host '[8/9] Removing install dirs...' -ForegroundColor Cyan
+  foreach ($dir in $installDirs) {
+    if (Test-Path -LiteralPath $dir) {
+      if ($PSCmdlet.ShouldProcess($dir, 'rd /s /q')) {
+        cmd /c "rd /s /q ""$dir""" 2>$null
+        Write-Host "      removed: $dir"
+      }
+    } else {
+      Write-Host "      not present: $dir" -ForegroundColor DarkGray
     }
-  } else {
-    Write-Host '[8/9] No install dir present — skipping' -ForegroundColor DarkGray
   }
 } else {
-  Write-Host '[8/9] -KeepInstall set — leaving install dir' -ForegroundColor DarkGray
+  Write-Host '[8/9] -KeepInstall set — leaving install dirs' -ForegroundColor DarkGray
 }
 
 # ─── 9. Verify ────────────────────────────────────────────────────────────
@@ -207,9 +235,9 @@ Write-Host ''
 Write-Host '── Docker images (should be empty) ──' -ForegroundColor DarkGray
 docker images $imageBase
 Write-Host ''
-$dataExists    = Test-Path -LiteralPath $dataDir
-$updaterExists = Test-Path -LiteralPath $updaterDir
-$installExists = Test-Path -LiteralPath $installDir
+$dataExists    = @($dataDirs    | Where-Object { Test-Path -LiteralPath $_ }).Count -gt 0
+$updaterExists = @($updaterDirs | Where-Object { Test-Path -LiteralPath $_ }).Count -gt 0
+$installExists = @($installDirs | Where-Object { Test-Path -LiteralPath $_ }).Count -gt 0
 Write-Host "Data dir present:    $dataExists $(if ($dataExists -and -not $KeepData) {'  ← UNEXPECTED'})" `
   -ForegroundColor $(if ($dataExists -and -not $KeepData) {'Yellow'} else {'Green'})
 Write-Host "Updater dir present: $updaterExists $(if ($updaterExists) {'  ← UNEXPECTED'})" `
