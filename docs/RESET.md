@@ -63,10 +63,9 @@ Or a Fox/Electron process is still alive — check Task Manager → end any `fox
 docker rm -f fox-in-the-box
 docker rmi -f ghcr.io/fox-in-the-box-ai/cloud:stable
 cmd /c "rd /s /q ""$env:APPDATA\fox-in-the-box"""
-cmd /c "rd /s /q ""$env:LOCALAPPDATA\fox-in-the-box-updater"""
-# Legacy pre-v0.7.19 locations (only present on old installs):
-cmd /c "rd /s /q ""$env:APPDATA\@fox-in-the-box"""
 cmd /c "rd /s /q ""$env:LOCALAPPDATA\@fox-in-the-boxelectron-updater"""
+# Legacy pre-v0.7.19 data location (only present on old installs):
+cmd /c "rd /s /q ""$env:APPDATA\@fox-in-the-box"""
 ```
 
 Then uninstall the app via Settings → Apps if you want the program files gone too.

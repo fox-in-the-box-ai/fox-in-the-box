@@ -61,10 +61,10 @@
   Requires Docker Desktop installed (`docker` on PATH).
   Does NOT require Administrator privileges.
 
-  Issues #340 + #341 led to this rewrite. The previous version assumed
-  Fox was already quit, used the wrong data path (assumed `Fox in the box`
-  but Electron actually creates `@fox-in-the-box` because package.json has
-  no productName field), and didn't survive auto-restarting tray processes.
+  Issues #340 + #341 led to the original rewrite (at the time package.json
+  had no productName, so Electron created `@fox-in-the-box`). Since v0.7.19
+  productName is `fox-in-the-box` and the userData/install dirs moved with
+  it — #754 made this script clean both path generations.
 #>
 [CmdletBinding(SupportsShouldProcess = $true)]
 param(
@@ -78,20 +78,25 @@ $ErrorActionPreference = 'Continue'
 
 $containerName = 'fox-in-the-box'
 $imageBase     = 'ghcr.io/fox-in-the-box-ai/cloud'
-# Two path generations per dir (#754): v0.7.19 dropped the '@' from the
-# userData name (productName fox-in-the-box) and later releases moved the
-# updater/install dirs with it. Modern first, legacy second — the script
-# removes both; presence of either counts in the final verification.
+# Path generations (#754), each derived from electron-builder internals:
+# - userData follows the app productName: `fox-in-the-box` since v0.7.19,
+#   `@fox-in-the-box` before (npm-scope leak).
+# - the electron-updater cache dir follows sanitizeFileName(package.json
+#   name) — which never changed — so `@fox-in-the-boxelectron-updater` is
+#   the ONLY updater dir that has ever existed.
+# - the NSIS install dir follows executableName (`FoxInTheBox`, current)
+#   with the pre-productName `@fox-in-the-boxelectron` before it.
+# Modern first, legacy second — the script removes all of them; presence
+# of any counts in the final verification.
 $dataDirs    = @(
   (Join-Path $env:APPDATA 'fox-in-the-box'),
   (Join-Path $env:APPDATA '@fox-in-the-box')
 )
 $updaterDirs = @(
-  (Join-Path $env:LOCALAPPDATA 'fox-in-the-box-updater'),
   (Join-Path $env:LOCALAPPDATA '@fox-in-the-boxelectron-updater')
 )
 $installDirs = @(
-  (Join-Path $env:LOCALAPPDATA 'Programs\Fox in the Box'),
+  (Join-Path $env:LOCALAPPDATA 'Programs\FoxInTheBox'),
   (Join-Path $env:LOCALAPPDATA 'Programs\@fox-in-the-boxelectron')
 )
 
@@ -127,10 +132,11 @@ if ($PSCmdlet.ShouldProcess($containerName, 'docker rm -f')) {
 if ($PSCmdlet.ShouldProcess($imageBase, 'docker rmi')) {
   Write-Host '[3/9] Untagging Fox container images...' -ForegroundColor Cyan
   $tags = @('stable','latest','dev')
-  # All versioned tags currently known (extend as releases ship)
-  for ($minor = 5; $minor -le 30; $minor++) {
-    $tags += "v0.7.$minor"
-  }
+  # Every locally-present tag of the Fox image, whatever the version —
+  # the old hardcoded v0.7.5..v0.7.30 range silently spared newer tags.
+  $tags += @(docker images $imageBase --format '{{.Tag}}' 2>$null) |
+    Where-Object { $_ -and $_ -ne '<none>' }
+  $tags = $tags | Select-Object -Unique
   foreach ($tag in $tags) {
     docker rmi -f "${imageBase}:${tag}" 2>$null | Out-Null
   }
@@ -177,7 +183,7 @@ if (-not $KeepData) {
       if ($PSCmdlet.ShouldProcess($dir, 'rd /s /q')) {
         cmd /c "rd /s /q ""$dir""" 2>$null
         if (Test-Path -LiteralPath $dir) {
-          Write-Host "      WARNING: $dir partially survived — try `wsl --shutdown` then re-run" -ForegroundColor Yellow
+          Write-Host "      WARNING: $dir partially survived — try 'wsl --shutdown' then re-run" -ForegroundColor Yellow
         } else {
           Write-Host "      removed: $dir"
         }
