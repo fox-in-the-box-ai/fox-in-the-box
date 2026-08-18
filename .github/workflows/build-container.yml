@@ -686,3 +686,44 @@ jobs:
       - name: Stop container
         if: always()
         run: docker stop selftest-fox || true
+
+  # ── Main-push failure visibility ──────────────────────────────────────
+  # A failed run on a main push dies silently: no PR to go red, nobody
+  # watching. That silence cost real money once — the bump(upstream) #740
+  # merge-push failed at the arm64 checkout (GitHub 429), the merge job
+  # (and with it the Option B :stable auto-bump) never ran, and :stable
+  # sat on the previous image undetected for hours until a Trivy alert
+  # audit exposed stale package versions. This job opens (or re-fires)
+  # one issue whenever any job in a main-push run fails.
+  main_push_health:
+    name: main-push failure handler
+    needs: [build, merge, smoke, image-selftest]
+    if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main' && (contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Open or re-fire the rolling ci-health issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          source .github/scripts/tripwire-common.sh
+          title="[main-push] build-container failed on main (rolling)"
+          body=$(cat <<BODY_EOF
+          ## A main-push build-container run failed
+
+          Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          Commit: \`${{ github.sha }}\` — $(git log -1 --format=%s "${{ github.sha }}" 2>/dev/null || echo "(subject unavailable)")
+
+          Consequences to check:
+          - **No fresh \`:latest\`** was tagged from this commit.
+          - If the commit subject starts with \`bump(upstream):\`, the **Option B \`:stable\` auto-bump did NOT run** — \`:stable\` is stale until this run is re-run to completion (\`gh run rerun <id> --failed\`).
+
+          ## Resolution
+          - Inspect the failing job; transient infra (429 / mirror hang) → \`gh run rerun --failed\` and confirm the merge job completes.
+          - Close this issue once a run for this or a newer main commit is fully green.
+          BODY_EOF
+          )
+          tripwire_fire "$title" "$body" "ci-health,P1"

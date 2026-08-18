@@ -20,7 +20,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 
-- Upstream-watch and tripwire detectors no longer spam the issue tracker: nightly watch reports dedupe by title and supersede older reports (previously up to one duplicate per night), the branch rewrite-regex requires whole path segments with frontend-framework tokens scoped to the webui repo, maintainer-absence recognizes both maintainer accounts, stage-batch keys on published releases instead of the retired Stamp-CHANGELOG commit pattern, and the patch rebase-clock floors ages at the last upstream-pin verification date
+- Failed CI runs on main pushes are no longer silent: build-container opens a rolling `ci-health` issue naming the run, the commit, and the `:latest`/`:stable` consequences (a failed merge-push once skipped the Option B `:stable` advance undetected for hours); the container vulnerability scan can also be re-run on demand now
+- Upstream-watch and tripwire detectors no longer spam the issue tracker: nightly watch reports dedupe by title and supersede older reports (previously up to one duplicate per night), the branch rewrite-regex requires whole path segments with frontend-framework tokens scoped to the webui repo, maintainer-absence recognizes both maintainer accounts, stage-batch keys on published releases instead of the retired Stamp-CHANGELOG commit pattern, and the patch rebase-clock floors ages at the last upstream-pin verification date; closing a subject-specific fire (issue-age, branch-watch, CVE-feed — the title names an issue number, branch, or advisory id) now counts as a standing acknowledgement and suppresses nightly re-creation of the same subject
 
 ---
 

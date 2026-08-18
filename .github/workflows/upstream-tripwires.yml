@@ -10,8 +10,11 @@
 # Each tripwire is its own job. All jobs are independent; one failing does
 # not skip the others. A job's "fire" condition opens (or reuses) one issue
 # with a stable title; subsequent fires bump the existing issue rather than
-# stack. Issue closes happen by human inspection after the upstream condition
-# clears.
+# stack. Recurring-condition tripwires re-fire after a close once the
+# condition recurs; subject-specific tripwires (issue-age, branch-watch,
+# cve-feed — the title names an issue number / branch / GHSA id) treat a
+# closed same-title issue as a standing human acknowledgement and stay
+# quiet for that subject (tripwire_fire ack_dedupe mode).
 #
 # Tripwires implemented:
 #   #207  upstream_commit_digest   — daily commits + keyword/file flagging

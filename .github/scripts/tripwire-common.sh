@@ -7,24 +7,59 @@ set -eu
 
 REPO="${GITHUB_REPOSITORY:-fox-in-the-box-ai/fox-in-the-box}"
 RUN_URL="${GITHUB_SERVER_URL:-https://github.com}/${REPO}/actions/runs/${GITHUB_RUN_ID:-local}"
+# Actions sets GITHUB_WORKFLOW to the calling workflow's name; issues and
+# labels created by the helpers cite it so callers outside
+# upstream-tripwires.yml (e.g. build-container.yml's main_push_health)
+# carry correct provenance.
+SOURCE_WORKFLOW="${GITHUB_WORKFLOW:-upstream-tripwires.yml}"
 
 # Open or re-fire an issue. De-dupe by exact title match.
 #
 # Usage:
-#   tripwire_fire "<exact-title>" "<body markdown>" "<comma,sep,labels>"
+#   tripwire_fire "<exact-title>" "<body markdown>" "<comma,sep,labels>" [ack_dedupe]
 #
 # If an open issue with the same title exists, comment "Re-fired on
 # <RUN_URL>" + the new body on it. Otherwise create.
+#
+# Pass "ack_dedupe" as the 4th arg for tripwires whose titles name a
+# SPECIFIC subject (an upstream issue number, a branch name): a CLOSED
+# issue with the same title then counts as a human acknowledgement and
+# the fire is skipped instead of re-created (#747 re-fired nightly after
+# #723 was dispositioned). A different subject produces a different
+# title, so genuinely new conditions still fire. Do NOT use it for
+# recurring-condition tripwires with stable titles (absence, stage-batch)
+# — there a past closed issue must not suppress a future real fire.
 tripwire_fire() {
     local title="$1"
     local body="$2"
     local labels="$3"
+    local mode="${4:-}"
+
+    # Titles reach jq via the environment (env.TW_TITLE), never by
+    # splicing into the program text: branch-watch titles embed
+    # upstream-controlled branch names, and a crafted name containing
+    # jq-significant characters must not be able to break the filter —
+    # in the ack path that breakage would SUPPRESS a P1 fire.
+    export TW_TITLE="$title"
+
+    if [ "$mode" = "ack_dedupe" ]; then
+        local acked
+        acked=$(gh issue list --repo "$REPO" --state closed --limit 100 \
+                  --search "in:title \"$title\"" \
+                  --json number,title \
+                  -q '.[] | select(.title == env.TW_TITLE) | .number' \
+                  2>/dev/null | head -1)
+        if [ -n "$acked" ]; then
+            echo "[tripwire] condition previously acknowledged in closed #$acked — skipping re-fire"
+            return 0
+        fi
+    fi
 
     local existing
-    existing=$(gh issue list --repo "$REPO" --state open \
+    existing=$(gh issue list --repo "$REPO" --state open --limit 100 \
                  --search "in:title \"$title\"" \
                  --json number,title \
-                 -q ".[] | select(.title == \"$title\") | .number" \
+                 -q '.[] | select(.title == env.TW_TITLE) | .number' \
                  2>/dev/null | head -1)
 
     if [ -n "$existing" ]; then
@@ -47,13 +82,13 @@ tripwire_fire() {
         # permissions issue (the issue creation will surface the error).
         gh label create "$l" --repo "$REPO" --force \
             --color "$(tripwire_label_color "$l")" \
-            --description "auto-created by upstream-tripwires.yml" >/dev/null 2>&1 || true
+            --description "auto-created by $SOURCE_WORKFLOW" >/dev/null 2>&1 || true
         label_args+=("--label" "$l")
     done
 
     gh issue create --repo "$REPO" \
         --title "$title" \
-        --body "$(printf '%s\n\n_Fired by upstream-tripwires.yml run %s_' "$body" "$RUN_URL")" \
+        --body "$(printf '%s\n\n_Fired by %s run %s_' "$body" "$SOURCE_WORKFLOW" "$RUN_URL")" \
         "${label_args[@]}"
 }
 
@@ -68,11 +103,12 @@ tripwire_clear() {
     local title="$1"
     local reason="$2"
 
+    export TW_TITLE="$title"
     local numbers
-    numbers=$(gh issue list --repo "$REPO" --state open \
+    numbers=$(gh issue list --repo "$REPO" --state open --limit 100 \
                  --search "in:title \"$title\"" \
                  --json number,title \
-                 -q ".[] | select(.title == \"$title\") | .number" \
+                 -q '.[] | select(.title == env.TW_TITLE) | .number' \
                  2>/dev/null)
 
     if [ -z "$numbers" ]; then
@@ -81,7 +117,7 @@ tripwire_clear() {
 
     echo "$numbers" | while read -r num; do
         gh issue comment "$num" --repo "$REPO" \
-            --body "$(printf 'Condition cleared: %s\n\n_Auto-closed by upstream-tripwires.yml run %s_' "$reason" "$RUN_URL")" \
+            --body "$(printf 'Condition cleared: %s\n\n_Auto-closed by %s run %s_' "$reason" "$SOURCE_WORKFLOW" "$RUN_URL")" \
             || echo "[tripwire] warning: failed to comment on #$num"
         gh issue close "$num" --repo "$REPO" --reason "completed" \
             || echo "[tripwire] warning: failed to close #$num"
@@ -94,6 +130,7 @@ tripwire_label_color() {
     case "$1" in
         tripwire-fire)         echo "d73a4a" ;;  # red
         tripwire-self-health)  echo "fbca04" ;;  # yellow
+        ci-health)             echo "b60205" ;;  # dark red — main-push pipeline failures
         tripwire/cve|security) echo "b60205" ;;  # dark red
         tripwire/license)      echo "5319e7" ;;  # purple
         tripwire/branch|tripwire/nous-ui) echo "d93f0b" ;;  # orange

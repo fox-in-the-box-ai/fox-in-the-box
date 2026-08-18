@@ -78,7 +78,7 @@ Issue accretion in young projects signals maintainer triage capacity is below in
 - [ ] Inspect $oldest_url — is it truly neglected or just a low-priority enhancement?
 - [ ] Skim the upstream's recent issue activity — is overall response time degrading?
 - [ ] If yes: re-evaluate dependence on this upstream in v0.7.x planning
-- [ ] If no (one-off neglected enhancement): close this issue; tripwire will re-fire if the new oldest issue also exceeds threshold
+- [ ] If no (one-off neglected enhancement): close this issue — closing acknowledges THIS oldest issue permanently; the tripwire fires again only when a different issue becomes the >threshold oldest
 
 EOF
 )
@@ -86,7 +86,8 @@ EOF
     tripwire_fire \
         "[tripwire/issue-age] $repo oldest open issue >${THRESHOLD_DAYS}d (#$oldest_num)" \
         "$body" \
-        "tripwire-fire,tripwire/issue-age,P2"
+        "tripwire-fire,tripwire/issue-age,P2" \
+        ack_dedupe
 }
 
 check_repo "$WEBUI_REPO"
