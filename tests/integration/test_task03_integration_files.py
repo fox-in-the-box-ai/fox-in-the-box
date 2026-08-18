@@ -143,8 +143,14 @@ class TestEntrypoint(unittest.TestCase):
         self.assertIn("openssh-client", self.sh)
         self.assertIn("rsync", self.sh)
         self.assertIn("apt-get install -y --no-install-recommends", self.sh)
-        # Must never fail boot when apt is unavailable
-        self.assertIn("WARN: apt-get failed", self.sh)
+        # Must never fail boot when apt is unavailable, and the warning must
+        # carry apt's actual error text for operators
+        self.assertIn("WARN: dev-tool heal failed", self.sh)
+        self.assertIn("apt said:", self.sh)
+        # Offline boots must not stall on apt's default timeouts
+        self.assertIn("Acquire::http::Timeout=5", self.sh)
+        # Bridge code carries its removal tracker
+        self.assertIn("#736", self.sh)
 
 
 if __name__ == "__main__":

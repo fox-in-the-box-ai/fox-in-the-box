@@ -159,23 +159,27 @@ mkdir -p /app/workspace
 chown -R foxinthebox:foxinthebox /app/workspace
 
 # ── 4a. Dev toolbelt self-heal ────────────────────────────────────────────────
-# Best-effort: if a stale or partial image is missing ssh/rsync (built before
-# openssh-client was baked, interrupted installs), install them at boot. Never
-# fail boot on apt problems — the tools are optional for the core service.
+# Best-effort BRIDGE CODE for stale images built before ssh/rsync were baked
+# (removal tracked in #736 — delete once the deployed fleet rolls past the
+# bake release). On healthy images this is a cheap command -v no-op. Never
+# fail boot on apt problems; short network timeouts keep offline boots fast.
 _ensure_dev_toolbelt() {
-    local missing_apt=() missing_names=()
+    local missing_apt=() missing_names=() apt_err
     command -v ssh   >/dev/null 2>&1 || { missing_apt+=(openssh-client); missing_names+=(ssh);   }
     command -v rsync >/dev/null 2>&1 || { missing_apt+=(rsync);          missing_names+=(rsync); }
     if [ "${#missing_apt[@]}" -eq 0 ]; then
         echo "[entrypoint] Dev toolbelt: ssh + rsync present."
         return 0
     fi
-    echo "[entrypoint] Installing missing dev tools: ${missing_names[*]}"
-    if apt-get update -qq 2>/dev/null && \
-       apt-get install -y --no-install-recommends "${missing_apt[@]}" -qq 2>/dev/null; then
+    echo "[entrypoint] Stale image detected — installing missing dev tools: ${missing_names[*]} (pull a current image to avoid this per-boot install)"
+    if apt_err=$(apt-get update -qq \
+            -o Acquire::http::Timeout=5 -o Acquire::https::Timeout=5 -o Acquire::Retries=1 2>&1 >/dev/null) && \
+       apt_err=$(apt-get install -y --no-install-recommends "${missing_apt[@]}" -qq \
+            -o Acquire::http::Timeout=5 -o Acquire::https::Timeout=5 -o Acquire::Retries=1 2>&1 >/dev/null); then
+        rm -rf /var/lib/apt/lists/*
         echo "[entrypoint] Installed: ${missing_names[*]}"
     else
-        echo "[entrypoint] WARN: apt-get failed — dev tools unavailable: ${missing_names[*]}" >&2
+        echo "[entrypoint] WARN: dev-tool heal failed — ${missing_names[*]} unavailable this boot. apt said: ${apt_err:-no error output}" >&2
     fi
 }
 _ensure_dev_toolbelt
