@@ -30,8 +30,12 @@ from .fox_overlay_plugin.monkey_patches import (
     auxiliary_client,
     bedrock_imds,
     cron_diagnostics,
-    runtime_provider,
 )
+
+# runtime_provider target_model patch REMOVED 2026-08-17: upstream
+# v2026.8.16.2 ships the fix natively (runtime_provider.py:2211 uses
+# target_model in the Bedrock api_mode read) — the Phase 0 PR-campaign
+# outcome this patch's docstring planned for.
 
 
 def register(ctx) -> None:
@@ -40,7 +44,6 @@ def register(ctx) -> None:
     Idempotent: each ``apply()`` no-ops on its second call via per-target
     sentinel attribute.
     """
-    runtime_provider.apply()
     auxiliary_client.apply()
     cron_diagnostics.apply()
     bedrock_imds.apply()

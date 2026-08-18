@@ -49,17 +49,16 @@ def apply() -> None:
     # 2) cron.jobs.mark_job_run — maintain rolling failure history
     # v2026.6.19 added cross-process file locking via _jobs_lock and
     # fire-claim clearing between the delivery_error and completed-count lines.
+    # v2026.8.16.2 split mark_job_run into a locking wrapper +
+    # _mark_job_run_locked (body) and inserted a run_claim clearing block
+    # (#59229) inside our old anchor span. Target the locked body with the
+    # minimal unique anchor and insert the history block right after it.
     substitute_function(
         upstream_module=_u_jobs,
-        function_name="mark_job_run",
+        function_name="_mark_job_run_locked",
         substitutions=[
             (
-                '                job["last_delivery_error"] = delivery_error\n'
-                '                # Clear any external-fire claim so a re-armed recurring job can\n'
-                '                # be claimed again on its next fire (Phase 4C CAS).\n'
-                '                job["fire_claim"] = None\n'
-                '                \n'
-                '                # Increment completed count\n',
+                '                job["last_delivery_error"] = delivery_error\n',
                 '                job["last_delivery_error"] = delivery_error\n'
                 '\n'
                 '                # Maintain rolling failure history (last 5 entries).\n'
@@ -70,13 +69,7 @@ def apply() -> None:
                 '                    _hist.append(_entry)\n'
                 '                    job["failure_history"] = _hist[-5:]  # keep last 5\n'
                 '                else:\n'
-                '                    job["failure_history"] = []\n'
-                '\n'
-                '                # Clear any external-fire claim so a re-armed recurring job can\n'
-                '                # be claimed again on its next fire (Phase 4C CAS).\n'
-                '                job["fire_claim"] = None\n'
-                '                \n'
-                '                # Increment completed count\n',
+                '                    job["failure_history"] = []\n',
             ),
         ],
         sentinel="_fox_patched_mark_job_run_failure_history",
@@ -90,10 +83,9 @@ def apply() -> None:
         function_name="run_job",
         substitutions=[
             (
-                '    except Exception as e:\n'
-                '        error_msg = f"{type(e).__name__}: {str(e)}"\n'
-                '        logger.exception("Job \'%s\' failed: %s", job_name, error_msg)\n'
-                '        \n'
+                # v2026.8.16.2 inserted an audit-record write between the
+                # except header and the output template; anchor on the intact
+                # template block only (verified unique in run_job).
                 '        output = f"""# Cron Job: {job_name} (FAILED)\n'
                 '\n'
                 '**Job ID:** {job_id}\n'
@@ -111,10 +103,6 @@ def apply() -> None:
                 '```\n'
                 '"""\n'
                 '        return False, output, "", error_msg\n',
-                '    except Exception as e:\n'
-                '        error_msg = f"{type(e).__name__}: {str(e)}"\n'
-                '        logger.exception("Job \'%s\' failed: %s", job_name, error_msg)\n'
-                '\n'
                 '        # Collect agent activity diagnostics if available\n'
                 '        _diag_lines: list[str] = []\n'
                 '        if agent is not None:\n'
@@ -168,36 +156,12 @@ def apply() -> None:
         extra_globals={"traceback": traceback},
     )
 
-    # 4) cron.scheduler.run_one_job — augment upstream's failure summary
-    # with Fox-specific context (consecutive failure count + session log
-    # path). v2026.6.19 extracted the per-job firing logic from tick()
-    # into run_one_job() and the error formatting into
-    # _summarize_cron_failure_for_delivery.
-    substitute_function(
-        upstream_module=_u_scheduler,
-        function_name="run_one_job",
-        substitutions=[
-            (
-                '        deliver_content = final_response if success else _summarize_cron_failure_for_delivery(job, error)\n',
-                '        if success:\n'
-                '            deliver_content = final_response\n'
-                '        else:\n'
-                '            _fail_lines = [_summarize_cron_failure_for_delivery(job, error)]\n'
-                '            _history = job.get("failure_history") or []\n'
-                '            if len(_history) > 1:\n'
-                '                _fail_lines.append(f"**Consecutive failures:** {len(_history)} (first: {_history[0].get(\'at\', \'?\')[:16]})")\n'
-                '            _session_files = sorted(\n'
-                '                (f for f in (_get_hermes_home() / "sessions").glob(f"session_cron_{job[\'id\']}_*.json") if f.is_file()),\n'
-                '                key=lambda p: p.stat().st_mtime,\n'
-                '                reverse=True,\n'
-                '            )\n'
-                '            if _session_files:\n'
-                '                _fail_lines.append(f"**Session log:** `{_session_files[0]}`")\n'
-                '            deliver_content = "\\n".join(_fail_lines)\n',
-            ),
-        ],
-        sentinel="_fox_patched_run_one_job_structured_failure",
-    )
+    # 4) run_one_job delivery-enrichment substitution REMOVED 2026-08-17:
+    # upstream v2026.8.16.2 refactored run_one_job into _run_one_job_body
+    # and ships native failure-streak nudging (_failure_streak_nudge +
+    # persisted failure_streak) superseding our consecutive-failures line;
+    # the session-log pointer already reaches users via the patched
+    # run_job FAILED template.
 
     # 5) tools.cronjob_tools._format_job — surface failure history when present
     substitute_function(

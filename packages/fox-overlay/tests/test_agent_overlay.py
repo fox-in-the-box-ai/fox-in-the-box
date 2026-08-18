@@ -27,20 +27,17 @@ pytest.importorskip("tools.cronjob_tools")
 
 from agent import auxiliary_client  # noqa: E402
 from cron import jobs, scheduler  # noqa: E402
-from hermes_cli import runtime_provider  # noqa: E402
 from tools import cronjob_tools  # noqa: E402
 
 from fox_overlay.agent_plugins import register  # noqa: E402
 
 
 SENTINELS = [
-    (runtime_provider, "resolve_runtime_provider", "_fox_patched_target_model"),
     (auxiliary_client, "_resolve_task_provider_model", "_fox_patched_provider_auto_fallback"),
     (auxiliary_client, "_get_auxiliary_task_config", "_fox_patched_auxiliary_default_fallback"),
     (jobs, "create_job", "_fox_patched_create_job_failure_history"),
-    (jobs, "mark_job_run", "_fox_patched_mark_job_run_failure_history"),
+    (jobs, "_mark_job_run_locked", "_fox_patched_mark_job_run_failure_history"),
     (scheduler, "run_job", "_fox_patched_run_job_diagnostics"),
-    (scheduler, "run_one_job", "_fox_patched_run_one_job_structured_failure"),
     (cronjob_tools, "_format_job", "_fox_patched_format_job_failure_history"),
 ]
 

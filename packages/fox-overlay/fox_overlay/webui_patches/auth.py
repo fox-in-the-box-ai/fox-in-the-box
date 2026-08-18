@@ -63,8 +63,10 @@ def apply() -> None:
         function_name="check_auth",
         substitutions=[
             (
-                "    # Check session cookie\n"
-                "    cookie_val = parse_cookie(handler)\n",
+                # v0.52.113 dropped the "# Check session cookie" comment; the
+                # parse+verify pair below is the unique anchor in check_auth.
+                "    cookie_val = parse_cookie(handler)\n"
+                "    has_session = bool(cookie_val and verify_session(cookie_val))\n",
 
                 "    # PATH 5 (Fox managed mode): X-Fox-Auth shared secret.\n"
                 "    # Fleet's fox-control sends this header on every request.\n"
@@ -74,8 +76,8 @@ def apply() -> None:
                 "        _fox_auth_header = handler.headers.get('X-Fox-Auth', '')\n"
                 "        if _fox_auth_header and _hmac_compare(_fox_auth_header, _fox_plane_secret):\n"
                 "            return True\n"
-                "    # Check session cookie\n"
-                "    cookie_val = parse_cookie(handler)\n",
+                "    cookie_val = parse_cookie(handler)\n"
+                "    has_session = bool(cookie_val and verify_session(cookie_val))\n",
             ),
         ],
         sentinel=_CHECK_AUTH_SENTINEL,
