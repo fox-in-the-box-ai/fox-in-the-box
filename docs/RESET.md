@@ -25,11 +25,11 @@ cd packages\scripts
 .\clean-windows-desktop.ps1
 ```
 
-That does the full nuclear cleanup: stops every Fox / Electron process, removes the container, untags every Fox image variant (`:stable`, `:v0.7.*`, `:latest`), prunes dangling volumes, runs the bundled NSIS uninstaller silently, deletes the app data dirs + updater caches + install dir, and verifies clean state at the end. Note: current installs (v0.7.19+) use `%APPDATA%\fox-in-the-box`; `%APPDATA%\@fox-in-the-box` is the legacy pre-v0.7.19 location — the script currently targets only the legacy paths (tracked as a known gap), so on v0.7.19+ installs also remove the non-@ dirs manually per the fallback below.
+That does the full nuclear cleanup: stops every Fox / Electron process, removes the container, untags every Fox image variant (`:stable`, `:v0.7.*`, `:latest`), prunes dangling volumes, runs the bundled NSIS uninstaller silently, deletes the app data dirs + updater caches + install dirs — **both path generations**: the current v0.7.19+ locations (`%APPDATA%\fox-in-the-box` etc.) and the legacy `@`-prefixed pre-v0.7.19 ones — and verifies clean state at the end.
 
 **Options:**
 
-- `-KeepData` — leave the data dirs (`%APPDATA%\fox-in-the-box`, legacy `%APPDATA%\@fox-in-the-box`) alone (preserve onboarding state, settings, conversation history, local models). Useful for "reset Docker only."
+- `-KeepData` — leave the data dirs (both generations) alone (preserve onboarding state, settings, conversation history, local models). Useful for "reset Docker only."
 - `-KeepInstall` — don't run the uninstaller or delete the install dir. Useful for "reset data only."
 - `-WhatIf` — preview what would change without changing anything.
 
