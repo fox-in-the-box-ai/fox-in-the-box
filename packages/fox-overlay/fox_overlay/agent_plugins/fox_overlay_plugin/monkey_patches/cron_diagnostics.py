@@ -2,15 +2,14 @@
 
 Restores the Fox edit from hermes-agent fork commit edb16600b that
 relocated to this overlay during the v0.6.0 upstream-separation
-migration (Phase 3). Five substitutions across three modules:
+migration (Phase 3). Four substitutions across three modules:
 
 * ``cron.jobs.create_job`` — add ``failure_history`` to the job dict.
-* ``cron.jobs.mark_job_run`` — maintain rolling last-5 failure entries.
+* ``cron.jobs._mark_job_run_locked`` — maintain rolling last-5 failure
+  entries (upstream split ``mark_job_run`` into a locked helper in
+  v2026.8.16.2).
 * ``cron.scheduler.run_job`` — enrich the FAILED output with agent
   diagnostics + traceback + session-log pointer.
-* ``cron.scheduler.run_one_job`` — augment failure delivery with
-  consecutive failure count + session log path (upstream handles error
-  formatting via ``_summarize_cron_failure_for_delivery``).
 * ``tools.cronjob_tools._format_job`` — surface ``last_error`` +
   ``failure_history`` + ``consecutive_failures`` to the tool API when
   the job has failures.
@@ -22,6 +21,7 @@ injected into the patched function's ``__globals__`` via the helper's
 Phase 0 PR campaign candidate; if upstream accepts the PR, this
 monkey-patch becomes dead code and is removed in Phase 10 cleanup.
 """
+
 import traceback
 
 from cron import jobs as _u_jobs
@@ -49,34 +49,27 @@ def apply() -> None:
     # 2) cron.jobs.mark_job_run — maintain rolling failure history
     # v2026.6.19 added cross-process file locking via _jobs_lock and
     # fire-claim clearing between the delivery_error and completed-count lines.
+    # v2026.8.16.2 split mark_job_run into a locking wrapper +
+    # _mark_job_run_locked (body) and inserted a run_claim clearing block
+    # (#59229) inside our old anchor span. Target the locked body with the
+    # minimal unique anchor and insert the history block right after it.
     substitute_function(
         upstream_module=_u_jobs,
-        function_name="mark_job_run",
+        function_name="_mark_job_run_locked",
         substitutions=[
             (
+                '                job["last_delivery_error"] = delivery_error\n',
                 '                job["last_delivery_error"] = delivery_error\n'
-                '                # Clear any external-fire claim so a re-armed recurring job can\n'
-                '                # be claimed again on its next fire (Phase 4C CAS).\n'
-                '                job["fire_claim"] = None\n'
-                '                \n'
-                '                # Increment completed count\n',
-                '                job["last_delivery_error"] = delivery_error\n'
-                '\n'
-                '                # Maintain rolling failure history (last 5 entries).\n'
-                '                # On success, clear it so the counter resets.\n'
-                '                if not success:\n'
+                "\n"
+                "                # Maintain rolling failure history (last 5 entries).\n"
+                "                # On success, clear it so the counter resets.\n"
+                "                if not success:\n"
                 '                    _entry = {"at": now, "error": (error or "unknown")[:200]}\n'
                 '                    _hist = list(job.get("failure_history") or [])\n'
-                '                    _hist.append(_entry)\n'
+                "                    _hist.append(_entry)\n"
                 '                    job["failure_history"] = _hist[-5:]  # keep last 5\n'
-                '                else:\n'
-                '                    job["failure_history"] = []\n'
-                '\n'
-                '                # Clear any external-fire claim so a re-armed recurring job can\n'
-                '                # be claimed again on its next fire (Phase 4C CAS).\n'
-                '                job["fire_claim"] = None\n'
-                '                \n'
-                '                # Increment completed count\n',
+                "                else:\n"
+                '                    job["failure_history"] = []\n',
             ),
         ],
         sentinel="_fox_patched_mark_job_run_failure_history",
@@ -90,35 +83,30 @@ def apply() -> None:
         function_name="run_job",
         substitutions=[
             (
-                '    except Exception as e:\n'
-                '        error_msg = f"{type(e).__name__}: {str(e)}"\n'
-                '        logger.exception("Job \'%s\' failed: %s", job_name, error_msg)\n'
-                '        \n'
+                # v2026.8.16.2 inserted an audit-record write between the
+                # except header and the output template; anchor on the intact
+                # template block only (verified unique in run_job).
                 '        output = f"""# Cron Job: {job_name} (FAILED)\n'
-                '\n'
-                '**Job ID:** {job_id}\n'
-                '**Run Time:** {_hermes_now().strftime(\'%Y-%m-%d %H:%M:%S\')}\n'
-                '**Schedule:** {job.get(\'schedule_display\', \'N/A\')}\n'
-                '\n'
-                '## Prompt\n'
-                '\n'
-                '{prompt}\n'
-                '\n'
-                '## Error\n'
-                '\n'
-                '```\n'
-                '{error_msg}\n'
-                '```\n'
+                "\n"
+                "**Job ID:** {job_id}\n"
+                "**Run Time:** {_hermes_now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+                "**Schedule:** {job.get('schedule_display', 'N/A')}\n"
+                "\n"
+                "## Prompt\n"
+                "\n"
+                "{prompt}\n"
+                "\n"
+                "## Error\n"
+                "\n"
+                "```\n"
+                "{error_msg}\n"
+                "```\n"
                 '"""\n'
                 '        return False, output, "", error_msg\n',
-                '    except Exception as e:\n'
-                '        error_msg = f"{type(e).__name__}: {str(e)}"\n'
-                '        logger.exception("Job \'%s\' failed: %s", job_name, error_msg)\n'
-                '\n'
-                '        # Collect agent activity diagnostics if available\n'
-                '        _diag_lines: list[str] = []\n'
-                '        if agent is not None:\n'
-                '            try:\n'
+                "        # Collect agent activity diagnostics if available\n"
+                "        _diag_lines: list[str] = []\n"
+                "        if agent is not None:\n"
+                "            try:\n"
                 '                _act = agent.get_activity_summary() if hasattr(agent, "get_activity_summary") else {}\n'
                 '                _api_calls = _act.get("api_call_count", "?")\n'
                 '                _max_iter = _act.get("max_iterations", "?")\n'
@@ -127,39 +115,39 @@ def apply() -> None:
                 '                _diag_lines.append(f"**Iterations:** {_api_calls}/{_max_iter}")\n'
                 '                _diag_lines.append(f"**Last activity:** {_last_act} ({int(_idle)}s ago)")\n'
                 '                if _act.get("current_tool"):\n'
-                '                    _diag_lines.append(f"**Stuck on tool:** `{_act[\'current_tool\']}`")\n'
-                '            except Exception:\n'
-                '                pass\n'
-                '\n'
-                '        _tb = traceback.format_exc()\n'
+                "                    _diag_lines.append(f\"**Stuck on tool:** `{_act['current_tool']}`\")\n"
+                "            except Exception:\n"
+                "                pass\n"
+                "\n"
+                "        _tb = traceback.format_exc()\n"
                 '        _diag_block = ("\\n".join(_diag_lines) + "\\n\\n") if _diag_lines else ""\n'
-                '\n'
+                "\n"
                 '        output = f"""# Cron Job: {job_name} (FAILED)\n'
-                '\n'
-                '**Job ID:** {job_id}\n'
-                '**Session:** `{_cron_session_id}`\n'
-                '**Run Time:** {_hermes_now().strftime(\'%Y-%m-%d %H:%M:%S\')}\n'
-                '**Schedule:** {job.get(\'schedule_display\', \'N/A\')}\n'
-                '\n'
-                '## Error\n'
-                '\n'
-                '```\n'
-                '{error_msg}\n'
-                '```\n'
-                '\n'
-                '## Agent Diagnostics\n'
-                '\n'
-                '{_diag_block}**Session log:** `~/.hermes/sessions/session_{_cron_session_id}.json`\n'
-                '\n'
-                '## Traceback\n'
-                '\n'
-                '```\n'
-                '{_tb}\n'
-                '```\n'
-                '\n'
-                '## Prompt\n'
-                '\n'
-                '{prompt}\n'
+                "\n"
+                "**Job ID:** {job_id}\n"
+                "**Session:** `{_cron_session_id}`\n"
+                "**Run Time:** {_hermes_now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+                "**Schedule:** {job.get('schedule_display', 'N/A')}\n"
+                "\n"
+                "## Error\n"
+                "\n"
+                "```\n"
+                "{error_msg}\n"
+                "```\n"
+                "\n"
+                "## Agent Diagnostics\n"
+                "\n"
+                "{_diag_block}**Session log:** `~/.hermes/sessions/session_{_cron_session_id}.json`\n"
+                "\n"
+                "## Traceback\n"
+                "\n"
+                "```\n"
+                "{_tb}\n"
+                "```\n"
+                "\n"
+                "## Prompt\n"
+                "\n"
+                "{prompt}\n"
                 '"""\n'
                 '        return False, output, "", error_msg\n',
             ),
@@ -168,36 +156,12 @@ def apply() -> None:
         extra_globals={"traceback": traceback},
     )
 
-    # 4) cron.scheduler.run_one_job — augment upstream's failure summary
-    # with Fox-specific context (consecutive failure count + session log
-    # path). v2026.6.19 extracted the per-job firing logic from tick()
-    # into run_one_job() and the error formatting into
-    # _summarize_cron_failure_for_delivery.
-    substitute_function(
-        upstream_module=_u_scheduler,
-        function_name="run_one_job",
-        substitutions=[
-            (
-                '        deliver_content = final_response if success else _summarize_cron_failure_for_delivery(job, error)\n',
-                '        if success:\n'
-                '            deliver_content = final_response\n'
-                '        else:\n'
-                '            _fail_lines = [_summarize_cron_failure_for_delivery(job, error)]\n'
-                '            _history = job.get("failure_history") or []\n'
-                '            if len(_history) > 1:\n'
-                '                _fail_lines.append(f"**Consecutive failures:** {len(_history)} (first: {_history[0].get(\'at\', \'?\')[:16]})")\n'
-                '            _session_files = sorted(\n'
-                '                (f for f in (_get_hermes_home() / "sessions").glob(f"session_cron_{job[\'id\']}_*.json") if f.is_file()),\n'
-                '                key=lambda p: p.stat().st_mtime,\n'
-                '                reverse=True,\n'
-                '            )\n'
-                '            if _session_files:\n'
-                '                _fail_lines.append(f"**Session log:** `{_session_files[0]}`")\n'
-                '            deliver_content = "\\n".join(_fail_lines)\n',
-            ),
-        ],
-        sentinel="_fox_patched_run_one_job_structured_failure",
-    )
+    # 4) run_one_job delivery-enrichment substitution REMOVED 2026-08-17:
+    # upstream v2026.8.16.2 refactored run_one_job into _run_one_job_body
+    # and ships native failure-streak nudging (_failure_streak_nudge +
+    # persisted failure_streak) superseding our consecutive-failures line;
+    # the session-log pointer already reaches users via the patched
+    # run_job FAILED template.
 
     # 5) tools.cronjob_tools._format_job — surface failure history when present
     substitute_function(
@@ -207,17 +171,17 @@ def apply() -> None:
             (
                 '        "paused_at": job.get("paused_at"),\n'
                 '        "paused_reason": job.get("paused_reason"),\n'
-                '    }\n'
+                "    }\n"
                 '    if job.get("script"):\n',
                 '        "paused_at": job.get("paused_at"),\n'
                 '        "paused_reason": job.get("paused_reason"),\n'
-                '    }\n'
-                '    # Surface failure history and last error only when there are failures —\n'
-                '    # keeps the list output clean for healthy jobs.\n'
+                "    }\n"
+                "    # Surface failure history and last error only when there are failures —\n"
+                "    # keeps the list output clean for healthy jobs.\n"
                 '    if job.get("last_status") == "error" or job.get("failure_history"):\n'
                 '        result["last_error"] = job.get("last_error")\n'
                 '        _hist = job.get("failure_history") or []\n'
-                '        if _hist:\n'
+                "        if _hist:\n"
                 '            result["failure_history"] = _hist\n'
                 '            result["consecutive_failures"] = len(_hist)\n'
                 '    if job.get("script"):\n',

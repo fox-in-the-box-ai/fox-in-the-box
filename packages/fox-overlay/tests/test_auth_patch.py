@@ -37,9 +37,9 @@ def check_auth(handler, parsed) -> bool:
     # Public paths don't require auth
     if parsed.path in PUBLIC_PATHS or parsed.path.startswith('/static/') or parsed.path.startswith('/session/static/'):
         return True
-    # Check session cookie
     cookie_val = parse_cookie(handler)
-    if cookie_val and verify_session(cookie_val):
+    has_session = bool(cookie_val and verify_session(cookie_val))
+    if has_session:
         return True
     # Not authorized
     if parsed.path.startswith('/api/'):

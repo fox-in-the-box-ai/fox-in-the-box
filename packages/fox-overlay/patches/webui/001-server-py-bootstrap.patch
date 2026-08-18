@@ -1,5 +1,5 @@
 diff --git a/server.py b/server.py
-index 48129542..dcf26b0d 100644
+index 8ccac36b..ecb3c8eb 100644
 --- a/server.py
 +++ b/server.py
 @@ -100,6 +100,16 @@ from urllib.parse import urlparse
@@ -16,6 +16,6 @@ index 48129542..dcf26b0d 100644
 +except Exception as _fox_e:
 +    logger.warning("fox_overlay.bootstrap failed (%s); Fox routes disabled", _fox_e)
 +
- from api.auth import check_auth
+ from api.auth import check_auth, reset_trusted_auth_request_state
  from api.config import HOST, PORT, STATE_DIR, SESSION_DIR, DEFAULT_WORKSPACE
  from api.helpers import (
