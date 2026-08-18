@@ -41,7 +41,10 @@ These are long-standing CVEs in Debian system packages (glibc, tar, perl, iptabl
 - Fox doesn't process untrusted tar archives or user-supplied regex patterns
 - Container isolation + TLS termination mitigate the remaining vectors
 
-**Debian system packages with no fix available:**
+**Debian system packages with no fix available:** (the base layer applies
+`apt-get upgrade -y` at build time, so every fix Debian *has* shipped enters
+the image on the next build — this class is only the remainder with no fix
+published)
 The container base image (`python:3.11-slim`, Debian trixie) includes system packages at their latest Debian patch level. When CVEs are reported against these packages before Debian releases a fix, the alerts appear and remain open until Debian ships the patch. These auto-close on the next container rebuild after the Debian fix lands.
 
 **System npm bundled dependencies:**
