@@ -22,11 +22,10 @@ releases without carrying a perpetually-conflicting fork.
 | `versions.toml` | Pinned upstream tags + their bump history. |
 | `MANIFEST.toml` | Inventory of overlay artifacts (used by `scripts/check-overlay-basis.sh`). |
 | `scripts/check-overlay-basis.sh` | CI gate — verifies every overlay artifact still applies cleanly against the current submodule pin. |
-| `tests/` | Pytest regression suite (383 tests across 31 modules covering dispatcher, monkey-patches, wraps, modules, memory provider). |
+| `tests/` | Pytest regression suite (383 tests across 28 test modules covering dispatcher, monkey-patches, wraps, modules, memory provider). |
 
 ## Where to learn more
 
-- **`fox-private-docs/architecture/upstream-overlay.md`** — the authoritative overlay-mechanisms doc (mechanism table, when to use which, wrap-and-splice / multi-substitution / fail-loud anchor patterns). Read it before writing overlay code.
+- **`fox-private-docs/architecture/upstream-overlay.md`** — the authoritative overlay-mechanisms doc (mechanism table, when to use which, wrap-and-splice / multi-substitution / fail-loud anchor patterns); maintainer-internal repo. External contributors: this README's table plus the patch/monkey-patch sources themselves (each carries a fail-loud anchor and docstring) are the public reference.
 - **[`docs/architecture/upstream-overlay.md`](../../docs/architecture/upstream-overlay.md)** — the in-repo upstream-PR strategy doc (when to push a fix upstream instead of patching).
 - **[`docs/RELEASE_WORKFLOW.md`](../../docs/RELEASE_WORKFLOW.md)** — Flow A (Fox-code release) vs Flow B (Option B upstream-only bump).
-- **`docs/archive/upstream-migration-execution-plan.archive.md`** — the original 10-phase migration plan (historical).

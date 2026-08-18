@@ -28,7 +28,7 @@ On AWS VMs, the instance metadata service (IMDS) makes the machine's default ins
 
 **Open Dependabot alerts: 0** (as of 2026-08-18 — js-yaml 4.3.1 and protobufjs 7.6.5 cleared the last npm alerts). The long-tracked **GHSA-537c-gmf6-5ccf accepted risk is CLOSED**: upstream hermes-agent previously hard-pinned `cryptography` below the 48.0.1 fix; since the v0.52.113 / v2026.8.16.2 pin bump, `requirements.lock` carries `cryptography==50.0.0`.
 
-`packages/integration/requirements.lock` is itself a supply-chain control: 96 exact pins for every Python package in the container, consumed as a pip **constraints** file (`-c`) at build time so transitive resolution cannot drift silently between builds; CI fails on freeze drift.
+`packages/integration/requirements.lock` is itself a supply-chain control: 94 exact pins for every Python package in the container, consumed as a pip **constraints** file (`-c`) at build time so transitive resolution cannot drift silently between builds; CI fails on freeze drift.
 
 ### Triage policy for container-scan (Trivy) alert categories
 

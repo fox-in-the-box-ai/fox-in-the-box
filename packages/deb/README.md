@@ -8,7 +8,7 @@
 
 ```bash
 # Add the signing key + repo once
-curl -fsSL https://apt.foxinthebox.ai/gpg.asc | sudo gpg --dearmor -o /usr/share/keyrings/foxinthebox.gpg
+curl -fsSL https://apt.foxinthebox.ai/gpg | sudo gpg --dearmor -o /usr/share/keyrings/foxinthebox.gpg
 echo "deb [signed-by=/usr/share/keyrings/foxinthebox.gpg] https://apt.foxinthebox.ai stable main" | sudo tee /etc/apt/sources.list.d/foxinthebox.list
 
 sudo apt update && sudo apt install foxinthebox

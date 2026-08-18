@@ -2,7 +2,7 @@
 
 *Decision-ready. No monetization — decoupled from ADR-0001. 2026-06-01.*
 
-*Builds on: `docs/explorations/do-marketplace.md`*
+*Builds on: `docs/archive/explorations-do-marketplace.md`*
 
 ---
 

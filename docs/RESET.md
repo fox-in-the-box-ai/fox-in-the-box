@@ -93,7 +93,7 @@ Then uninstall the app via Settings → Apps if you want the program files gone 
 
    ```bash
    rm -rf "$HOME/Library/Application Support/fox-in-the-box"
-rm -rf "$HOME/Library/Application Support/@fox-in-the-box"  # legacy pre-v0.7.19
+   rm -rf "$HOME/Library/Application Support/@fox-in-the-box"  # legacy pre-v0.7.19
    rm -rf "$HOME/.foxinthebox"   # only if you used the Docker one-liner path
    ```
 
