@@ -190,17 +190,26 @@ jobs:
           # digest IS the manifest-list digest. Use --format for stability.
           # Retry: GHCR reads-after-write occasionally lag the push by a
           # few seconds, returning 404/empty on the immediate inspect.
+          # Stderr is captured so a terminal failure still reports WHY
+          # (404 lag vs auth vs network), and the final attempt neither
+          # sleeps nor logs a misleading "retrying".
           DIGEST=""
+          RAW=""
           for attempt in 1 2 3 4 5; do
-            DIGEST=$(docker buildx imagetools inspect "${IMAGE}:${TAG}" --format '{{json .Manifest}}' 2>/dev/null | jq -r '.digest' || true)
+            RAW=$(docker buildx imagetools inspect "${IMAGE}:${TAG}" --format '{{json .Manifest}}' 2>&1) \
+              && DIGEST=$(jq -r '.digest' <<<"$RAW" 2>/dev/null || true) \
+              || DIGEST=""
             if [[ -n "$DIGEST" && "$DIGEST" != "null" ]]; then
               break
             fi
-            echo "inspect attempt $attempt returned no digest; retrying in 10s"
-            sleep 10
+            if [[ "$attempt" -lt 5 ]]; then
+              echo "inspect attempt $attempt returned no digest; retrying in 10s"
+              sleep 10
+            fi
           done
           if [[ -z "$DIGEST" || "$DIGEST" == "null" ]]; then
-            echo "::error::Could not determine index digest from manifest-list inspect after 5 attempts"
+            echo "::error::Could not determine index digest from manifest-list inspect after 5 attempts. Last inspect output:"
+            echo "$RAW"
             exit 1
           fi
           echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
@@ -210,17 +219,25 @@ jobs:
         run: |
           set -euo pipefail
           # Same GHCR read-after-write lag as the digest inspect above:
-          # retry before concluding a platform is genuinely missing.
+          # retry before concluding a platform is genuinely missing. RAW
+          # keeps the last inspect output (incl. error text) for the
+          # hard-fail path below.
           INSPECT=""
+          RAW=""
           for attempt in 1 2 3 4 5; do
-            INSPECT=$(docker buildx imagetools inspect "${IMAGE}:${{ steps.tag.outputs.tag }}" \
-              --format '{{range .Manifest.Manifests}}{{.Platform.OS}}/{{.Platform.Architecture}}{{"\n"}}{{end}}' 2>/dev/null || true)
+            RAW=$(docker buildx imagetools inspect "${IMAGE}:${{ steps.tag.outputs.tag }}" \
+              --format '{{range .Manifest.Manifests}}{{.Platform.OS}}/{{.Platform.Architecture}}{{"\n"}}{{end}}' 2>&1) \
+              && INSPECT="$RAW" || INSPECT=""
             if grep -qx 'linux/amd64' <<<"$INSPECT" && grep -qx 'linux/arm64' <<<"$INSPECT"; then
               break
             fi
-            echo "inspect attempt $attempt incomplete; retrying in 10s"
-            sleep 10
+            if [[ "$attempt" -lt 5 ]]; then
+              echo "inspect attempt $attempt incomplete; retrying in 10s"
+              sleep 10
+            fi
           done
+          echo "Last inspect output:"
+          echo "$RAW"
           echo "Platforms found in manifest list:"
           echo "$INSPECT"
           # Both must be present. `attestation-manifest` entries (with
@@ -281,12 +298,22 @@ jobs:
                 -t "${IMAGE}:stable" \
                 "${IMAGE}@${INPUT_DIGEST}"
               # Verify both arches survived the re-tag (defensive — FITB#82).
-              docker buildx imagetools inspect "${IMAGE}:stable" \
-                --format '{{range .Manifest.Manifests}}{{.Platform.OS}}/{{.Platform.Architecture}}{{"\n"}}{{end}}' \
-                | grep -qx 'linux/amd64'
-              docker buildx imagetools inspect "${IMAGE}:stable" \
-                --format '{{range .Manifest.Manifests}}{{.Platform.OS}}/{{.Platform.Architecture}}{{"\n"}}{{end}}' \
-                | grep -qx 'linux/arm64'
+              # Same GHCR read-after-write retry as the merge/verify steps.
+              PLATFORMS=""
+              for attempt in 1 2 3 4 5; do
+                PLATFORMS=$(docker buildx imagetools inspect "${IMAGE}:stable" \
+                  --format '{{range .Manifest.Manifests}}{{.Platform.OS}}/{{.Platform.Architecture}}{{"\n"}}{{end}}' 2>&1) \
+                  || PLATFORMS=""
+                if grep -qx 'linux/amd64' <<<"$PLATFORMS" && grep -qx 'linux/arm64' <<<"$PLATFORMS"; then
+                  break
+                fi
+                if [[ "$attempt" -lt 5 ]]; then
+                  echo ":stable inspect attempt $attempt incomplete; retrying in 10s"
+                  sleep 10
+                fi
+              done
+              grep -qx 'linux/amd64' <<<"$PLATFORMS" || { echo "::error:::stable missing linux/amd64 after re-tag. Last inspect: $PLATFORMS"; exit 1; }
+              grep -qx 'linux/arm64' <<<"$PLATFORMS" || { echo "::error:::stable missing linux/arm64 after re-tag. Last inspect: $PLATFORMS"; exit 1; }
               # imagetools create rebuilds the manifest list and assigns it a
               # NEW index digest (the contents are bit-identical but the
               # operation creates a new manifest blob). Re-read so the log
