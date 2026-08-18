@@ -25,11 +25,11 @@ cd packages\scripts
 .\clean-windows-desktop.ps1
 ```
 
-That does the full nuclear cleanup: stops every Fox / Electron process, removes the container, untags every Fox image variant (`:stable`, `:v0.7.*`, `:latest`), prunes dangling volumes, runs the bundled NSIS uninstaller silently, deletes the `%APPDATA%\@fox-in-the-box` data dir + `%LOCALAPPDATA%\@fox-in-the-boxelectron-updater` + install dir, and verifies clean state at the end.
+That does the full nuclear cleanup: stops every Fox / Electron process, removes the container, untags every Fox image variant (`:stable`, `:v0.7.*`, `:latest`), prunes dangling volumes, runs the bundled NSIS uninstaller silently, deletes the app data dirs + updater caches + install dir, and verifies clean state at the end. Note: current installs (v0.7.19+) use `%APPDATA%\fox-in-the-box`; `%APPDATA%\@fox-in-the-box` is the legacy pre-v0.7.19 location — the script currently targets only the legacy paths (tracked as a known gap), so on v0.7.19+ installs also remove the non-@ dirs manually per the fallback below.
 
 **Options:**
 
-- `-KeepData` — leave `%APPDATA%\@fox-in-the-box` alone (preserve onboarding state, settings, conversation history, local models). Useful for "reset Docker only."
+- `-KeepData` — leave the data dirs (`%APPDATA%\fox-in-the-box`, legacy `%APPDATA%\@fox-in-the-box`) alone (preserve onboarding state, settings, conversation history, local models). Useful for "reset Docker only."
 - `-KeepInstall` — don't run the uninstaller or delete the install dir. Useful for "reset data only."
 - `-WhatIf` — preview what would change without changing anything.
 
@@ -62,6 +62,9 @@ Or a Fox/Electron process is still alive — check Task Manager → end any `fox
 ```powershell
 docker rm -f fox-in-the-box
 docker rmi -f ghcr.io/fox-in-the-box-ai/cloud:stable
+cmd /c "rd /s /q ""$env:APPDATA\fox-in-the-box"""
+cmd /c "rd /s /q ""$env:LOCALAPPDATA\fox-in-the-box-updater"""
+# Legacy pre-v0.7.19 locations (only present on old installs):
 cmd /c "rd /s /q ""$env:APPDATA\@fox-in-the-box"""
 cmd /c "rd /s /q ""$env:LOCALAPPDATA\@fox-in-the-boxelectron-updater"""
 ```
@@ -86,10 +89,11 @@ Then uninstall the app via Settings → Apps if you want the program files gone 
    rm ~/Library/LaunchAgents/io.foxinthebox.plist   # only if you no longer want auto-start
    ```
 
-4. **Remove your data.** Default Electron path is `~/Library/Application Support/@fox-in-the-box`. If you used the Docker one-liner with `-v ~/.foxinthebox:/data`, also remove that.
+4. **Remove your data.** Default Electron path is `~/Library/Application Support/fox-in-the-box` (v0.7.19+; older installs used `@fox-in-the-box`). If you used the Docker one-liner with `-v ~/.foxinthebox:/data`, also remove that.
 
    ```bash
-   rm -rf "$HOME/Library/Application Support/@fox-in-the-box"
+   rm -rf "$HOME/Library/Application Support/fox-in-the-box"
+rm -rf "$HOME/Library/Application Support/@fox-in-the-box"  # legacy pre-v0.7.19
    rm -rf "$HOME/.foxinthebox"   # only if you used the Docker one-liner path
    ```
 

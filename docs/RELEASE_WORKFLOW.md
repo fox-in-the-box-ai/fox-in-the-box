@@ -21,7 +21,9 @@ Before tagging anything:
 - [ ] **`qa/SMOKE_CHECKLIST.md` run end-to-end against a fresh container built from `main`**
 - [ ] CHANGELOG entry drafted in concise / sectioned style (see prior releases for tone — `Fixed`/`Added`/`What's next`)
 
-**v0.7.60 HARD gate (no bypass):** the pre-release real-container smoke with an **OpenRouter-only key** (design §g.2 steps 1–14 — memory READY line, store/recall round trip, embed-server kill/recovery, catalog-blackout boot, pool-only credential round trip) must run against the PR-built image and pass before the tag. This is a PR-body commitment for the mem0 default-on release; the `qa/SMOKE_LOG.md` entry for v0.7.60 may not use a Bypass reason for these steps.
+**Memory hard gate (standing rule, established v0.7.60):** any release that changes the memory subsystem (mem0 plugin, embed-server, provider resolution, `/readyz` memory component) must run the real-container smoke with a **real provider key** against the release-candidate image — memory READY line, store/recall round trip, embed-server kill/recovery, keyless OFF state, offline embeddings — and record it in `qa/SMOKE_LOG.md` without a Bypass reason for those steps. Precedent: the v0.7.60 entry (13/14 steps, Anthropic wire path documented-skip).
+
+**CI-enforced release gates (in `release.yml`):** the tag build refuses to publish unless (a) `qa/SMOKE_LOG.md` has a `## vX.Y.Z` entry whose body contains at least one `- [x]` line OR an explicit `Bypass reason:` line (v0.7.15 header gate + v0.7.19 body gate), and (b) `CHANGELOG.md` has a matching `[X.Y.Z]` entry. An empty smoke entry fails the release.
 
 ## Cutting a release — two flows
 
@@ -44,11 +46,14 @@ git checkout -b release/v0.7.6
 # 3. Bump version files + CHANGELOG + smoke-checklist row
 echo "0.7.6" > VERSION
 # Edit packages/electron/package.json — bump "version" to match
+# Refresh packages/electron/package-lock.json so its own version fields
+# match (npm install --package-lock-only) — the lock was left stale at
+# v0.7.60 and healed later; VERSION + package.json + electron lock bump together
 # Edit CHANGELOG.md — add new ## [0.7.6] section at top with prose lead + sections
 # Edit qa/SMOKE_CHECKLIST.md — add Section L row + update "Last updated:" line
 
 # 4. Commit + push + PR
-git add VERSION packages/electron/package.json CHANGELOG.md qa/SMOKE_CHECKLIST.md
+git add VERSION packages/electron/package.json packages/electron/package-lock.json CHANGELOG.md qa/SMOKE_CHECKLIST.md
 git commit -m "release(v0.7.6): <theme> (release mechanics)"
 git push -u origin release/v0.7.6
 gh pr create --title "release(v0.7.6): <theme>" --body "..."
@@ -61,7 +66,7 @@ git tag -a v0.7.6 -m "v0.7.6 — <theme>"
 git push origin v0.7.6
 ```
 
-The `release.yml` workflow runs automatically on tag push. It chains `build-container.yml` (multi-arch Docker → GHCR) and `build-electron.yml` (signed macOS DMGs + signed Windows exe) and creates the GitHub Release with the CHANGELOG entry as the body.
+The `release.yml` workflow runs automatically on tag push. Its job graph: `build-container.yml` (multi-arch Docker → GHCR) and `build-electron.yml` (signed macOS DMGs + signed Windows exe) run as reusable workflows; `build-deb` (amd64 + arm64) feeds `deb-smoke-test` and then `publish-apt` (reprepro → Cloudflare R2 → apt.foxinthebox.ai; currently `continue-on-error` per #539); a decoupled `promote-container` job (#550) advances `:vX.Y.Z` and `:stable` from the built index digest independently of the Electron build, with GHCR read-after-write retries on the manifest inspections (#743); the GitHub Release job needs `[wait-for-electron, deb-smoke-test, promote-container]` and publishes the CHANGELOG entry as the body with 7 assets.
 
 ### Flow B — Option B upstream-only bump (since v0.7.0)
 
@@ -81,21 +86,27 @@ cd forks/hermes-webui && git fetch --tags && git checkout vX.Y.Z && cd ../..
 bash packages/fox-overlay/scripts/check-overlay-basis.sh
 
 # 4. Commit + push + PR — PR title MUST start with `bump(upstream):`
-git add forks/hermes-webui packages/fox-overlay/versions.toml
+git add forks/hermes-webui packages/fox-overlay packages/integration/requirements.lock
 git commit -m "bump(upstream): webui vX.Y.W → vX.Y.Z (closes #NNN)"
 git push -u origin bump/upstream-webui-vX.Y.Z
 gh pr create --title "bump(upstream): webui vX.Y.W → vX.Y.Z (closes #NNN)" --body "..."
 
 # 5. CI runs the Option B diff guard (.github/workflows/option-b-diff-guard.yml)
-#    — fails the PR if the diff touches anything outside forks/hermes-* +
-#    versions.toml. Once CI is green, squash-merge with the SAME `bump(upstream):`
-#    subject — build-container.yml's merge job regexes the commit subject and
-#    auto-bumps :stable on match.
+#    — fails the PR if the diff touches anything outside the allowlist:
+#    forks/hermes-agent + forks/hermes-webui submodule pointers, ALL of
+#    packages/fox-overlay/ (regenerated patches, retargeted monkey-patches,
+#    tests, versions.toml), packages/integration/requirements.lock, and the
+#    guard workflow file itself. A real bump (e.g. #740) typically touches
+#    all three areas. Once CI is green, squash-merge with the SAME
+#    `bump(upstream):` subject — build-container.yml's merge job regexes the
+#    commit subject and auto-bumps :stable on match.
 
 gh pr merge <PR#> --squash --subject "bump(upstream): webui vX.Y.W → vX.Y.Z (closes #NNN)"
 ```
 
 **No tag push, no GitHub Release, no DMG/exe rebuild for Option B.** `:stable` advances; users on the desktop app get the new container content on next launch. The Option B diff guard (since v0.7.5) prevents an unintended Fox-code change from sneaking through under a `bump(upstream):` subject — that protects against the original FITB#122 class of regression.
+
+**Verify the advance actually happened.** The `:stable` auto-bump runs in the merge-push's `build-container.yml` run on `main` — if that run fails (infra flake on checkout, builder outage), the advance is silently skipped while the PR's own CI stays green. A failed or cancelled main-push run now fires a rolling `[main-push]` `ci-health` issue naming the consequences; the fix is `gh run rerun <run-id> --failed` and confirming the merge job completes. This class bit for real on #740 (429 flake → `:stable` served the pre-bump image for ~6 hours).
 
 See [`docs/architecture/upstream-overlay.md`](architecture/upstream-overlay.md) → "Versioning policy (Option B)" for the design rationale.
 
@@ -135,9 +146,11 @@ The **`assets-nomic-embed-v1.5`** prerelease GitHub Release hosts the embedding-
 # Watch the pipeline
 gh run watch --exit-status
 
-# Confirm the 5 binaries
-gh release view v0.5.0 --json assets -q '.assets[].name'
-# Expected: arm64-mac.dmg, arm64-mac.zip, setup-x64.exe, x64-mac.dmg, x64-mac.zip
+# Confirm the 7 assets
+gh release view v0.7.60 --json assets -q '.assets[].name'
+# Expected: arm64-mac.dmg, arm64-mac.zip, x64-mac.dmg, x64-mac.zip,
+#           setup-x64.exe, foxinthebox_X.Y.Z_amd64.deb, foxinthebox_X.Y.Z_arm64.deb
+# (release.yml uses fail_on_unmatched_files: true)
 ```
 
 Then, **on the released binary** (not on local main):

@@ -4,13 +4,25 @@
 
 ## User install
 
+### Via the apt repo (recommended, live since v0.7.59)
+
+```bash
+# Add the signing key + repo once
+curl -fsSL https://apt.foxinthebox.ai/gpg.asc | sudo gpg --dearmor -o /usr/share/keyrings/foxinthebox.gpg
+echo "deb [signed-by=/usr/share/keyrings/foxinthebox.gpg] https://apt.foxinthebox.ai stable main" | sudo tee /etc/apt/sources.list.d/foxinthebox.list
+
+sudo apt update && sudo apt install foxinthebox
+```
+
+Releases publish to the repo automatically via `release.yml`'s `publish-apt` job (reprepro → Cloudflare R2).
+
+### Direct .deb download (alternative)
+
 Download the `.deb` for your architecture from the [latest release](https://github.com/fox-in-the-box-ai/fox-in-the-box/releases/latest):
 
 ```bash
 sudo apt install ./foxinthebox_<version>_<arch>.deb
 ```
-
-> **apt repo (not yet available).** `apt.foxinthebox.ai` will provide `apt install foxinthebox` once GPG signing and R2 hosting are configured. Tracked in #539. Until then, download the `.deb` from GitHub Releases.
 
 ### From a local .deb file
 
@@ -20,52 +32,12 @@ Always use `apt install` (not `dpkg -i`) to ensure dependencies are resolved:
 sudo apt install ./foxinthebox_<version>_<arch>.deb
 ```
 
-## One-time infrastructure setup
+## Infrastructure setup
 
-### Generate GPG signing key pair
-
-```bash
-# Generate (no passphrase — for CI use)
-gpg --batch --full-gen-key <<EOF
-Key-Type: RSA
-Key-Length: 4096
-Subkey-Type: RSA
-Subkey-Length: 4096
-Name-Real: Fox in the Box
-Name-Email: apt@foxinthebox.ai
-Expire-Date: 0
-%no-protection
-%commit
-EOF
-
-# Get key ID
-gpg --list-secret-keys apt@foxinthebox.ai
-
-# Export private key (store as GitHub secret APT_GPG_PRIVATE_KEY)
-gpg --armor --export-secret-keys <KEY_ID>
-
-# Export public key (upload to R2 as gpg.asc)
-gpg --armor --export <KEY_ID> > gpg.asc
-# rclone copyto gpg.asc r2:foxinthebox-apt/gpg.asc
-```
-
-### Bootstrap Cloudflare R2 bucket
-
-1. Create bucket `foxinthebox-apt` in Cloudflare R2
-2. Enable public access on the bucket
-3. Add CNAME: `apt.foxinthebox.ai` → R2 bucket public URL
-4. Create R2 API token with Read+Write access to `foxinthebox-apt`
-5. Upload `gpg.asc` to bucket root
-
-### GitHub secrets required
-
-| Secret | Value |
-|--------|-------|
-| `APT_GPG_PRIVATE_KEY` | `gpg --armor --export-secret-keys <KEY_ID>` |
-| `APT_GPG_KEY_ID` | GPG key fingerprint |
-| `R2_ACCOUNT_ID` | Cloudflare account ID |
-| `R2_ACCESS_KEY` | R2 API token access key |
-| `R2_SECRET_KEY` | R2 API token secret key |
+The one-time GPG keygen, R2 bucket bootstrap, and GitHub-secrets inventory
+live in [`docs/ops/apt-repo-setup.md`](../../docs/ops/apt-repo-setup.md) —
+that ops doc is the maintained copy; this README intentionally doesn't
+duplicate it.
 
 ## Building locally
 

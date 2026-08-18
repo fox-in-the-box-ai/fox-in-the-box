@@ -18,7 +18,7 @@ pnpm build:docker:dev
 
 What this does:
 
-- Reads `VERSION` (repo root) — currently `0.7.59`
+- Reads `VERSION` (repo root) — currently `0.7.60`
 - Builds with `--build-arg FITB_DEV=1`
 - Tags the image as `fox-in-the-box:dev`
 - Skips the `_clone_app hermes-agent` / `_clone_app hermes-webui` calls in `entrypoint.sh` — the container will use bind-mounted submodules instead
@@ -44,7 +44,9 @@ Edit code in `forks/*` on your host. The container sees the changes immediately.
 
 ```bash
 docker exec -it <container> supervisorctl -c /etc/supervisor/supervisord.conf restart hermes-webui
-# or hermes-gateway, qdrant, llama-server, tailscaled
+# or hermes-gateway, qdrant, embed-server, llama-server, tailscaled
+# (embed-server is the mem0 local embedder on :8644 — the unit memory work
+#  most often needs restarted; llama-server is the separate local-fallback unit)
 ```
 
 For static-asset changes (HTML / JS / CSS in `forks/hermes-webui/static/`), just hard-refresh the browser — webui serves static files directly from the bind mount.
@@ -71,7 +73,7 @@ If a mount is missing:
 | ---------------- | --------------------------- | --------------------------------------- |
 | Build flag       | `FITB_DEV=1`                | `FITB_DEV=0` (default)                  |
 | Submodule source | Bind-mounted from your host | Cloned from a git tag at build time     |
-| Tag              | `dev`                       | semver e.g. `0.7.59`                    |
+| Tag              | `dev`                       | semver e.g. `0.7.60`                    |
 | Use case         | Iterating on submodule code | Released artifact, CI, what users run   |
 
 ## Common workflows
@@ -104,7 +106,7 @@ When dev mode hides the bug, you need the actual built image. Build the producti
 
 ```bash
 docker build -f packages/integration/Dockerfile \
-  -t fitb:repro --build-arg FITB_VERSION=v0.7.59 .
+  -t fitb:repro --build-arg FITB_VERSION=v0.7.60 .
 docker run --rm --cap-add=NET_ADMIN --device /dev/net/tun \
   --sysctl net.ipv4.ip_forward=1 \
   -p 127.0.0.1:8788:8787 \
