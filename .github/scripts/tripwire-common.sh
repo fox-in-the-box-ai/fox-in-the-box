@@ -30,12 +30,19 @@ tripwire_fire() {
     local labels="$3"
     local mode="${4:-}"
 
+    # Titles reach jq via the environment (env.TW_TITLE), never by
+    # splicing into the program text: branch-watch titles embed
+    # upstream-controlled branch names, and a crafted name containing
+    # jq-significant characters must not be able to break the filter —
+    # in the ack path that breakage would SUPPRESS a P1 fire.
+    export TW_TITLE="$title"
+
     if [ "$mode" = "ack_dedupe" ]; then
         local acked
-        acked=$(gh issue list --repo "$REPO" --state closed \
+        acked=$(gh issue list --repo "$REPO" --state closed --limit 100 \
                   --search "in:title \"$title\"" \
                   --json number,title \
-                  -q ".[] | select(.title == \"$title\") | .number" \
+                  -q '.[] | select(.title == env.TW_TITLE) | .number' \
                   2>/dev/null | head -1)
         if [ -n "$acked" ]; then
             echo "[tripwire] condition previously acknowledged in closed #$acked — skipping re-fire"
@@ -44,10 +51,10 @@ tripwire_fire() {
     fi
 
     local existing
-    existing=$(gh issue list --repo "$REPO" --state open \
+    existing=$(gh issue list --repo "$REPO" --state open --limit 100 \
                  --search "in:title \"$title\"" \
                  --json number,title \
-                 -q ".[] | select(.title == \"$title\") | .number" \
+                 -q '.[] | select(.title == env.TW_TITLE) | .number' \
                  2>/dev/null | head -1)
 
     if [ -n "$existing" ]; then
@@ -91,11 +98,12 @@ tripwire_clear() {
     local title="$1"
     local reason="$2"
 
+    export TW_TITLE="$title"
     local numbers
-    numbers=$(gh issue list --repo "$REPO" --state open \
+    numbers=$(gh issue list --repo "$REPO" --state open --limit 100 \
                  --search "in:title \"$title\"" \
                  --json number,title \
-                 -q ".[] | select(.title == \"$title\") | .number" \
+                 -q '.[] | select(.title == env.TW_TITLE) | .number' \
                  2>/dev/null)
 
     if [ -z "$numbers" ]; then
