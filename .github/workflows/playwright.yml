@@ -125,7 +125,9 @@ jobs:
     # runs that spec (cheap). Phase 1+ scales up the spec count.
     if: github.event_name == 'schedule' && github.event.schedule == '0 4 * * *'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # 20m was sized for the 1-spec Phase 0 suite; 57 tests x 3 browsers
+    # over 4 shards timed out 3 shards on 2026-08-19.
+    timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
@@ -235,3 +237,39 @@ jobs:
       - name: Phase 0 stub — list tests so the workspace + browsers exist
         working-directory: qa/playwright
         run: pnpm exec playwright test --list
+
+  # Cron runs fail silently — no PR to go red, nobody watching at 04:00
+  # UTC. Same pattern as build-container's main_push_health (#752): open
+  # or re-fire one rolling ci-health issue when a scheduled run fails.
+  cron_health:
+    name: cron failure handler
+    needs: [full]
+    if: always() && github.event_name == 'schedule' && (contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Open or re-fire the rolling ci-health issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          source .github/scripts/tripwire-common.sh
+          title="[cron] Playwright nightly full suite failed (rolling)"
+          body=$(cat <<BODY_EOF
+          ## The nightly Playwright full run failed or was cancelled
+
+          Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+          Shard timeouts usually mean the suite outgrew the job budget or the
+          :stable container was slow to become healthy; a cancelled matrix can
+          also mean runner starvation. Inspect the slowest shard's report.
+
+          ## Resolution
+          - Transient: \`gh run rerun <id> --failed\`
+          - Structural (suite growth): raise the \`full\` job timeout or add a shard
+          - Close once a nightly run is green.
+          BODY_EOF
+          )
+          tripwire_fire "$title" "$body" "ci-health,P2"
