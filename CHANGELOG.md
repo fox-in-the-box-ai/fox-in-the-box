@@ -33,7 +33,13 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
-## [0.7.60] — 2026-08-14
+## [0.7.60] — 2026-08-14 (tagged 2026-08-16, published 2026-08-18)
+
+> Correction (2026-08-19): the `openssh-client`/`rsync` image bake and the
+> entrypoint self-heal listed below merged AFTER the v0.7.60 tag and are not
+> in the tagged desktop/container artifacts — they reached users via the
+> post-release `:stable` container advance and ship in tagged form with the
+> next release. Recorded here rather than silently rewriting history.
 
 ### Added
 

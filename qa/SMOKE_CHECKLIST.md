@@ -29,7 +29,7 @@ sleep 15   # extra time for entrypoint operator-grant + supervisord settle
 
 **The smoke container is at `http://127.0.0.1:8788`. Your real install (port 8787) is unaffected.**
 
-**Currently testing:** v0.7.60 (released 2026-08-18; `:stable` currently carries the post-release #740 container-only pin bump — webui v0.52.113 / agent v2026.8.16.2). Use `docker manifest inspect "$IMAGE" | jq -r '.manifests[0].digest'` to capture the digest for the current run; record it in the SMOKE log if a release is on the line.
+**Currently testing:** v0.7.60 (released 2026-08-18). `:stable` additionally carries post-release Option B pin bumps — the live pins are whatever `packages/fox-overlay/versions.toml` says on `main` (that file is the single source of truth; this doc deliberately stopped naming versions that rot). Use `docker manifest inspect "$IMAGE" | jq -r '.manifests[0].digest'` to capture the digest for the current run; record it in the SMOKE log if a release is on the line.
 
 ---
 

@@ -4,7 +4,7 @@
 
 ## User install
 
-### Via the apt repo (recommended, live since v0.7.59)
+### Via the apt repo (publishes since v0.7.59; DNS for `apt.foxinthebox.ai` pending — use the direct .deb below until it resolves)
 
 ```bash
 # Add the signing key + repo once
