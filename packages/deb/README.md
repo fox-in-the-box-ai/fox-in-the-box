@@ -4,7 +4,12 @@
 
 ## User install
 
-### Via the apt repo (publishes since v0.7.59; DNS for `apt.foxinthebox.ai` pending — use the direct .deb below until it resolves)
+### Via the apt repo — not yet reachable
+
+Packages have published to the repo bucket since v0.7.59, but the
+`apt.foxinthebox.ai` DNS delegation is still pending — **use the direct
+.deb download below until it resolves.** Once live (verify the key
+fingerprint against the one published in this repo before trusting it):
 
 ```bash
 # Add the signing key + repo once
