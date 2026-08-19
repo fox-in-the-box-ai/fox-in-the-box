@@ -19,6 +19,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - js-yaml resolved to 4.3.1 in both lockfiles (root pnpm-lock.yaml and packages/electron/package-lock.json), clearing all four open js-yaml advisories. Corrects the 0.7.60 record: that entry listed js-yaml 4.3.1 in its security batch, but the lockfiles still resolved 4.2.0 at release time — this change is what lands it.
 - protobufjs resolved to 7.6.5 in both lockfiles, clearing the last two open dependabot alerts; with the js-yaml 4.3.1 bump this takes the open alert count to zero
 
+### Added
+
+- (carried from the v0.7.60 correction) `openssh-client` and `rsync` baked into the container image, plus the entrypoint self-heal bridge for stale images (#736 sunset) — merged just after the v0.7.60 tag, so this is their first tagged release
+
 ### Fixed
 
 - Desktop (macOS): guided setup no longer touches Homebrew when Docker Desktop is already installed — a present-but-stopped Docker is started, not (re)installed, so an existing install can never be upgraded (and its containers restarted) without consent; Homebrew runs only when Docker Desktop is absent (#749)
@@ -33,7 +37,13 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
-## [0.7.60] — 2026-08-14
+## [0.7.60] — 2026-08-14 (release commit 2026-08-16, tagged & published 2026-08-18)
+
+> Correction (2026-08-19): the `openssh-client`/`rsync` image bake and the
+> entrypoint self-heal listed below merged AFTER the v0.7.60 tag and are not
+> in the tagged desktop/container artifacts — they reached users via the
+> post-release `:stable` container advance; the first tagged release cut
+> from current `main` will contain them. Recorded here rather than silently rewriting history.
 
 ### Added
 
