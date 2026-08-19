@@ -27,6 +27,7 @@
 #   #214  e2e_pair_test            — verified-shipped (see comment in job)
 #   #215  patch_rebase_clock       — oldest overlay patch refresh-age
 #   #216  open_issue_age           — oldest upstream open issue >90d
+#   #217  scheduled_run_health     — watched scheduled workflows have a recent green run
 #
 # See docs/architecture/upstream-overlay.md §Operational → "Tripwires" for
 # the resolution playbook for each label.
@@ -208,6 +209,21 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: bash .github/scripts/tripwire-issue-age.sh
 
+  # ── #217 — Scheduled-run health ────────────────────────────────────────
+  # Watches scheduled workflows whose failure modes produce NO signal
+  # (offline self-hosted runner → runs queue forever → cancelled without
+  # any failure handler executing). Fires a rolling ci-health issue per
+  # watched workflow; auto-clears when a successful run lands.
+  scheduled_run_health:
+    if: github.event.inputs.only == '' || github.event.inputs.only == 'scheduled_run_health'
+    name: "#217 scheduled-run health"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash .github/scripts/tripwire-scheduled-run-health.sh
+
   # ── Tripwire-job failure handler ────────────────────────────────────────
   # If any tripwire job itself fails (network blip, API rate limit, script
   # bug), open one combined issue rather than ten — surfacing infra failure
@@ -225,6 +241,7 @@ jobs:
       - e2e_pair_test
       - patch_rebase_clock
       - open_issue_age
+      - scheduled_run_health
     if: always() && contains(needs.*.result, 'failure')
     runs-on: ubuntu-latest
     steps:

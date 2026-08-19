@@ -196,7 +196,16 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -eu
-          title="[upstream-watch] Update available: webui ${{ steps.pinned.outputs.webui_tag }} → ${{ steps.latest.outputs.webui }}, agent ${{ steps.pinned.outputs.agent_tag }} → ${{ steps.latest.outputs.agent }}"
+          # Title names ONLY drifted components — "webui vX → vX" in #763
+          # read as a false webui update.
+          parts=""
+          if [ "${{ steps.drift.outputs.webui_drift }}" = "yes" ]; then
+              parts="webui ${{ steps.pinned.outputs.webui_tag }} → ${{ steps.latest.outputs.webui }}"
+          fi
+          if [ "${{ steps.drift.outputs.agent_drift }}" = "yes" ]; then
+              parts="${parts:+$parts, }agent ${{ steps.pinned.outputs.agent_tag }} → ${{ steps.latest.outputs.agent }}"
+          fi
+          title="[upstream-watch] Update available: $parts"
           # Dedupe: an open issue with this exact title means the same
           # update is already reported — re-fire as a comment, don't stack.
           # Title goes to jq via the environment (env.WATCH_TITLE), not
