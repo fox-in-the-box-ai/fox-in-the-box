@@ -311,7 +311,7 @@ What we're working on next. No promises on dates — this is a small team — bu
 **Recently shipped**
 
 - **Long-term memory on by default** — fresh installs get persistent memory out of the box: local nomic-embed-text-v1.5 embedder (llama.cpp), self-hosted mem0 + embedded Qdrant, memory state in Settings and `/readyz` (v0.7.60)
-- **Fox branding, Bedrock credentials card, ssh + rsync in the image** — canonical app icons and favicons, AWS Bedrock credentials in Settings, openssh-client and rsync baked in (v0.7.60)
+- **Fox branding, Bedrock credentials card, ssh + rsync in the image** — canonical app icons and favicons, AWS Bedrock credentials in Settings (v0.7.60); the openssh-client/rsync image bake merged just after the v0.7.60 tag — container users have it via `:stable`, and it ships tagged with the next release
 - **Upstream bumps** — container-only Option B pin advances ship continuously; the live pinned pair is in [`packages/fox-overlay/versions.toml`](packages/fox-overlay/versions.toml)
 - **Security alert triage** — resolved 24 supply-chain alerts via npm overrides + Dockerfile upgrade (v0.7.55–v0.7.57)
 - **Apt repository** — `.deb` packages publish to the apt repo bucket on every release (v0.7.59+); public availability at `apt.foxinthebox.ai` awaits DNS delegation — until then use the `.deb` assets on GitHub Releases
