@@ -194,16 +194,24 @@ jobs:
         if: steps.drift.outputs.no_drift != 'yes' && steps.basis.outputs.basis_rc == '0'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        env:
+          # Tag names come from third-party repos — env-routed, never
+          # interpolated into the script text (script-injection surface
+          # with an issues:write token).
+          PINNED_WEBUI: ${{ steps.pinned.outputs.webui_tag }}
+          PINNED_AGENT: ${{ steps.pinned.outputs.agent_tag }}
+          LATEST_WEBUI: ${{ steps.latest.outputs.webui }}
+          LATEST_AGENT: ${{ steps.latest.outputs.agent }}
         run: |
           set -eu
           # Title names ONLY drifted components — "webui vX → vX" in #763
           # read as a false webui update.
           parts=""
           if [ "${{ steps.drift.outputs.webui_drift }}" = "yes" ]; then
-              parts="webui ${{ steps.pinned.outputs.webui_tag }} → ${{ steps.latest.outputs.webui }}"
+              parts="webui $PINNED_WEBUI → $LATEST_WEBUI"
           fi
           if [ "${{ steps.drift.outputs.agent_drift }}" = "yes" ]; then
-              parts="${parts:+$parts, }agent ${{ steps.pinned.outputs.agent_tag }} → ${{ steps.latest.outputs.agent }}"
+              parts="${parts:+$parts, }agent $PINNED_AGENT → $LATEST_AGENT"
           fi
           title="[upstream-watch] Update available: $parts"
           # Dedupe: an open issue with this exact title means the same
@@ -260,7 +268,15 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -eu
-          title="[upstream-drift] Overlay anchors drift against webui ${{ steps.latest.outputs.webui }} / agent ${{ steps.latest.outputs.agent }}"
+          # Same only-drifted-components rule as the update-available title.
+          parts=""
+          if [ "${{ steps.drift.outputs.webui_drift }}" = "yes" ]; then
+              parts="webui ${{ steps.latest.outputs.webui }}"
+          fi
+          if [ "${{ steps.drift.outputs.agent_drift }}" = "yes" ]; then
+              parts="${parts:+$parts / }agent ${{ steps.latest.outputs.agent }}"
+          fi
+          title="[upstream-drift] Overlay anchors drift against $parts"
           # Dedupe: same drift target already reported → re-fire as a
           # comment instead of stacking a duplicate issue per nightly run.
           # Title via env for jq — see the update-available step.

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Tripwire #217 — scheduled-run health.
+# Tripwire — scheduled-run health (added in the 2026-08-19 verification
+# sweep; unlike #207-#216 this one has no spec issue under epic #206).
 #
 # A scheduled workflow whose runner is offline (or whose runs queue
 # forever and get cancelled) fails SILENTLY: no PR goes red, and the
@@ -12,20 +13,27 @@
 set -eu
 source "$(dirname "$0")/tripwire-common.sh"
 
+# Default staleness threshold; per-entry ":<hours>" overrides it.
 THRESHOLD_HOURS=48
-# workflow-file:allowed-staleness-override (hours), space-separated.
-WATCHED="windows-real-smoke.yml:48"
+# workflow-file[:allowed-staleness-hours], space-separated.
+WATCHED="windows-real-smoke.yml"
 
 now_epoch=$(date -u +%s)
 
 for entry in $WATCHED; do
     wf="${entry%%:*}"
-    max_h="${entry##*:}"
-    last_ok=$(gh api -X GET "repos/$REPO/actions/workflows/$wf/runs" \
-                -f status=success -f per_page=1 2>/dev/null \
-              | jq -r '.workflow_runs[0].updated_at // empty' || true)
+    case "$entry" in *:*) max_h="${entry##*:}" ;; *) max_h="$THRESHOLD_HOURS" ;; esac
+    # An API failure must fail the JOB (into the tripwire-self-health
+    # handler), never masquerade as "never succeeded" — a 403/rate-limit
+    # would otherwise false-fire and permanently break auto-clear.
+    if ! resp=$(gh api -X GET "repos/$REPO/actions/workflows/$wf/runs" \
+                  -f status=success -f per_page=1 2>&1); then
+        echo "::error::gh api failed for $wf runs: $resp"
+        exit 1
+    fi
+    last_ok=$(printf '%s' "$resp" | jq -r '.workflow_runs[0].updated_at // empty')
     if [ -z "$last_ok" ]; then
-        age_desc="never"
+        age_desc="never (no successful run on record)"
         stale=1
     else
         ok_epoch=$(date -u -j -f '%Y-%m-%dT%H:%M:%SZ' "$last_ok" +%s 2>/dev/null \
@@ -48,7 +56,7 @@ for entry in $WATCHED; do
 Last successful run: **$age_desc**.
 
 Queued-forever runs (offline self-hosted runner) and cancelled crons die
-without any failure handler executing — this watchdog is the only signal.
+without any failure handler executing; this watchdog is the only signal.
 
 ## Resolution
 
