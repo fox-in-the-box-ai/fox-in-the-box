@@ -85,8 +85,8 @@ body=$(cat <<EOF
 
 | Upstream | Total commits | Keyword-flagged | Touched always-conflict file |
 |----------|--------------|------------------|------------------------------|
-| ${WEBUI_REPO}@${WEBUI_BRANCH} | $webui_count | $(echo "$webui_kw" | grep -c '^-' || echo 0) | $webui_conf_count |
-| ${AGENT_REPO}@${AGENT_BRANCH} | $agent_count | $(echo "$agent_kw" | grep -c '^-' || echo 0) | n/a |
+| ${WEBUI_REPO}@${WEBUI_BRANCH} | $webui_count | $(echo "$webui_kw" | grep -c '^-' || true) | $webui_conf_count |
+| ${AGENT_REPO}@${AGENT_BRANCH} | $agent_count | $(echo "$agent_kw" | grep -c '^-' || true) | n/a |
 
 ### Keyword matches (regex: \`$KEYWORDS\`)
 
