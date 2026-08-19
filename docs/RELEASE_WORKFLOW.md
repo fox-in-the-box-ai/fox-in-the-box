@@ -66,7 +66,7 @@ git tag -a v0.7.6 -m "v0.7.6 — <theme>"
 git push origin v0.7.6
 ```
 
-The `release.yml` workflow runs automatically on tag push. Its job graph: `build-container.yml` (multi-arch Docker → GHCR) and `build-electron.yml` (signed macOS DMGs + signed Windows exe) run as reusable workflows; `build-deb` (amd64 + arm64) feeds `deb-smoke-test` and then `publish-apt` (reprepro → Cloudflare R2 → apt.foxinthebox.ai; currently `continue-on-error` per #539); a decoupled `promote-container` job (#550) advances `:vX.Y.Z` and `:stable` from the built index digest independently of the Electron build, with GHCR read-after-write retries on the manifest inspections (#743); the GitHub Release job needs `[wait-for-electron, deb-smoke-test, promote-container]` and publishes the CHANGELOG entry as the body with 7 assets.
+The `release.yml` workflow runs automatically on tag push. Its job graph: `build-container.yml` (multi-arch Docker → GHCR) and `build-electron.yml` (signed macOS DMGs + signed Windows exe) run as reusable workflows; `build-deb` (amd64 + arm64) feeds `deb-smoke-test` and then `publish-apt` (reprepro → Cloudflare R2 → apt.foxinthebox.ai; a failure reds the run); a decoupled `promote-container` job (#550) advances `:vX.Y.Z` and `:stable` from the built index digest independently of the Electron build, with GHCR read-after-write retries on the manifest inspections (#743); the GitHub Release job needs `[wait-for-electron, deb-smoke-test, promote-container]` and publishes the CHANGELOG entry as the body with 7 assets; an `sbom` job then attaches `sbom.cdx.json` to the release (called directly — the `release: published` trigger never fires for workflow-published releases).
 
 ### Flow B — Option B upstream-only bump (since v0.7.0)
 

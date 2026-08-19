@@ -1,8 +1,8 @@
 name: SBOM
 # NOTE: `release: published` does NOT fire for releases created by another
 # workflow using GITHUB_TOKEN (GitHub's workflow-recursion guard) — which
-# is exactly how release.yml publishes. That left every release since
-# v0.7.55 without an SBOM asset. release.yml therefore calls this workflow
+# is exactly how release.yml publishes. That left every release after
+# v0.7.55 (i.e. v0.7.56 onward) without an SBOM asset. release.yml therefore calls this workflow
 # directly (workflow_call) after publishing; the release trigger stays for
 # manually-published releases, and workflow_dispatch(tag) backfills.
 on:
@@ -28,6 +28,16 @@ jobs:
   sbom:
     runs-on: ubuntu-latest
     steps:
+      - name: Refuse to run against a nonexistent release
+        if: inputs.tag != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # action-gh-release CREATES a release when tag_name has none —
+          # a typo'd backfill tag would silently mint a stray public
+          # release. Fail loud instead.
+          gh release view "${{ inputs.tag }}" --repo "${{ github.repository }}" >/dev/null
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # SBOM must describe the released tree, not default-branch HEAD.

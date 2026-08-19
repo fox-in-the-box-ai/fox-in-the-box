@@ -243,7 +243,7 @@ jobs:
   # or re-fire one rolling ci-health issue when a scheduled run fails.
   cron_health:
     name: cron failure handler
-    needs: [full]
+    needs: [full, electron-parity]
     if: always() && github.event_name == 'schedule' && (contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled'))
     runs-on: ubuntu-latest
     permissions:
