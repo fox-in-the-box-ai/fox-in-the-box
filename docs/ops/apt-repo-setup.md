@@ -86,7 +86,7 @@ build-deb (amd64 + arm64)
     ↓
 deb-smoke-test (dpkg install verification)
     ↓
-    ├── publish-apt (reprepro → R2 sync; continue-on-error until #539 secrets land)
+    ├── publish-apt (reprepro → R2 sync; hard-fails the run on error since 2026-08-19)
     └── release (GitHub Release with .deb attached — needs wait-for-electron,
                  deb-smoke-test, promote-container; does NOT depend on publish-apt)
 ```

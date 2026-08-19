@@ -79,7 +79,6 @@ jobs:
   publish-apt:
     name: Publish to apt.foxinthebox.ai
     needs: [build-deb, deb-smoke-test]
-    continue-on-error: true  # #539 — secrets not yet configured; remove when populated
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -183,6 +182,17 @@ jobs:
             grep -qx 'linux/arm64' <<<"$PLATFORMS" || { echo "::error::$IMG:$TAG missing linux/arm64"; exit 1; }
           done
           echo "✅ Both $IMG:$VERSION and $IMG:stable are multi-arch (linux/amd64, linux/arm64)"
+
+  # SBOM rides the release directly — the sbom.yml release trigger cannot
+  # fire for workflow-published releases (see sbom.yml header).
+  sbom:
+    name: Attach SBOM
+    needs: [release]
+    uses: ./.github/workflows/sbom.yml
+    permissions:
+      contents: write
+    with:
+      tag: ${{ github.ref_name }}
 
   release:
     name: Create GitHub Release
