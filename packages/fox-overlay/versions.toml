@@ -12,18 +12,19 @@
 [upstream]
 hermes_webui_tag = "v0.52.113"
 hermes_webui_url = "https://github.com/nesquena/hermes-webui"
-hermes_agent_tag = "v2026.8.16.2"
+hermes_agent_tag = "v2026.8.18"
 hermes_agent_url = "https://github.com/NousResearch/hermes-agent"
 
 [meta]
-pinned_at = "2026-08-17"
-pinned_in_pr = "fox-in-the-box-ai/fox-in-the-box#740"
+pinned_at = "2026-08-19"
+pinned_in_pr = "fox-in-the-box-ai/fox-in-the-box#764"
 phase = "option-b-bump"
-notes = "Post-freeze bump webui v0.52.0 to v0.52.113 (latest stable; exp-v0.52.2xx series is prerelease and excluded), agent v2026.7.7.2 to v2026.8.16.2, closing #690. Four webui patches regenerated in-sequence (001/003/007/010). Agent overlay: cron mark_job_run anchor retargeted to _mark_job_run_locked, run_job FAILED-template anchor narrowed, webui check_auth re-anchored; TWO monkey-patches DELETED as upstream-absorbed (runtime_provider target_model routing; cron run_one_job delivery enrichment, superseded by upstream _failure_streak_nudge). requirements.lock re-frozen (cryptography 50.0.0 closes GHSA-537c-gmf6-5ccf). Note: agent tag ships case-colliding contributors/emails files — macOS checkouts show phantom submodule dirt (upstream report pending)."
+notes = "Agent-only bump v2026.8.16.2 to v2026.8.18 (closes #763; webui stays v0.52.113). Basis CLEAN per upstream-watch run 2026-08-19 and CI validate-overlay; only upstream dep delta is hermes-agent 0.20.3 to 0.20.4 (no third-party changes, requirements.lock untouched). Case-colliding contributors/emails caveat from v2026.8.16.2 persists — macOS checkouts stay phantom-dirty."
 
 [history]
 prior_pins = [
   # newest first
+  "webui=v0.52.113, agent=v2026.8.16.2 -- upstream bump #740 (2026-08-18)",
   "webui=v0.52.0, agent=v2026.7.7.2 -- upstream bump #644 (2026-07-10)",
   "webui=v0.51.537, agent=v2026.6.19 -- patch refresh bump #604 (2026-06-20)",
   "webui=v0.51.528, agent=v2026.6.19 -- patch refresh bump #566 (2026-06-20)",
