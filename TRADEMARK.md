@@ -29,6 +29,6 @@ attribution.
 ## Questions
 
 If your use case is not covered above, email
-[legal@foxinthebox.ai](mailto:legal@foxinthebox.ai) or open an
+[legal@foxinthebox.io](mailto:legal@foxinthebox.io) or open an
 [issue](https://github.com/fox-in-the-box-ai/fox-in-the-box/issues/new)
 for non-sensitive questions.

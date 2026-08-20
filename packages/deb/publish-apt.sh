@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# publish-apt.sh — Publish Fox in the Box .deb packages to apt.foxinthebox.ai
+# publish-apt.sh — Publish Fox in the Box .deb packages to apt.foxinthebox.io
 #
 # Required env vars:
 #   GPG_PRIVATE_KEY   Armored GPG private key
@@ -82,7 +82,7 @@ done
 _log "Pushing updated repo to R2..."
 if [ "$DRY_RUN" != "1" ]; then
     rclone sync ./apt-repo "r2:$BUCKET" --quiet
-    _log "Published successfully to apt.foxinthebox.ai"
+    _log "Published successfully to apt.foxinthebox.io"
 else
     _log "(DRY_RUN) would sync ./apt-repo -> r2:$BUCKET"
     _log "(DRY_RUN) complete — no changes made"

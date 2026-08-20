@@ -6,15 +6,16 @@
 
 ### Via the apt repo — not yet reachable
 
-Packages have published to the repo bucket since v0.7.59, but the
-`apt.foxinthebox.ai` DNS delegation is still pending — **use the direct
-.deb download below until it resolves.** Once live (verify the key
+Packages have published to the repo bucket since v0.7.59. The domain is
+`foxinthebox.io` (registered, on Cloudflare); the `apt.` subdomain just
+needs the R2 custom-domain attach — **use the direct .deb download below
+until `apt.foxinthebox.io` resolves.** Once live (verify the key
 fingerprint against the one published in this repo before trusting it):
 
 ```bash
 # Add the signing key + repo once
-curl -fsSL https://apt.foxinthebox.ai/gpg | sudo gpg --dearmor -o /usr/share/keyrings/foxinthebox.gpg
-echo "deb [signed-by=/usr/share/keyrings/foxinthebox.gpg] https://apt.foxinthebox.ai stable main" | sudo tee /etc/apt/sources.list.d/foxinthebox.list
+curl -fsSL https://apt.foxinthebox.io/gpg | sudo gpg --dearmor -o /usr/share/keyrings/foxinthebox.gpg
+echo "deb [signed-by=/usr/share/keyrings/foxinthebox.gpg] https://apt.foxinthebox.io stable main" | sudo tee /etc/apt/sources.list.d/foxinthebox.list
 
 sudo apt update && sudo apt install foxinthebox
 ```
