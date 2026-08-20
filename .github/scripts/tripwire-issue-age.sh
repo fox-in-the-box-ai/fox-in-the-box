@@ -32,11 +32,13 @@ check_repo() {
     fi
 
     # Oldest open issue (`gh api` sorts asc by created with `-f sort=created -f direction=asc`).
-    local oldest
-    oldest=$(gh api -X GET "repos/$repo/issues" \
-              -f state=open -f sort=created -f direction=asc -f per_page=1 2>/dev/null \
-              | jq -c '.[0] // empty' \
-              2>/dev/null || true)
+    local oldest resp
+    if ! resp=$(gh api -X GET "repos/$repo/issues" \
+              -f state=open -f sort=created -f direction=asc -f per_page=1 2>&1); then
+        echo "::error::gh api failed for $repo issues: $resp"
+        exit 1
+    fi
+    oldest=$(printf '%s' "$resp" | jq -c '.[0] // empty' 2>/dev/null || true)
 
     if [ -z "$oldest" ]; then
         echo "[tripwire/issue-age] $repo: no open issues; no-op"
