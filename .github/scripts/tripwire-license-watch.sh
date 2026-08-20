@@ -18,8 +18,25 @@ source "$(dirname "$0")/tripwire-common.sh"
 STATE_FILE=".github/state/upstream-licenses.json"
 
 # Fetch current LICENSE SHA from each upstream.
-current_webui_sha=$(gh api "repos/$WEBUI_REPO/contents/LICENSE?ref=$WEBUI_BRANCH" -q .sha 2>/dev/null || echo "MISSING")
-current_agent_sha=$(gh api "repos/$AGENT_REPO/contents/LICENSE?ref=$AGENT_BRANCH" -q .sha 2>/dev/null || echo "MISSING")
+# An API failure must fail the JOB (into tripwire-self-health), never be
+# stringified into a "SHA" — a 429 body once fired a false LICENSE-drift
+# alarm (#771) with the error JSON embedded as the new SHA. A genuine
+# 404 (LICENSE deleted upstream) is a REAL drift signal, kept as MISSING.
+_license_sha() {
+    local repo="$1" branch="$2" resp
+    if resp=$(gh api "repos/$repo/contents/LICENSE?ref=$branch" -q .sha 2>&1); then
+        printf '%s' "$resp"
+        return 0
+    fi
+    if printf '%s' "$resp" | grep -q '"status": *"404"'; then
+        printf 'MISSING'
+        return 0
+    fi
+    echo "::error::gh api failed for $repo LICENSE: $resp" >&2
+    return 1
+}
+current_webui_sha=$(_license_sha "$WEBUI_REPO" "$WEBUI_BRANCH")
+current_agent_sha=$(_license_sha "$AGENT_REPO" "$AGENT_BRANCH")
 
 state=$(tripwire_state_read "$STATE_FILE")
 baseline_webui_sha=$(echo "$state" | jq -r '.webui // ""')
