@@ -75,9 +75,9 @@ jobs:
       - name: Run smoke test
         run: bash tests/container/test_deb_install.sh
 
-  # ── Publish to apt.foxinthebox.ai ─────────────────────────────────────────────
+  # ── Publish to apt.foxinthebox.io ─────────────────────────────────────────────
   publish-apt:
-    name: Publish to apt.foxinthebox.ai
+    name: Publish to apt.foxinthebox.io
     needs: [build-deb, deb-smoke-test]
     runs-on: ubuntu-22.04
     steps:

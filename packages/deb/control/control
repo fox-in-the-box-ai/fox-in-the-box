@@ -1,7 +1,7 @@
 Package: foxinthebox
 Version: __VERSION__
 Architecture: __ARCH__
-Maintainer: Fox in the Box <support@foxinthebox.ai>
+Maintainer: Fox in the Box <support@foxinthebox.io>
 Installed-Size: __SIZE_KB__
 Depends: python3.11 | python3 (>= 3.11),
          python3.11-venv | python3-venv (>= 3.11),
@@ -16,7 +16,7 @@ Depends: python3.11 | python3 (>= 3.11),
 Recommends: tailscale
 Section: net
 Priority: optional
-Homepage: https://foxinthebox.ai
+Homepage: https://foxinthebox.io
 Description: Fox in the Box — privacy-first self-hosted AI assistant
  Fox in the Box bundles Hermes Agent, a customized web UI, Qdrant vector
  store, and a local LLM fallback. Runs entirely on your machine.

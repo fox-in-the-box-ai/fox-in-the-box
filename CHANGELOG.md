@@ -25,6 +25,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 
+- The org's domain is `foxinthebox.io` — every doc, install instruction, the apt endpoint, legal/support email addresses, and the .deb package's Maintainer/Homepage fields previously pointed at `foxinthebox.ai` / `fox-in-the-box.ai`, neither of which was ever registered; `apt.foxinthebox.io` goes live once the R2 custom-domain attach lands
+
 - Desktop (macOS): guided setup no longer touches Homebrew when Docker Desktop is already installed — a present-but-stopped Docker is started, not (re)installed, so an existing install can never be upgraded (and its containers restarted) without consent; Homebrew runs only when Docker Desktop is absent (#749)
 - Desktop: launching the packaged app from a terminal whose pipe later closes no longer crashes with an EPIPE uncaught-exception dialog — stdout/stderr stream errors are guarded before the first log write; file logging is unaffected (#748)
 - Windows cleanup script (`clean-windows-desktop.ps1`) now removes every real path generation — the current dirs (`%APPDATA%\fox-in-the-box`, `%LOCALAPPDATA%\Programs\FoxInTheBox`) plus the legacy `@`-prefixed ones — and untags every locally-present Fox image tag instead of a hardcoded version range; previously modern installs kept their data, install dir, and newer image tags after a "full" cleanup while verification reported clean (#754)

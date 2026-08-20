@@ -1,7 +1,7 @@
-# apt.foxinthebox.ai — Setup Instructions
+# apt.foxinthebox.io — Setup Instructions
 
 Instructions for configuring the GitHub CI pipeline and Cloudflare R2 bucket
-to publish `.deb` packages to `apt.foxinthebox.ai`.
+to publish `.deb` packages to `apt.foxinthebox.io`.
 
 ---
 
@@ -23,7 +23,7 @@ to publish `.deb` packages to `apt.foxinthebox.ai`.
 ### Configure custom domain
 
 1. R2 bucket settings → Custom Domains → Add
-2. Enter: `apt.foxinthebox.ai`
+2. Enter: `apt.foxinthebox.io`
 3. Cloudflare will auto-provision DNS + TLS
 4. Cache settings: cache everything, default TTL (R2 handles invalidation)
 
@@ -40,24 +40,30 @@ gpg --batch --gen-key <<EOF
 Key-Type: RSA
 Key-Length: 4096
 Name-Real: Fox in the Box
-Name-Email: security@foxinthebox.ai
+Name-Email: security@foxinthebox.io
 Expire-Date: 0
 %no-protection
 EOF
 
 # Export the private key (armored) for GitHub Secrets
-gpg --armor --export-secret-keys security@foxinthebox.ai > apt-signing-key.asc
+gpg --armor --export-secret-keys <KEY_ID> > apt-signing-key.asc   # use the key ID — the DEPLOYED key's identity is the pre-correction .ai string
 
 # Get the key ID
-gpg --list-keys --keyid-format long security@foxinthebox.ai
+gpg --list-keys --keyid-format long security@foxinthebox.io
 # Note the 16-char key ID (e.g., ABCDEF1234567890)
 
 # Export the public key for the apt repo
-gpg --armor --export security@foxinthebox.ai > foxinthebox-apt.gpg.asc
+gpg --armor --export <KEY_ID> > foxinthebox-apt.gpg.asc
 ```
 
-Host the public key at `https://apt.foxinthebox.ai/gpg` (upload to R2 bucket
+Host the public key at `https://apt.foxinthebox.io/gpg` (upload to R2 bucket
 root as `gpg`).
+
+> Note: the currently-deployed signing key was generated with the
+> pre-correction identity string `security@foxinthebox.ai` (the org's
+> domain is actually `foxinthebox.io`). The identity is cosmetic — trust
+> is established by the key fingerprint, not the embedded email; rotate
+> the identity at the next planned key rotation, not before.
 
 ---
 
@@ -107,7 +113,7 @@ apt sync must not block the release artifacts, and vice versa.
 ### What gets published
 
 ```
-apt.foxinthebox.ai/
+apt.foxinthebox.io/
 ├── dists/
 │   └── stable/
 │       └── main/
@@ -130,11 +136,11 @@ After the repo is live, users run:
 
 ```bash
 # Add the GPG key
-curl -fsSL https://apt.foxinthebox.ai/gpg | sudo gpg --dearmor \
+curl -fsSL https://apt.foxinthebox.io/gpg | sudo gpg --dearmor \
     -o /usr/share/keyrings/foxinthebox.gpg
 
 # Add the repository
-echo "deb [signed-by=/usr/share/keyrings/foxinthebox.gpg] https://apt.foxinthebox.ai stable main" \
+echo "deb [signed-by=/usr/share/keyrings/foxinthebox.gpg] https://apt.foxinthebox.io stable main" \
     | sudo tee /etc/apt/sources.list.d/foxinthebox.list
 
 # Install
@@ -151,8 +157,8 @@ Upgrade: `sudo apt update && sudo apt upgrade foxinthebox`
 
 After first setup, verify:
 
-- [ ] `curl -sf https://apt.foxinthebox.ai/gpg | head -1` returns `-----BEGIN PGP PUBLIC KEY BLOCK-----`
-- [ ] `curl -sf https://apt.foxinthebox.ai/dists/stable/main/binary-amd64/Packages.gz | gunzip | head` shows package metadata
+- [ ] `curl -sf https://apt.foxinthebox.io/gpg | head -1` returns `-----BEGIN PGP PUBLIC KEY BLOCK-----`
+- [ ] `curl -sf https://apt.foxinthebox.io/dists/stable/main/binary-amd64/Packages.gz | gunzip | head` shows package metadata
 - [ ] On a clean Ubuntu 22.04 VM: install instructions above succeed
 - [ ] `dpkg -l foxinthebox` shows installed version
 - [ ] `systemctl status foxinthebox` shows active/running
@@ -170,7 +176,7 @@ The secret is not configured in the repository. See Step 3.
 The same version `.deb` was already published. Bump VERSION before re-tagging.
 
 **Users get "NO_PUBKEY" on apt update:**
-The public GPG key at `apt.foxinthebox.ai/gpg` is missing or the R2 custom
+The public GPG key at `apt.foxinthebox.io/gpg` is missing or the R2 custom
 domain isn't configured. Check Step 1.
 
 **rclone sync hangs or 403:**
