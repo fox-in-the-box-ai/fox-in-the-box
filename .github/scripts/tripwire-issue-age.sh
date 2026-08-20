@@ -17,8 +17,11 @@ check_repo() {
 
     # Upstream age (in months).
     local created
-    created=$(gh api "repos/$repo" -q .created_at 2>/dev/null || echo "")
-    [ -z "$created" ] && { echo "[tripwire/issue-age] $repo: cannot read created_at; skip"; return 0; }
+    if ! created=$(gh api "repos/$repo" -q .created_at 2>&1); then
+        echo "::error::gh api failed for $repo created_at: $created"
+        exit 1
+    fi
+    [ -z "$created" ] && { echo "[tripwire/issue-age] $repo: empty created_at; skip"; return 0; }
 
     local created_epoch now_epoch upstream_age_months
     created_epoch=$(date -u -j -f '%Y-%m-%dT%H:%M:%SZ' "$created" +%s 2>/dev/null \

@@ -25,6 +25,13 @@ STATE_FILE=".github/state/upstream-licenses.json"
 _license_sha() {
     local repo="$1" branch="$2" resp
     if resp=$(gh api "repos/$repo/contents/LICENSE?ref=$branch" -q .sha 2>&1); then
+        # Shape-check: only a bare 40-hex blob SHA may pass — any stderr
+        # chatter concatenated by 2>&1 on a "successful" call must not be
+        # comparable against the baseline (the #771 corruption class).
+        if ! printf '%s' "$resp" | grep -qE '^[0-9a-f]{40}$'; then
+            echo "::error::unexpected LICENSE sha shape for $repo: $resp" >&2
+            return 1
+        fi
         printf '%s' "$resp"
         return 0
     fi
