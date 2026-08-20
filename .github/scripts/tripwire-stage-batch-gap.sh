@@ -19,7 +19,11 @@ source "$(dirname "$0")/tripwire-common.sh"
 # what this tripwire watches (outage, not stable-promotion cadence).
 THRESHOLD_HOURS=48
 
-last_stamp_iso=$(gh api -X GET "repos/$WEBUI_REPO/releases" -f per_page=100 2>/dev/null \
+if ! _rel_resp=$(gh api -X GET "repos/$WEBUI_REPO/releases" -f per_page=100 2>&1); then
+    echo "::error::gh api failed for $WEBUI_REPO releases: $_rel_resp"
+    exit 1
+fi
+last_stamp_iso=$(printf '%s' "$_rel_resp" \
                    | jq -r '[.[] | select(.draft == false)] | sort_by(.published_at) | last | .published_at // empty' \
                    || true)
 
@@ -35,9 +39,15 @@ last_stamp_epoch=$(date -u -j -f '%Y-%m-%dT%H:%M:%SZ' "$last_stamp_iso" +%s 2>/d
 gap_hours=$(( (now_epoch - last_stamp_epoch) / 3600 ))
 
 # Commits since the newest release (i.e. unreleased work).
-unreleased=$(gh api -X GET "repos/$WEBUI_REPO/commits" \
-               -f sha="$WEBUI_BRANCH" -f since="$last_stamp_iso" --paginate 2>/dev/null \
-               | jq -r '.[].sha' | wc -l | tr -d ' ')
+# Failure here must not read as unreleased=0 — that path auto-CLEARS a
+# genuine open stall fire on a transient 429 (the false-clear mirror of
+# the #771 false-fire).
+if ! _cm_resp=$(gh api -X GET "repos/$WEBUI_REPO/commits" \
+               -f sha="$WEBUI_BRANCH" -f since="$last_stamp_iso" --paginate 2>&1); then
+    echo "::error::gh api failed for $WEBUI_REPO commits: $_cm_resp"
+    exit 1
+fi
+unreleased=$(printf '%s' "$_cm_resp" | jq -r '.[].sha' | wc -l | tr -d ' ')
 [ "$unreleased" -lt 0 ] && unreleased=0
 
 CLEAR_TITLE="[tripwire/stage-batch] $WEBUI_REPO release stamp gap >${THRESHOLD_HOURS}h"

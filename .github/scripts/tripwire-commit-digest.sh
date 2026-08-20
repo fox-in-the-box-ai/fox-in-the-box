@@ -17,9 +17,15 @@ since=$(date -u -v-1d +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -d '24 hours ag
 # Returns markdown list of commits since $since for the given repo+branch.
 # Each line: "- {sha} {author}: {message-first-line}"
 list_commits() {
-    local repo="$1" branch="$2"
-    gh api -X GET "repos/$repo/commits" \
-        -f sha="$branch" -f since="$since" --paginate 2>/dev/null \
+    local repo="$1" branch="$2" resp
+    # API failure must fail the job — read-as-zero-activity would let
+    # tripwire_clear close the rolling digest on a transient 429.
+    if ! resp=$(gh api -X GET "repos/$repo/commits" \
+        -f sha="$branch" -f since="$since" --paginate 2>&1); then
+        echo "::error::gh api failed for $repo commits: $resp" >&2
+        exit 1
+    fi
+    printf '%s' "$resp" \
         | jq -r '.[] | "- `\(.sha[0:7])` \(.commit.author.name): \(.commit.message | split("\n")[0])"' \
         || true
 }
@@ -32,8 +38,13 @@ list_conflict_commits() {
     IFS='|' read -ra paths <<<"$CONFLICT_FILES"
     for p in "${paths[@]}"; do
         local shas
-        shas=$(gh api -X GET "repos/$repo/commits" \
-                 -f sha="$branch" -f path="$p" -f since="$since" --paginate 2>/dev/null \
+        local cresp
+        if ! cresp=$(gh api -X GET "repos/$repo/commits" \
+                 -f sha="$branch" -f path="$p" -f since="$since" --paginate 2>&1); then
+            echo "::error::gh api failed for $repo commits (path $p): $cresp" >&2
+            exit 1
+        fi
+        shas=$(printf '%s' "$cresp" \
                  | jq -r '.[] | "\(.sha[0:7]) \(.commit.author.name): \(.commit.message | split("\n")[0])"' \
                  || true)
         if [ -n "$shas" ]; then

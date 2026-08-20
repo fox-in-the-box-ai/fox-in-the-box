@@ -17,8 +17,11 @@ check_repo() {
 
     # Upstream age (in months).
     local created
-    created=$(gh api "repos/$repo" -q .created_at 2>/dev/null || echo "")
-    [ -z "$created" ] && { echo "[tripwire/issue-age] $repo: cannot read created_at; skip"; return 0; }
+    if ! created=$(gh api "repos/$repo" -q .created_at 2>&1); then
+        echo "::error::gh api failed for $repo created_at: $created"
+        exit 1
+    fi
+    [ -z "$created" ] && { echo "[tripwire/issue-age] $repo: empty created_at; skip"; return 0; }
 
     local created_epoch now_epoch upstream_age_months
     created_epoch=$(date -u -j -f '%Y-%m-%dT%H:%M:%SZ' "$created" +%s 2>/dev/null \
@@ -32,11 +35,13 @@ check_repo() {
     fi
 
     # Oldest open issue (`gh api` sorts asc by created with `-f sort=created -f direction=asc`).
-    local oldest
-    oldest=$(gh api -X GET "repos/$repo/issues" \
-              -f state=open -f sort=created -f direction=asc -f per_page=1 2>/dev/null \
-              | jq -c '.[0] // empty' \
-              2>/dev/null || true)
+    local oldest resp
+    if ! resp=$(gh api -X GET "repos/$repo/issues" \
+              -f state=open -f sort=created -f direction=asc -f per_page=1 2>&1); then
+        echo "::error::gh api failed for $repo issues: $resp"
+        exit 1
+    fi
+    oldest=$(printf '%s' "$resp" | jq -c '.[0] // empty' 2>/dev/null || true)
 
     if [ -z "$oldest" ]; then
         echo "[tripwire/issue-age] $repo: no open issues; no-op"

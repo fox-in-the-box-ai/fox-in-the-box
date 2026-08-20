@@ -11,8 +11,11 @@ source "$(dirname "$0")/tripwire-common.sh"
 
 # `gh api repos/{owner}/{repo}/contents/` lists root dir; filter for any
 # directory entry whose name matches our watch list.
-dirs=$(gh api "repos/$AGENT_REPO/contents?ref=$AGENT_BRANCH" \
-        -q '.[] | select(.type=="dir") | .name' 2>/dev/null || true)
+if ! dirs=$(gh api "repos/$AGENT_REPO/contents?ref=$AGENT_BRANCH" \
+        -q '.[] | select(.type=="dir") | .name' 2>&1); then
+    echo "::error::gh api failed for $AGENT_REPO contents: $dirs"
+    exit 1
+fi
 
 watch_list="webui frontend static ui app react-app"
 matches=""
