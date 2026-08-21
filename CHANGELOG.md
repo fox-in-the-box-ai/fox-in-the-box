@@ -9,6 +9,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Fixed
+
+- Provider-settings smoke spec no longer flakes when a parallel spec resets onboarding mid-test; the nightly failure tracked by #775 was this race, not an endpoint break (#778).
+
 ### Changed
 
 - Bundled desktop Electron → 43.4.0 (Chromium 150, Node 24), from 42.8.0 in the npm lockfile and 42.5.1 in the pnpm lockfile — the bump also heals that pre-existing cross-lockfile skew. Verified with a packaged-app launch smoke on macOS arm64 (window renders, startup orchestrator runs, zero renderer errors, clean exit) plus the full startup test suite; Windows coverage is the CI dev-mode startup smoke — no packaged-exe install test exists yet
