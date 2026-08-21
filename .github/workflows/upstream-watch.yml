@@ -194,7 +194,6 @@ jobs:
         if: steps.drift.outputs.no_drift != 'yes' && steps.basis.outputs.basis_rc == '0'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        env:
           # Tag names come from third-party repos — env-routed, never
           # interpolated into the script text (script-injection surface
           # with an issues:write token).
