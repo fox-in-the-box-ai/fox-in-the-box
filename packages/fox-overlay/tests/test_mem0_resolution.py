@@ -718,3 +718,111 @@ class TestNegativeInvariants:
         # auth.py's own resolve_provider (registry-space) — the plugin must
         # only use providers.resolve_provider_full.
         assert "from hermes_cli.auth import resolve_provider" not in source
+
+
+# ── Qdrant server mode ────────────────────────────────────────────────────────
+
+
+class TestQdrantServerMode:
+    """_build_qdrant_cfg returns a server or embedded config based on runtime_cfg.
+
+    Pure-function tests — no env fixture needed.
+    """
+
+    def _build(self, **kw):
+        from agent_memory_plugins.mem0_oss import _build_qdrant_cfg  # noqa: PLC0415
+
+        runtime = {
+            "collection": "hermes",
+            "vector_store_path": "/x/qdrant",
+            "qdrant_url": "",
+            "qdrant_host": "",
+            "qdrant_port": "6333",
+            "qdrant_api_key": "",
+        }
+        runtime.update(kw)
+        return _build_qdrant_cfg(runtime, store_dims=768)
+
+    def test_no_server_config_returns_embedded(self):
+        cfg = self._build()
+        assert cfg["path"] == "/x/qdrant"
+        assert cfg["on_disk"] is True
+        assert "url" not in cfg
+        assert "host" not in cfg
+
+    def test_url_returns_server_mode_no_path(self):
+        cfg = self._build(qdrant_url="http://127.0.0.1:6333")
+        assert cfg["url"] == "http://127.0.0.1:6333"
+        assert "path" not in cfg
+        assert "on_disk" not in cfg
+
+    def test_host_port_returns_server_mode(self):
+        cfg = self._build(qdrant_host="myhost", qdrant_port="6399")
+        assert cfg["host"] == "myhost"
+        assert cfg["port"] == 6399
+        assert "url" not in cfg
+        assert "path" not in cfg
+
+    def test_host_without_port_defaults_to_6333(self):
+        cfg = self._build(qdrant_host="myhost", qdrant_port="")
+        assert cfg["port"] == 6333
+
+    def test_bad_port_string_defaults_to_6333(self):
+        cfg = self._build(qdrant_host="myhost", qdrant_port="notanumber")
+        assert cfg["port"] == 6333
+
+    def test_api_key_added_when_set(self):
+        cfg = self._build(qdrant_url="http://127.0.0.1:6333", qdrant_api_key="secret")
+        assert cfg["api_key"] == "secret"
+        assert cfg["https"] is False  # http:// url
+
+    def test_https_flag_for_https_url(self):
+        cfg = self._build(
+            qdrant_url="https://qdrant.example.com", qdrant_api_key="tok"
+        )
+        assert cfg["https"] is True
+
+    def test_url_takes_precedence_over_host(self):
+        """When both url and host are set, url wins."""
+        cfg = self._build(
+            qdrant_url="http://127.0.0.1:6333", qdrant_host="otherhost"
+        )
+        assert cfg["url"] == "http://127.0.0.1:6333"
+        assert "host" not in cfg
+
+    def test_dims_forwarded(self):
+        from agent_memory_plugins.mem0_oss import _build_qdrant_cfg  # noqa: PLC0415
+
+        runtime = {
+            "collection": "hermes",
+            "vector_store_path": "/x",
+            "qdrant_url": "http://127.0.0.1:6333",
+            "qdrant_host": "",
+            "qdrant_port": "6333",
+            "qdrant_api_key": "",
+        }
+        cfg = _build_qdrant_cfg(runtime, store_dims=384)
+        assert cfg["embedding_model_dims"] == 384
+
+    def test_runtime_config_reads_env_vars(self, monkeypatch):
+        """_load_runtime_config picks up MEM0_OSS_QDRANT_* env vars."""
+        from agent_memory_plugins.mem0_oss import _load_runtime_config  # noqa: PLC0415
+
+        monkeypatch.setenv("MEM0_OSS_QDRANT_URL", "http://qdrant.local:6333")
+        monkeypatch.setenv("MEM0_OSS_QDRANT_API_KEY", "mykey")
+        cfg = _load_runtime_config()
+        assert cfg["qdrant_url"] == "http://qdrant.local:6333"
+        assert cfg["qdrant_api_key"] == "mykey"
+
+    def test_runtime_config_file_override_qdrant(self, tmp_path, monkeypatch):
+        """mem0_oss.json overrides take effect for qdrant server keys."""
+        import json  # noqa: PLC0415
+        from agent_memory_plugins.mem0_oss import _load_runtime_config  # noqa: PLC0415
+
+        monkeypatch.setenv("HERMES_HOME", str(tmp_path))
+        monkeypatch.delenv("MEM0_OSS_QDRANT_URL", raising=False)
+        (tmp_path / "mem0_oss.json").write_text(
+            json.dumps({"qdrant_url": "http://fileserver:6333"}), encoding="utf-8"
+        )
+        cfg = _load_runtime_config()
+        assert cfg["qdrant_url"] == "http://fileserver:6333"
