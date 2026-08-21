@@ -8,9 +8,9 @@
  * Response shape (upstream hermes-webui api/providers.py):
  *   { providers: [{id, display_name, has_key, configurable, ...}], active_provider: string }
  *
- * /api/providers is not in the onboarding whitelist — call
- * /api/setup/skip first to prevent 302 redirect when running in
- * parallel with tests that call /test/reset.
+ * /api/providers is not in the onboarding whitelist — tests go
+ * through getProvidersJson below, which re-skips onboarding before
+ * each attempt to survive parallel tests calling /test/reset.
  */
 import { test, expect, request } from '@playwright/test';
 import type { APIRequestContext } from '@playwright/test';
@@ -19,7 +19,7 @@ import type { APIRequestContext } from '@playwright/test';
  * skip + GET with retry: a parallel test calling /test/reset between our
  * /api/setup/skip and the GET flips the app back into onboarding, and the
  * GET 302s to the onboarding HTML page. Re-skipping immediately before
- * each attempt closes the window; the last attempt asserts status so a
+ * each attempt narrows the window; the last attempt asserts status so a
  * real endpoint break fails with the status, not a JSON SyntaxError.
  */
 async function getProvidersJson(api: APIRequestContext) {
