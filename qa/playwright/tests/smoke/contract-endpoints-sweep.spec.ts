@@ -12,6 +12,7 @@
  * upstream's default-path handler).
  */
 import { test, expect, request } from '@playwright/test';
+import { getSkippingOnboarding } from '../helpers/onboarding';
 
 const CONTRACT_ENDPOINTS: Array<{ path: string; ok: number[] }> = [
   { path: '/version', ok: [200] },
@@ -28,8 +29,7 @@ test.describe('Contract + Fox endpoints sweep', () => {
   for (const { path, ok } of CONTRACT_ENDPOINTS) {
     test(`${path} registered (status in {${ok.join(', ')}})`, async ({ baseURL }) => {
       const api = await request.newContext({ baseURL });
-      await api.post('/api/setup/skip');
-      const res = await api.get(path);
+      const res = await getSkippingOnboarding(api, path, ok);
       const status = res.status();
       expect(
         ok.includes(status),
