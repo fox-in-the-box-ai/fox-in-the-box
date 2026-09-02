@@ -80,10 +80,10 @@ jobs:
           # in-app version display is never blank — previously these built
           # with FITB_VERSION="" which surfaced as empty version strings on
           # :latest / :stable images. FITB#122 cosmetic.
-          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
-            echo "fitb_version=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            echo "fitb_version=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
           else
-            SHORT_SHA="$(echo "${{ github.sha }}" | cut -c1-7)"
+            SHORT_SHA="$(echo "$GITHUB_SHA" | cut -c1-7)"
             echo "fitb_version=dev-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
           fi
           RUNTIME_VERSION=$(grep '^hermes_webui_tag' packages/fox-overlay/versions.toml | sed 's/.*= *"\(.*\)"/\1/')
@@ -182,9 +182,10 @@ jobs:
           # Source list = name@sha256:<digest> for each per-platform image.
           # `printf '%s '` over the artifact filenames, with an explicit
           # name@sha256: prefix.
-          SOURCES=$(printf "${IMAGE}@sha256:%s " *)
-          echo "Sources: $SOURCES"
-          docker buildx imagetools create -t "${IMAGE}:${TAG}" $SOURCES
+          SOURCES=()
+          for f in *; do SOURCES+=("${IMAGE}@sha256:${f}"); done
+          echo "Sources: ${SOURCES[*]}"
+          docker buildx imagetools create -t "${IMAGE}:${TAG}" "${SOURCES[@]}"
           # Capture the index digest from the freshly-pushed manifest list.
           # `inspect --raw` returns the canonical bytes; their content
           # digest IS the manifest-list digest. Use --format for stability.
@@ -465,7 +466,7 @@ jobs:
             -p 127.0.0.1:8787:8787 \
             "${IMAGE}@${DIGEST}"
 
-          for i in $(seq 1 36); do
+          for _ in $(seq 1 36); do
             RESP=$(curl -fsS http://localhost:8787/health 2>/dev/null) || RESP=""
             if [[ -n "$RESP" ]] && echo "$RESP" | grep -q '"status": "ok"'; then
               RETRY_ELAPSED=$(( $(date +%s) - RETRY_START ))
