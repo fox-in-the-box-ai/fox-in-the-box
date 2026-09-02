@@ -13,6 +13,34 @@ RUN_URL="${GITHUB_SERVER_URL:-https://github.com}/${REPO}/actions/runs/${GITHUB_
 # carry correct provenance.
 SOURCE_WORKFLOW="${GITHUB_WORKFLOW:-upstream-tripwires.yml}"
 
+# Bounded-retry gh issue lookup (#774): a transient API failure (429,
+# network) must not read as "no matching issue" — in the fire path that
+# stacks a duplicate, in the ack path it re-fires an acknowledged
+# condition, and in the clear path it silently skips the close. Retry
+# 3x with backoff; on exhaustion fail the script so the workflow's
+# self-health handler reports the API outage once, instead of every
+# tripwire guessing wrong. (Immediate exit-1 without retry was rejected
+# in #774: one 429 blip would fail all ten tripwires.)
+# Uses TW_TITLE from the environment for both the server-side search
+# narrowing and the exact jq match — same injection rule as the callers.
+_tw_issue_numbers() {
+    local state="$1"
+    local attempt out
+    for attempt in 1 2 3; do
+        if out=$(gh issue list --repo "$REPO" --state "$state" --limit 100 \
+                   --search "in:title \"$TW_TITLE\"" \
+                   --json number,title \
+                   -q '.[] | select(.title == env.TW_TITLE) | .number' 2>&1); then
+            printf '%s\n' "$out"
+            return 0
+        fi
+        echo "[tripwire] gh issue list ($state) failed (attempt $attempt/3): $out" >&2
+        [ "$attempt" -lt 3 ] && sleep $((attempt * 5))
+    done
+    echo "::error::gh issue list ($state) failed after 3 attempts — cannot determine tripwire issue state for: $TW_TITLE"
+    return 1
+}
+
 # Open or re-fire an issue. De-dupe by exact title match.
 #
 # Usage:
@@ -44,11 +72,8 @@ tripwire_fire() {
 
     if [ "$mode" = "ack_dedupe" ]; then
         local acked
-        acked=$(gh issue list --repo "$REPO" --state closed --limit 100 \
-                  --search "in:title \"$title\"" \
-                  --json number,title \
-                  -q '.[] | select(.title == env.TW_TITLE) | .number' \
-                  2>/dev/null | head -1)
+        acked=$(_tw_issue_numbers closed)
+        acked=$(printf '%s' "$acked" | head -1)
         if [ -n "$acked" ]; then
             echo "[tripwire] condition previously acknowledged in closed #$acked — skipping re-fire"
             return 0
@@ -56,11 +81,8 @@ tripwire_fire() {
     fi
 
     local existing
-    existing=$(gh issue list --repo "$REPO" --state open --limit 100 \
-                 --search "in:title \"$title\"" \
-                 --json number,title \
-                 -q '.[] | select(.title == env.TW_TITLE) | .number' \
-                 2>/dev/null | head -1)
+    existing=$(_tw_issue_numbers open)
+    existing=$(printf '%s' "$existing" | head -1)
 
     if [ -n "$existing" ]; then
         gh issue comment "$existing" --repo "$REPO" --body "$(printf '%s\n\n_Re-fired on %s_' "$body" "$RUN_URL")"
@@ -105,11 +127,7 @@ tripwire_clear() {
 
     export TW_TITLE="$title"
     local numbers
-    numbers=$(gh issue list --repo "$REPO" --state open --limit 100 \
-                 --search "in:title \"$title\"" \
-                 --json number,title \
-                 -q '.[] | select(.title == env.TW_TITLE) | .number' \
-                 2>/dev/null)
+    numbers=$(_tw_issue_numbers open)
 
     if [ -z "$numbers" ]; then
         return 0
