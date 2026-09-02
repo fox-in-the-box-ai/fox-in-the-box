@@ -69,13 +69,15 @@ jobs:
           agent_tag=$(grep -E '^hermes_agent_tag\s*=' "$file" | awk -F'"' '{print $2}')
           webui_url=$(grep -E '^hermes_webui_url\s*=' "$file" | awk -F'"' '{print $2}')
           agent_url=$(grep -E '^hermes_agent_url\s*=' "$file" | awk -F'"' '{print $2}')
-          echo "webui_tag=$webui_tag" >> "$GITHUB_OUTPUT"
-          echo "agent_tag=$agent_tag" >> "$GITHUB_OUTPUT"
-          echo "webui_url=$webui_url" >> "$GITHUB_OUTPUT"
-          echo "agent_url=$agent_url" >> "$GITHUB_OUTPUT"
-          # Derive owner/repo from URL for the GitHub API call below.
-          echo "webui_repo=$(echo "$webui_url" | sed -E 's#https?://github.com/##; s#\.git$##')" >> "$GITHUB_OUTPUT"
-          echo "agent_repo=$(echo "$agent_url" | sed -E 's#https?://github.com/##; s#\.git$##')" >> "$GITHUB_OUTPUT"
+          {
+            echo "webui_tag=$webui_tag"
+            echo "agent_tag=$agent_tag"
+            echo "webui_url=$webui_url"
+            echo "agent_url=$agent_url"
+            # Derive owner/repo from URL for the GitHub API call below.
+            echo "webui_repo=$(echo "$webui_url" | sed -E 's#https?://github.com/##; s#\.git$##')"
+            echo "agent_repo=$(echo "$agent_url" | sed -E 's#https?://github.com/##; s#\.git$##')"
+          } >> "$GITHUB_OUTPUT"
           echo "pinned: webui=$webui_tag, agent=$agent_tag"
 
       - name: Resolve latest upstream tags
@@ -201,15 +203,17 @@ jobs:
           PINNED_AGENT: ${{ steps.pinned.outputs.agent_tag }}
           LATEST_WEBUI: ${{ steps.latest.outputs.webui }}
           LATEST_AGENT: ${{ steps.latest.outputs.agent }}
+          WEBUI_DRIFT: ${{ steps.drift.outputs.webui_drift }}
+          AGENT_DRIFT: ${{ steps.drift.outputs.agent_drift }}
         run: |
           set -eu
           # Title names ONLY drifted components — "webui vX → vX" in #763
           # read as a false webui update.
           parts=""
-          if [ "${{ steps.drift.outputs.webui_drift }}" = "yes" ]; then
+          if [ "$WEBUI_DRIFT" = "yes" ]; then
               parts="webui $PINNED_WEBUI → $LATEST_WEBUI"
           fi
-          if [ "${{ steps.drift.outputs.agent_drift }}" = "yes" ]; then
+          if [ "$AGENT_DRIFT" = "yes" ]; then
               parts="${parts:+$parts, }agent $PINNED_AGENT → $LATEST_AGENT"
           fi
           title="[upstream-watch] Update available: $parts"
@@ -231,16 +235,16 @@ jobs:
 
           | Component | Pinned | Latest | Drift |
           |-----------|--------|--------|-------|
-          | webui     | ${{ steps.pinned.outputs.webui_tag }} | ${{ steps.latest.outputs.webui }} | ${{ steps.drift.outputs.webui_drift }} |
-          | agent     | ${{ steps.pinned.outputs.agent_tag }} | ${{ steps.latest.outputs.agent }} | ${{ steps.drift.outputs.agent_drift }} |
+          | webui     | $PINNED_WEBUI | $LATEST_WEBUI | $WEBUI_DRIFT |
+          | agent     | $PINNED_AGENT | $LATEST_AGENT | $AGENT_DRIFT |
 
           \`check-overlay-basis.sh\` against the new tags returned 0 — overlay anchors + \`.fox-removals\` entries are all stable against the proposed bump.
 
           ## To bump
 
           \`\`\`
-          cd forks/hermes-webui && git fetch origin --tags && git checkout ${{ steps.latest.outputs.webui }}
-          cd forks/hermes-agent && git fetch origin --tags && git checkout ${{ steps.latest.outputs.agent }}
+          cd forks/hermes-webui && git fetch origin --tags && git checkout $LATEST_WEBUI
+          cd forks/hermes-agent && git fetch origin --tags && git checkout $LATEST_AGENT
           # Then edit packages/fox-overlay/versions.toml + open a PR
           \`\`\`
 
@@ -265,15 +269,26 @@ jobs:
         if: steps.drift.outputs.no_drift != 'yes' && steps.basis.outputs.basis_rc != '0'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Third-party-derived values (tag names, script output over
+          # upstream content) — env-routed, never interpolated into the
+          # script text (script-injection surface with an issues:write
+          # token). Same rule as the update-available step.
+          PINNED_WEBUI: ${{ steps.pinned.outputs.webui_tag }}
+          PINNED_AGENT: ${{ steps.pinned.outputs.agent_tag }}
+          LATEST_WEBUI: ${{ steps.latest.outputs.webui }}
+          LATEST_AGENT: ${{ steps.latest.outputs.agent }}
+          WEBUI_DRIFT: ${{ steps.drift.outputs.webui_drift }}
+          AGENT_DRIFT: ${{ steps.drift.outputs.agent_drift }}
+          BASIS_OUTPUT: ${{ steps.basis.outputs.basis_output }}
         run: |
           set -eu
           # Same only-drifted-components rule as the update-available title.
           parts=""
-          if [ "${{ steps.drift.outputs.webui_drift }}" = "yes" ]; then
-              parts="webui ${{ steps.latest.outputs.webui }}"
+          if [ "$WEBUI_DRIFT" = "yes" ]; then
+              parts="webui $LATEST_WEBUI"
           fi
-          if [ "${{ steps.drift.outputs.agent_drift }}" = "yes" ]; then
-              parts="${parts:+$parts / }agent ${{ steps.latest.outputs.agent }}"
+          if [ "$AGENT_DRIFT" = "yes" ]; then
+              parts="${parts:+$parts / }agent $LATEST_AGENT"
           fi
           title="[upstream-drift] Overlay anchors drift against $parts"
           # Dedupe: same drift target already reported → re-fire as a
@@ -292,15 +307,15 @@ jobs:
 
           | Component | Pinned | Latest |
           |-----------|--------|--------|
-          | webui     | ${{ steps.pinned.outputs.webui_tag }} | ${{ steps.latest.outputs.webui }} |
-          | agent     | ${{ steps.pinned.outputs.agent_tag }} | ${{ steps.latest.outputs.agent }} |
+          | webui     | $PINNED_WEBUI | $LATEST_WEBUI |
+          | agent     | $PINNED_AGENT | $LATEST_AGENT |
 
           \`check-overlay-basis.sh\` against the proposed new tags returned non-zero. **Anchor/manifest refresh required BEFORE bumping the submodule pointer**.
 
           ## check-overlay-basis output
 
           \`\`\`
-          ${{ steps.basis.outputs.basis_output }}
+          $BASIS_OUTPUT
           \`\`\`
 
           ## Resolution playbook (per script's exit-banner)
