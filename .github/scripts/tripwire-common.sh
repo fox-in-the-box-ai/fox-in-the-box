@@ -44,7 +44,9 @@ _tw_issue_numbers() {
         [ "$attempt" -lt 3 ] && sleep $((attempt * 5))
     done
     rm -f "$errfile"
-    echo "::error::gh issue list ($state) failed after 3 attempts — cannot determine tripwire issue state for: $TW_TITLE"
+    # >&2: inside $(…) capture, stdout is swallowed into the (discarded)
+    # assignment — the annotation must ride stderr to reach the job log.
+    echo "::error::gh issue list ($state) failed after 3 attempts — cannot determine tripwire issue state for: $TW_TITLE" >&2
     return 1
 }
 
