@@ -30,7 +30,8 @@ _tw_issue_numbers() {
     local state="$1"
     local attempt out err errfile
     errfile=$(mktemp)
-    # shellcheck disable=SC2064 -- expand errfile now; it never changes
+    # Expand errfile now (it never changes) — hence double quotes.
+    # shellcheck disable=SC2064
     trap "rm -f '$errfile'" RETURN
     for attempt in 1 2 3; do
         # stderr goes to a file, NOT 2>&1 — a success-with-warning would
