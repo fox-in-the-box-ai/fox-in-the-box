@@ -10,14 +10,20 @@
 # (via shellcheck, preinstalled on ubuntu runners) run-block issues.
 name: Workflow Lint
 
+# Scripts are included in the paths: shellcheck follows `source
+# .github/scripts/…` from run blocks (SC1094 on parse failure), so a
+# scripts-only change can break the gate for every workflow — #797 did
+# exactly that while the filter was workflows-only.
 on:
   pull_request:
     paths:
       - '.github/workflows/**'
+      - '.github/scripts/**'
   push:
     branches: [main]
     paths:
       - '.github/workflows/**'
+      - '.github/scripts/**'
 
 permissions:
   contents: read
@@ -43,3 +49,11 @@ jobs:
 
       - name: Run actionlint
         run: ./actionlint -color
+
+      - name: Shellcheck the bash-invoked CI scripts
+        # actionlint only follows `source` targets; the per-tripwire
+        # scripts are run via `bash path` and would otherwise stay
+        # unlinted while this gate goes green on their PRs. Severity
+        # bar: warning — info-level findings (SC1091 dynamic source,
+        # intentional word-splitting) are noise for these ops scripts.
+        run: shellcheck --severity=warning -x -s bash .github/scripts/*.sh
