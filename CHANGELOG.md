@@ -22,6 +22,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Security
 
+- Dependency-alert wave of 2026-09-01/02 cleared same-day, keeping the alert count at zero: browserslist 4.28.8 in both lockfiles (two high — untrusted browserslist-stats crash / prototype write, unbounded cache growth; via the grouped dependency PRs) and @xmldom/xmldom 0.8.15 / 0.9.12 in both lockfiles (three medium — XML fragment injection via invalid EntityReference.nodeName). All build-time or test tooling; none of the vulnerable paths ship in the container or desktop runtime.
 - upstream-watch no longer interpolates third-party-controlled values (upstream tag names, basis-check output) into workflow script text holding an issues:write token; all such values are env-routed (#777, completing #767).
 - Container base layer now applies Debian security upgrades at build time (`apt-get upgrade -y`) — packages frozen at the python:3.11-slim snapshot no longer ship known-fixed CVEs; clears the fixable portion of the container-scan backlog (#755)
 - js-yaml resolved to 4.3.1 in both lockfiles (root pnpm-lock.yaml and packages/electron/package-lock.json), clearing all four open js-yaml advisories. Corrects the 0.7.60 record: that entry listed js-yaml 4.3.1 in its security batch, but the lockfiles still resolved 4.2.0 at release time — this change is what lands it.
