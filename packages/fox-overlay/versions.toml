@@ -19,7 +19,7 @@ hermes_agent_url = "https://github.com/NousResearch/hermes-agent"
 pinned_at = "2026-09-02"
 pinned_in_pr = "fox-in-the-box-ai/fox-in-the-box#791"
 phase = "option-b-bump"
-notes = "Agent-only bump v2026.8.18 to v2026.8.31 (upstream 0.20.4 to 0.21.0, ~3,091 commits; closes #790; webui stays v0.52.113). Anchor audit: gateway/run.py static patch applies cleanly at the new tag; all four cron_diagnostics substitution anchors (create_job, _mark_job_run_locked, run_job FAILED template, _format_job) present exactly once in the new function bodies; auxiliary_client anchors byte-identical. Dep delta: uvicorn floor 0.24 to 0.31 (lock already at 0.49.0), psutil pinned 7.2.2 upstream (lock matches), new exact-pinned firecrawl-anydoc==0.2.4 + snowballstemmer==3.1.1 float in via upstream; requirements.lock untouched."
+notes = "Agent-only bump v2026.8.18 to v2026.8.31 (upstream 0.20.4 to 0.21.0, ~3,091 commits; closes #790; webui stays v0.52.113). Anchor audit: gateway/run.py static patch applies cleanly at the new tag; all four cron_diagnostics substitution anchors (create_job, _mark_job_run_locked, run_job FAILED template, _format_job) present exactly once in the new function bodies; auxiliary_client anchors byte-identical. Dep delta: uvicorn floor 0.24 to 0.31 (lock already at 0.49.0), psutil pinned 7.2.2 upstream (lock matches), new exact-pinned firecrawl-anydoc==0.2.4 + snowballstemmer==3.1.1 float in via upstream; requirements.lock untouched (refreshed separately in #793 for #792)."
 
 [history]
 prior_pins = [
