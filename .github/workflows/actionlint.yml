@@ -10,14 +10,20 @@
 # (via shellcheck, preinstalled on ubuntu runners) run-block issues.
 name: Workflow Lint
 
+# Scripts are included in the paths: shellcheck follows `source
+# .github/scripts/…` from run blocks (SC1094 on parse failure), so a
+# scripts-only change can break the gate for every workflow — #797 did
+# exactly that while the filter was workflows-only.
 on:
   pull_request:
     paths:
       - '.github/workflows/**'
+      - '.github/scripts/**'
   push:
     branches: [main]
     paths:
       - '.github/workflows/**'
+      - '.github/scripts/**'
 
 permissions:
   contents: read
