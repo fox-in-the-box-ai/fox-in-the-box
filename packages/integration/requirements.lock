@@ -1,6 +1,6 @@
 # Frozen Python dependencies for the Fox container image.
 # Generated from ghcr.io/fox-in-the-box-ai/cloud:v0.7.51 on 2026-06-20,
-# refreshed for hermes-agent v2026.8.16.2 (2026-08-17).
+# refreshed for hermes-agent v2026.8.31 / 0.21.0 (2026-09-02, #792).
 # hermes-agent hard-pins cryptography==50.0.0 in pyproject.toml — this
 # CLOSES the long-tracked GHSA-537c-gmf6-5ccf accepted risk (fix was
 # 48.0.1; 46.0.7 was below it while upstream pinned there).
@@ -21,6 +21,11 @@
 # in embedded path mode only, intentionally independent of the standalone
 # Qdrant v1.9.4 server binary). protobuf 7.35.1 -> 6.33.6 because mem0ai
 # 2.0.10 requires protobuf<7.0.0,>=5.29.6 (pip check clean on the full set).
+# 2026-09-02: +firecrawl-anydoc==0.2.4 (upstream 0.21.0 document-to-Markdown
+# extraction; genuine firecrawl org, MIT, zero runtime deps; hosted OCR is
+# opt-in via FIRECRAWL_API_KEY which the Fox image never sets — default
+# ocr="reject" is fully offline) + snowballstemmer==3.1.1 (zero deps).
+
 annotated-doc==0.0.4
 annotated-types==0.7.0
 anthropic==0.87.0
@@ -38,6 +43,7 @@ distro==1.9.0
 docstring_parser==0.18.0
 fastapi==0.138.0
 fire==0.7.1
+firecrawl-anydoc==0.2.4
 google-api-core==2.31.0
 google-api-python-client==2.194.0
 google-auth-httplib2==0.3.1
@@ -99,6 +105,7 @@ ruamel.yaml==0.18.17
 s3transfer==0.16.1
 six==1.17.0
 sniffio==1.3.1
+snowballstemmer==3.1.1
 socksio==1.0.0
 SQLAlchemy==2.0.52
 starlette==1.3.1
