@@ -17,9 +17,12 @@ SOURCE_WORKFLOW="${GITHUB_WORKFLOW:-upstream-tripwires.yml}"
 # network) must not read as "no matching issue" — in the fire path that
 # stacks a duplicate, in the ack path it re-fires an acknowledged
 # condition, and in the clear path it silently skips the close. Retry
-# 3x with backoff; on exhaustion fail the script so the workflow's
-# self-health handler reports the API outage once, instead of every
-# tripwire guessing wrong. (Immediate exit-1 without retry was rejected
+# 3x with backoff; on exhaustion fail the script. In
+# upstream-tripwires.yml the self-health handler then reports the API
+# outage once; the other sourcing workflows (build-container
+# main_push_health, playwright cron_health) have no such backstop — an
+# exhaustion there fails the handler step, so the signal is the red
+# run itself, not an issue. (Immediate exit-1 without retry was rejected
 # in #774: one 429 blip would fail all ten tripwires.)
 # Uses TW_TITLE from the environment for both the server-side search
 # narrowing and the exact jq match — same injection rule as the callers.
@@ -27,6 +30,8 @@ _tw_issue_numbers() {
     local state="$1"
     local attempt out err errfile
     errfile=$(mktemp)
+    # shellcheck disable=SC2064 -- expand errfile now; it never changes
+    trap "rm -f '$errfile'" RETURN
     for attempt in 1 2 3; do
         # stderr goes to a file, NOT 2>&1 — a success-with-warning would
         # otherwise mix warning text into the captured number list and
