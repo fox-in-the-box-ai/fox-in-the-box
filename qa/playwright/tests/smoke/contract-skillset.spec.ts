@@ -5,18 +5,17 @@
  * skillset is loaded. In standalone mode the default is 404; in managed
  * mode Fleet injects a manifest at provision time.
  *
- * /skillset is not in the onboarding whitelist — call /api/setup/skip
- * first to prevent 302 redirect when running in parallel with tests
- * that call /test/reset.
+ * /skillset is not in the onboarding whitelist — requests go through
+ * the shared onboarding helper (#779) to survive parallel tests that
+ * call /test/reset.
  */
 import { test, expect, request } from '@playwright/test';
+import { getSkippingOnboarding } from '../helpers/onboarding';
 
 test.describe('Contract — /skillset', () => {
   test('returns 200 or 404 with JSON', async ({ baseURL }) => {
     const api = await request.newContext({ baseURL });
-    await api.post('/api/setup/skip');
-
-    const res = await api.get('/skillset');
+    const res = await getSkippingOnboarding(api, '/skillset', [200, 404]);
     const status = res.status();
     expect(
       [200, 404].includes(status),
@@ -28,9 +27,8 @@ test.describe('Contract — /skillset', () => {
 
   test('response body has expected shape', async ({ baseURL }) => {
     const api = await request.newContext({ baseURL });
-    await api.post('/api/setup/skip');
-
-    const res = await api.get('/skillset');
+    const res = await getSkippingOnboarding(api, '/skillset', [200, 404]);
+    expect([200, 404], '/skillset must return 200 or 404').toContain(res.status());
     const body = await res.json();
     if (res.status() === 200) {
       expect(body, '200 response must have a name field').toHaveProperty('name');
