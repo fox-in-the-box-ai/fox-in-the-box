@@ -2,7 +2,7 @@
 
 This matrix validates that desktop users can reach web onboarding in one click.
 
-**Runtime under test:** Electron 43.4.0 (Chromium 150 / Node 24) on main since #750 — ships with the next release; v0.7.60 shipped 42.8.0. Run the full matrix on both platforms whenever the Electron major changes.
+**Runtime under test:** Electron 44.1.1 (Chromium 150 / Node 24) on main since #750 — ships with the next release; v0.7.60 shipped 42.8.0. Run the full matrix on both platforms whenever the Electron major changes.
 
 ## Platforms
 
