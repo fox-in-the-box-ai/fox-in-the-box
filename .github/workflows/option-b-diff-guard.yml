@@ -71,6 +71,8 @@ jobs:
           violations=$(echo "$changed" | grep -Ev "$ALLOWED_RE" || true)
           if [ -n "$violations" ]; then
             echo "::error::Option B violation. A PR titled 'bump(upstream): …' must touch ONLY the upstream submodule pointers, packages/fox-overlay/, and this guard workflow. The following files are out-of-bounds for an Option B PR:"
+            # Per-line prefix on a multiline var; ${var//} has no per-line form (#777 documented exception).
+            # shellcheck disable=SC2001
             echo "$violations" | sed 's/^/::error::  - /'
             echo "::error::If this PR is supposed to include Fox-code changes, rename it to drop the 'bump(upstream):' prefix. If the auto-bump should apply but you also need a code change, split into two PRs."
             exit 1

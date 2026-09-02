@@ -13,6 +13,48 @@ RUN_URL="${GITHUB_SERVER_URL:-https://github.com}/${REPO}/actions/runs/${GITHUB_
 # carry correct provenance.
 SOURCE_WORKFLOW="${GITHUB_WORKFLOW:-upstream-tripwires.yml}"
 
+# Bounded-retry gh issue lookup (#774): a transient API failure (429,
+# network) must not read as "no matching issue" — in the fire path that
+# stacks a duplicate, in the ack path it re-fires an acknowledged
+# condition, and in the clear path it silently skips the close. Retry
+# 3x with backoff; on exhaustion fail the script. In
+# upstream-tripwires.yml the self-health handler then reports the API
+# outage once; the other sourcing workflows (build-container
+# main_push_health, playwright cron_health) have no such backstop — an
+# exhaustion there fails the handler step, so the signal is the red
+# run itself, not an issue. (Immediate exit-1 without retry was rejected
+# in #774: one 429 blip would fail all ten tripwires.)
+# Uses TW_TITLE from the environment for both the server-side search
+# narrowing and the exact jq match — same injection rule as the callers.
+_tw_issue_numbers() {
+    local state="$1"
+    local attempt out err errfile
+    errfile=$(mktemp)
+    # shellcheck disable=SC2064 -- expand errfile now; it never changes
+    trap "rm -f '$errfile'" RETURN
+    for attempt in 1 2 3; do
+        # stderr goes to a file, NOT 2>&1 — a success-with-warning would
+        # otherwise mix warning text into the captured number list and
+        # head -1 could read a warning line as an issue number.
+        if out=$(gh issue list --repo "$REPO" --state "$state" --limit 100 \
+                   --search "in:title \"$TW_TITLE\"" \
+                   --json number,title \
+                   -q '.[] | select(.title == env.TW_TITLE) | .number' 2>"$errfile"); then
+            rm -f "$errfile"
+            printf '%s\n' "$out"
+            return 0
+        fi
+        err=$(cat "$errfile" 2>/dev/null || true)
+        echo "[tripwire] gh issue list ($state) failed (attempt $attempt/3): $err" >&2
+        [ "$attempt" -lt 3 ] && sleep $((attempt * 5))
+    done
+    rm -f "$errfile"
+    # >&2: inside $(…) capture, stdout is swallowed into the (discarded)
+    # assignment — the annotation must ride stderr to reach the job log.
+    echo "::error::gh issue list ($state) failed after 3 attempts — cannot determine tripwire issue state for: $TW_TITLE" >&2
+    return 1
+}
+
 # Open or re-fire an issue. De-dupe by exact title match.
 #
 # Usage:
@@ -44,11 +86,8 @@ tripwire_fire() {
 
     if [ "$mode" = "ack_dedupe" ]; then
         local acked
-        acked=$(gh issue list --repo "$REPO" --state closed --limit 100 \
-                  --search "in:title \"$title\"" \
-                  --json number,title \
-                  -q '.[] | select(.title == env.TW_TITLE) | .number' \
-                  2>/dev/null | head -1)
+        acked=$(_tw_issue_numbers closed)
+        acked=$(printf '%s' "$acked" | head -1)
         if [ -n "$acked" ]; then
             echo "[tripwire] condition previously acknowledged in closed #$acked — skipping re-fire"
             return 0
@@ -56,11 +95,8 @@ tripwire_fire() {
     fi
 
     local existing
-    existing=$(gh issue list --repo "$REPO" --state open --limit 100 \
-                 --search "in:title \"$title\"" \
-                 --json number,title \
-                 -q '.[] | select(.title == env.TW_TITLE) | .number' \
-                 2>/dev/null | head -1)
+    existing=$(_tw_issue_numbers open)
+    existing=$(printf '%s' "$existing" | head -1)
 
     if [ -n "$existing" ]; then
         gh issue comment "$existing" --repo "$REPO" --body "$(printf '%s\n\n_Re-fired on %s_' "$body" "$RUN_URL")"
@@ -105,11 +141,7 @@ tripwire_clear() {
 
     export TW_TITLE="$title"
     local numbers
-    numbers=$(gh issue list --repo "$REPO" --state open --limit 100 \
-                 --search "in:title \"$title\"" \
-                 --json number,title \
-                 -q '.[] | select(.title == env.TW_TITLE) | .number' \
-                 2>/dev/null)
+    numbers=$(_tw_issue_numbers open)
 
     if [ -z "$numbers" ]; then
         return 0
