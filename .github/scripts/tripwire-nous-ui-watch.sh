@@ -46,7 +46,7 @@ If NousResearch ships an official UI, the calculus for depending on \`nesquena/h
 
 ## Actions
 
-- [ ] Inspect the directory: https://github.com/$AGENT_REPO/tree/$AGENT_BRANCH/$(echo $matches | awk '{print $1}')
+- [ ] Inspect the directory: https://github.com/$AGENT_REPO/tree/$AGENT_BRANCH/$(echo "$matches" | awk '{print $1}')
 - [ ] Read NousResearch's announcement / discussion / README context
 - [ ] Strategic review with Dennis — does this change v0.7.x / v0.8.x direction?
 - [ ] If false positive (dir exists for unrelated reasons), close this issue
