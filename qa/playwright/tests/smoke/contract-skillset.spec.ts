@@ -28,6 +28,7 @@ test.describe('Contract — /skillset', () => {
   test('response body has expected shape', async ({ baseURL }) => {
     const api = await request.newContext({ baseURL });
     const res = await getSkippingOnboarding(api, '/skillset', [200, 404]);
+    expect([200, 404], '/skillset must return 200 or 404').toContain(res.status());
     const body = await res.json();
     if (res.status() === 200) {
       expect(body, '200 response must have a name field').toHaveProperty('name');
