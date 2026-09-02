@@ -1,0 +1,45 @@
+# Workflow-validity gate (#777).
+#
+# GitHub validates workflow files server-side; an invalid file produces
+# only a zero-job "workflow file" failure run on push and silently stops
+# that workflow's schedule — the in-workflow `if: failure()` handlers
+# structurally cannot fire for this class (no job ever starts). A
+# duplicate `env:` key merged in #767 killed the upstream-watch nightly
+# for two days this way: PyYAML accepts duplicate keys locally, GitHub's
+# schema does not. actionlint catches duplicates, expression typos, and
+# (via shellcheck, preinstalled on ubuntu runners) run-block issues.
+name: Workflow Lint
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/**'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/**'
+
+permissions:
+  contents: read
+
+jobs:
+  actionlint:
+    name: actionlint
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Download actionlint (pinned, checksum-verified)
+        run: |
+          set -eu
+          version=1.7.12
+          sha256=8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+          curl -sSfLo actionlint.tar.gz \
+              "https://github.com/rhysd/actionlint/releases/download/v${version}/actionlint_${version}_linux_amd64.tar.gz"
+          echo "${sha256}  actionlint.tar.gz" | sha256sum -c -
+          tar -xzf actionlint.tar.gz actionlint
+          rm actionlint.tar.gz
+
+      - name: Run actionlint
+        run: ./actionlint -color

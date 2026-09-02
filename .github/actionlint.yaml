@@ -1,0 +1,5 @@
+# Self-hosted runner labels used by this repo's workflows (#777).
+# windows-real-smoke.yml targets the founder-managed Windows box.
+self-hosted-runner:
+  labels:
+    - fitb-runner-01
