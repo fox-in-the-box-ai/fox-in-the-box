@@ -121,12 +121,21 @@ jobs:
 
       - name: Determine drift
         id: drift
+        env:
+          # latest_* are third-party-controlled tag names — env-routed,
+          # never interpolated into script text. pinned_* are
+          # repo-controlled (versions.toml) but routed the same way for
+          # consistency.
+          PINNED_WEBUI: ${{ steps.pinned.outputs.webui_tag }}
+          PINNED_AGENT: ${{ steps.pinned.outputs.agent_tag }}
+          LATEST_WEBUI: ${{ steps.latest.outputs.webui }}
+          LATEST_AGENT: ${{ steps.latest.outputs.agent }}
         run: |
           set -eu
-          pinned_webui="${{ steps.pinned.outputs.webui_tag }}"
-          pinned_agent="${{ steps.pinned.outputs.agent_tag }}"
-          latest_webui="${{ steps.latest.outputs.webui }}"
-          latest_agent="${{ steps.latest.outputs.agent }}"
+          pinned_webui="$PINNED_WEBUI"
+          pinned_agent="$PINNED_AGENT"
+          latest_webui="$LATEST_WEBUI"
+          latest_agent="$LATEST_AGENT"
 
           webui_drift="no"; agent_drift="no"
           if [ "$pinned_webui" != "$latest_webui" ] && [ -n "$latest_webui" ]; then
@@ -160,18 +169,27 @@ jobs:
       - name: Check overlay basis against latest tags
         id: basis
         if: steps.drift.outputs.no_drift != 'yes'
+        env:
+          # Tag names are third-party-controlled; a crafted refname must
+          # not reach script text (this job's token has issues:write and
+          # checkout persists credentials). git checkout "$VAR" treats
+          # the value as data.
+          LATEST_WEBUI: ${{ steps.latest.outputs.webui }}
+          LATEST_AGENT: ${{ steps.latest.outputs.agent }}
+          WEBUI_DRIFT: ${{ steps.drift.outputs.webui_drift }}
+          AGENT_DRIFT: ${{ steps.drift.outputs.agent_drift }}
         run: |
           set +e  # we want to capture rather than fail-fast
           # Temporarily check out the latest tag in each submodule that drifted.
-          if [ "${{ steps.drift.outputs.webui_drift }}" = "yes" ]; then
+          if [ "$WEBUI_DRIFT" = "yes" ]; then
               ( cd forks/hermes-webui && \
                 git fetch origin --tags --quiet && \
-                git checkout "${{ steps.latest.outputs.webui }}" --quiet )
+                git checkout "$LATEST_WEBUI" --quiet )
           fi
-          if [ "${{ steps.drift.outputs.agent_drift }}" = "yes" ]; then
+          if [ "$AGENT_DRIFT" = "yes" ]; then
               ( cd forks/hermes-agent && \
                 git fetch origin --tags --quiet && \
-                git checkout "${{ steps.latest.outputs.agent }}" --quiet )
+                git checkout "$LATEST_AGENT" --quiet )
           fi
 
           # Run the overlay basis check.
