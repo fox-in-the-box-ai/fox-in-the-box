@@ -25,18 +25,25 @@ SOURCE_WORKFLOW="${GITHUB_WORKFLOW:-upstream-tripwires.yml}"
 # narrowing and the exact jq match — same injection rule as the callers.
 _tw_issue_numbers() {
     local state="$1"
-    local attempt out
+    local attempt out err errfile
+    errfile=$(mktemp)
     for attempt in 1 2 3; do
+        # stderr goes to a file, NOT 2>&1 — a success-with-warning would
+        # otherwise mix warning text into the captured number list and
+        # head -1 could read a warning line as an issue number.
         if out=$(gh issue list --repo "$REPO" --state "$state" --limit 100 \
                    --search "in:title \"$TW_TITLE\"" \
                    --json number,title \
-                   -q '.[] | select(.title == env.TW_TITLE) | .number' 2>&1); then
+                   -q '.[] | select(.title == env.TW_TITLE) | .number' 2>"$errfile"); then
+            rm -f "$errfile"
             printf '%s\n' "$out"
             return 0
         fi
-        echo "[tripwire] gh issue list ($state) failed (attempt $attempt/3): $out" >&2
+        err=$(cat "$errfile" 2>/dev/null || true)
+        echo "[tripwire] gh issue list ($state) failed (attempt $attempt/3): $err" >&2
         [ "$attempt" -lt 3 ] && sleep $((attempt * 5))
     done
+    rm -f "$errfile"
     echo "::error::gh issue list ($state) failed after 3 attempts — cannot determine tripwire issue state for: $TW_TITLE"
     return 1
 }
