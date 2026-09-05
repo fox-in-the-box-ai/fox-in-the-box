@@ -106,17 +106,32 @@ tripwire_fire() {
     existing=$(printf '%s' "$existing" | head -1)
 
     if [ -n "$existing" ]; then
-        # Compare against the newest comment's body with the run-URL
-        # footer stripped from both sides; skip the comment when the
-        # substance is unchanged. A lookup failure here must not
-        # suppress the re-fire (fail toward commenting, not silence).
+        # Compare against the newest comment's body, NORMALIZED on both
+        # sides: footers dropped (anchored), CRLF stripped, and
+        # run-varying tokens blanked — ISO timestamps, "<N>h ago",
+        # "<N> days (ago)", "<N> commits/runs/hours" — because tripwire
+        # bodies recompute ages every run and a byte-compare would
+        # never match (the first draft of this dedupe was dead code
+        # for exactly that reason). What survives normalization is the
+        # condition's identity; if THAT is unchanged, skip the comment.
+        # A lookup failure must not suppress the re-fire (fail toward
+        # commenting, not silence).
         local last_body new_full
         new_full=$(printf '%s\n\n_Re-fired on %s_' "$body" "$RUN_URL")
         last_body=$(gh issue view "$existing" --repo "$REPO" \
-                      --json comments -q '.comments[-1].body' 2>/dev/null || true)
+                      --json comments -q '.comments[-1].body // empty' 2>/dev/null || true)
+        _tw_normalize() {
+            tr -d '\r' | sed -E \
+                -e '/^_Re-fired on .*_$/d' \
+                -e '/^_Fired by .*_$/d' \
+                -e 's/[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z?//g' \
+                -e 's/[0-9]+(\.[0-9]+)?h ago//g' \
+                -e 's/[0-9]+ days?( ago)?//g' \
+                -e 's/[0-9]+ (commits?|runs?|hours?)//g'
+        }
         if [ -n "$last_body" ] && \
-           [ "$(printf '%s' "$last_body" | sed '/_Re-fired on /d;/_Fired by /d')" = \
-             "$(printf '%s' "$new_full" | sed '/_Re-fired on /d;/_Fired by /d')" ]; then
+           [ "$(printf '%s' "$last_body" | _tw_normalize)" = \
+             "$(printf '%s' "$new_full" | _tw_normalize)" ]; then
             echo "[tripwire] condition unchanged on open #$existing — skipping duplicate re-fire comment"
             return 0
         fi
