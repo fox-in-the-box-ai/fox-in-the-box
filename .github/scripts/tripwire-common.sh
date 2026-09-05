@@ -62,7 +62,13 @@ _tw_issue_numbers() {
 #   tripwire_fire "<exact-title>" "<body markdown>" "<comma,sep,labels>" [ack_dedupe]
 #
 # If an open issue with the same title exists, comment "Re-fired on
-# <RUN_URL>" + the new body on it. Otherwise create.
+# <RUN_URL>" + the new body on it — UNLESS the new body is identical to
+# the last re-fire comment's body (only the run URL differing): an
+# unchanged condition then re-fires silently, so a held condition does
+# not stack a near-identical comment per scheduled run (#772 collected
+# 16 of them; #785 drowned the human status note under 5). A changed
+# body (different ages, counts, subjects) still comments. Otherwise
+# create.
 #
 # Pass "ack_dedupe" as the 4th arg for tripwires whose titles name a
 # SPECIFIC subject (an upstream issue number, a branch name): a CLOSED
@@ -100,7 +106,36 @@ tripwire_fire() {
     existing=$(printf '%s' "$existing" | head -1)
 
     if [ -n "$existing" ]; then
-        gh issue comment "$existing" --repo "$REPO" --body "$(printf '%s\n\n_Re-fired on %s_' "$body" "$RUN_URL")"
+        # Compare against the newest comment's body, NORMALIZED on both
+        # sides: footers dropped (anchored), CRLF stripped, and
+        # run-varying tokens blanked — ISO timestamps, "<N>h ago",
+        # "<N> days (ago)", "<N> commits/runs/hours" — because tripwire
+        # bodies recompute ages every run and a byte-compare would
+        # never match (the first draft of this dedupe was dead code
+        # for exactly that reason). What survives normalization is the
+        # condition's identity; if THAT is unchanged, skip the comment.
+        # A lookup failure must not suppress the re-fire (fail toward
+        # commenting, not silence).
+        local last_body new_full
+        new_full=$(printf '%s\n\n_Re-fired on %s_' "$body" "$RUN_URL")
+        last_body=$(gh issue view "$existing" --repo "$REPO" \
+                      --json comments -q '.comments[-1].body // empty' 2>/dev/null || true)
+        _tw_normalize() {
+            tr -d '\r' | sed -E \
+                -e '/^_Re-fired on .*_$/d' \
+                -e '/^_Fired by .*_$/d' \
+                -e 's/[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z?//g' \
+                -e 's/[0-9]+(\.[0-9]+)?h ago//g' \
+                -e 's/[0-9]+ days?( ago)?//g' \
+                -e 's/[0-9]+ (commits?|runs?|hours?)//g'
+        }
+        if [ -n "$last_body" ] && \
+           [ "$(printf '%s' "$last_body" | _tw_normalize)" = \
+             "$(printf '%s' "$new_full" | _tw_normalize)" ]; then
+            echo "[tripwire] condition unchanged on open #$existing — skipping duplicate re-fire comment"
+            return 0
+        fi
+        gh issue comment "$existing" --repo "$REPO" --body "$new_full"
         echo "[tripwire] re-fired existing issue #$existing"
         return 0
     fi
