@@ -62,7 +62,13 @@ _tw_issue_numbers() {
 #   tripwire_fire "<exact-title>" "<body markdown>" "<comma,sep,labels>" [ack_dedupe]
 #
 # If an open issue with the same title exists, comment "Re-fired on
-# <RUN_URL>" + the new body on it. Otherwise create.
+# <RUN_URL>" + the new body on it — UNLESS the new body is identical to
+# the last re-fire comment's body (only the run URL differing): an
+# unchanged condition then re-fires silently, so a held condition does
+# not stack a near-identical comment per scheduled run (#772 collected
+# 16 of them; #785 drowned the human status note under 5). A changed
+# body (different ages, counts, subjects) still comments. Otherwise
+# create.
 #
 # Pass "ack_dedupe" as the 4th arg for tripwires whose titles name a
 # SPECIFIC subject (an upstream issue number, a branch name): a CLOSED
@@ -100,7 +106,21 @@ tripwire_fire() {
     existing=$(printf '%s' "$existing" | head -1)
 
     if [ -n "$existing" ]; then
-        gh issue comment "$existing" --repo "$REPO" --body "$(printf '%s\n\n_Re-fired on %s_' "$body" "$RUN_URL")"
+        # Compare against the newest comment's body with the run-URL
+        # footer stripped from both sides; skip the comment when the
+        # substance is unchanged. A lookup failure here must not
+        # suppress the re-fire (fail toward commenting, not silence).
+        local last_body new_full
+        new_full=$(printf '%s\n\n_Re-fired on %s_' "$body" "$RUN_URL")
+        last_body=$(gh issue view "$existing" --repo "$REPO" \
+                      --json comments -q '.comments[-1].body' 2>/dev/null || true)
+        if [ -n "$last_body" ] && \
+           [ "$(printf '%s' "$last_body" | sed '/_Re-fired on /d;/_Fired by /d')" = \
+             "$(printf '%s' "$new_full" | sed '/_Re-fired on /d;/_Fired by /d')" ]; then
+            echo "[tripwire] condition unchanged on open #$existing — skipping duplicate re-fire comment"
+            return 0
+        fi
+        gh issue comment "$existing" --repo "$REPO" --body "$new_full"
         echo "[tripwire] re-fired existing issue #$existing"
         return 0
     fi
