@@ -16,6 +16,14 @@ updates:
     groups:
       root-deps:
         patterns: ["*"]
+        # electron stays out of grouped bumps: a grouped PR once changed
+        # packages/electron/package.json to a new electron MAJOR while
+        # regenerating only the pnpm lockfile (#788 -> #806 incident),
+        # silently promoting a runtime major and breaking npm ci.
+        # Ungrouped, an electron update arrives as its own clearly-named
+        # PR that can be held for the packaged-smoke arc (#750/#802
+        # pattern).
+        exclude-patterns: ["electron"]
 
   - package-ecosystem: npm
     directory: /packages/electron
@@ -24,6 +32,8 @@ updates:
     groups:
       electron-deps:
         patterns: ["*"]
+        # Same rule as root-deps: electron majors get standalone PRs.
+        exclude-patterns: ["electron"]
 
   - package-ecosystem: npm
     directory: /qa/playwright
