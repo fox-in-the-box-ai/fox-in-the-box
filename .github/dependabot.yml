@@ -22,8 +22,10 @@ updates:
         # silently promoting a runtime major and breaking npm ci.
         # Ungrouped, an electron update arrives as its own clearly-named
         # PR that can be held for the packaged-smoke arc (#750/#802
-        # pattern).
-        exclude-patterns: ["electron"]
+        # pattern). electron-builder is excluded for the same reason:
+        # packaging breakage is invisible to PR CI (no job builds
+        # installers) and surfaces only at release time.
+        exclude-patterns: ["electron", "electron-builder"]
 
   - package-ecosystem: npm
     directory: /packages/electron
@@ -32,8 +34,9 @@ updates:
     groups:
       electron-deps:
         patterns: ["*"]
-        # Same rule as root-deps: electron majors get standalone PRs.
-        exclude-patterns: ["electron"]
+        # Same rule as root-deps: electron and electron-builder get
+        # standalone PRs.
+        exclude-patterns: ["electron", "electron-builder"]
 
   - package-ecosystem: npm
     directory: /qa/playwright
