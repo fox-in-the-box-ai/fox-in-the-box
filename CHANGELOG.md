@@ -14,7 +14,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - CI lints workflow files with actionlint (pinned, checksum-verified) — GitHub's server-side validator rejections previously surfaced only as zero-job push failures while silently stopping schedules (#777, the #767 duplicate-env incident class).
 - Provider-settings smoke spec no longer flakes when a parallel spec resets onboarding mid-test; the nightly failure tracked by #775 was this race, not an endpoint break (#778).
 - The onboarding-reset race guard is now a shared helper covering the sibling smoke specs with the same window (contract-skillset, hostname-overlay, contract-endpoints-sweep), with redirects disabled so the raced 302 is actually visible to the retry (#794).
-- The race guard's retries are now spaced with a backoff: a parallel wizard spec can hold onboarding open for whole seconds, and the previous back-to-back attempts could all land inside one such window — the 2026-09-04/05 nightly failures were exactly that (#809).
+- The race guard's retries are now spaced with a growing backoff (six attempts over ~6s): the previous three back-to-back attempts completed within tens of milliseconds and a single reset-adjacent window could cover them all — the 2026-09-04/05 nightly failures were exactly that (#809).
 - Tripwire issue lookups no longer read a failed GitHub API call as "no matching issue" — the three lookup paths (fire dedupe, ack dedupe, auto-clear) retry with backoff and fail loud on exhaustion instead of stacking duplicates, re-firing acknowledged conditions, or silently skipping closes (#797).
 
 ### Changed
