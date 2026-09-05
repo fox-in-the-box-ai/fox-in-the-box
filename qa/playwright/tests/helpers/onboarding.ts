@@ -11,6 +11,13 @@
  * maxRedirects: 0 — otherwise the raced 302 is silently followed to the
  * onboarding page's 200 HTML and the retry loop never sees the race.
  *
+ * Attempts are spaced with a short backoff: a parallel wizard spec can
+ * hold the app IN onboarding for whole seconds (reset, then browser
+ * navigation and HTML assertions before its own skip), so back-to-back
+ * retries can all land inside one such window — the 2026-09-04/05
+ * nightly failures (#809) were exactly that, with all 3 immediate
+ * attempts eaten by one onboarding window.
+ *
  * The final response is returned WITHOUT asserting — callers keep their own
  * status assertions so failure messages stay spec-specific. A genuinely
  * broken endpoint therefore fails the caller's assertion with the caller's
@@ -19,7 +26,10 @@
  */
 import type { APIRequestContext, APIResponse } from '@playwright/test';
 
-const ATTEMPTS = 3;
+const ATTEMPTS = 6;
+const BACKOFF_MS = 400;
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export async function getSkippingOnboarding(
   api: APIRequestContext,
@@ -31,6 +41,7 @@ export async function getSkippingOnboarding(
     await api.post("/api/setup/skip");
     res = await api.get(path, { maxRedirects: 0 });
     if (okStatuses.includes(res.status())) break;
+    if (attempt < ATTEMPTS - 1) await sleep(BACKOFF_MS);
   }
   return res;
 }
@@ -46,6 +57,7 @@ export async function postSkippingOnboarding(
     await api.post("/api/setup/skip");
     res = await api.post(path, { data, maxRedirects: 0 });
     if (okStatuses.includes(res.status())) break;
+    if (attempt < ATTEMPTS - 1) await sleep(BACKOFF_MS);
   }
   return res;
 }
