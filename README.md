@@ -172,7 +172,7 @@ For local iteration on the bundled `hermes-agent` / `hermes-webui` submodules, s
 **Operating system**
 
 - **Windows 10 or later** (Windows 11 recommended).
-- **macOS 12** (Monterey) or later — Apple Silicon or Intel.
+- **macOS 13** (Ventura) or later — Apple Silicon or Intel. (Electron 44 dropped macOS 12; v0.7.60 and earlier still run on Monterey.)
 - **Linux** with Docker Engine 20.10 or later.
 
 **Docker — required**
