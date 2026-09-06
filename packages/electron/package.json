@@ -26,12 +26,12 @@
     "electron": "^44.1.1",
     "electron-builder": "^26.15.3",
     "electron-builder-squirrel-windows": "26.15.3",
-    "jest": "^30.5.0",
-    "js-yaml": "^4.1.0",
+    "jest": "^30.5.1",
+    "js-yaml": "^5.4.1",
     "rcedit": "^5.0.0"
   },
   "overrides": {
-    "js-yaml": "^4.1.0"
+    "js-yaml": "^5.4.1"
   },
   "build": {
     "extends": "./electron-builder.yml"
