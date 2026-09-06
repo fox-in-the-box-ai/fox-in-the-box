@@ -117,7 +117,8 @@ details[open] .diag-arrow { transform: rotate(90deg); }
   font-size: 10px;
   color: rgba(255,248,220,0.28);
   line-height: 1.55;
-  max-height: 90px;
+  /* Grows with the window (see progress.html note); floor = old cap. */
+  max-height: max(90px, calc(100vh - 330px));
   overflow-y: auto;
   white-space: pre-wrap;
   word-break: break-all;

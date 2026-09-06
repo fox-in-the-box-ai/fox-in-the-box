@@ -346,6 +346,8 @@ function openDiagnosticWindow() {
   _diagnosticWin = new BrowserWindow({
     width: 640,
     height: 520,
+    minWidth: 640,
+    minHeight: 520,
     resizable: true,
     minimizable: false,
     maximizable: false,
