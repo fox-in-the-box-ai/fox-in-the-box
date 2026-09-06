@@ -157,7 +157,9 @@ function showProgress(message) {
   _progressWin = new BrowserWindow({
     width: 620,
     height: 560,
-    resizable: false,
+    minWidth: 620,
+    minHeight: 560,
+    resizable: true,
     minimizable: false,
     maximizable: false,
     closable: true,
@@ -288,7 +290,9 @@ function showError(details) {
   const win = new BrowserWindow({
     width: 560,
     height: 400,
-    resizable: false,
+    minWidth: 560,
+    minHeight: 400,
+    resizable: true,
     minimizable: false,
     maximizable: false,
     closable: true,
