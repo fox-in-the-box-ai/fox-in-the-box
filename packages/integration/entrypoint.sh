@@ -132,6 +132,16 @@ fi
 
 # ── 4. Fix permissions ─────────────────────────────────────────────────────────
 # Exclude /data/data/tailscale — tailscaled runs as root and manages its own state.
+# First, delete stale unix sockets from an ungracefully stopped previous
+# run: macOS bind mounts (virtiofs) return ENOENT when chown touches a
+# foreign socket, which aborts the fail-loud chown below — and with the
+# desktop app's AutoRemove container, the resulting exit vanishes before
+# anyone can read it ("Container disappeared", #817). Sockets are
+# per-boot runtime artifacts; every process that owned one is dead by
+# the time this entrypoint runs, so removing them is always safe. The
+# chown itself stays fail-loud for everything real.
+find /data/apps /data/config /data/data/hermes /data/data/mem0 \
+    -type s -name '*.sock' -delete 2>/dev/null || true
 echo "[entrypoint] Setting ownership on /data ..."
 chown foxinthebox:foxinthebox /data
 chown -R foxinthebox:foxinthebox \
