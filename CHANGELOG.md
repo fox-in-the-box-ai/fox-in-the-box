@@ -9,6 +9,19 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+---
+
+## [0.7.61] — 2026-09-06
+
+### Added
+
+- (carried from the v0.7.60 correction) `openssh-client` and `rsync` baked into the container image, plus the entrypoint self-heal bridge for stale images (#736 sunset) — merged just after the v0.7.60 tag, so this is their first tagged release
+
+### Changed
+
+- Dependency updates for electron and electron-builder now arrive as standalone PRs instead of riding grouped bumps — a grouped update once promoted an Electron major silently; standalone PRs can be held for the packaged-smoke release gate
+- Bundled desktop Electron → 44.1.1 (from 43.4.x). The version ranges landed on main through a grouped dependency update that moved only the pnpm lockfile; this change realigns the electron npm lockfile to the same resolution and pins both lockfiles to 44.1.1. Dev-mode CI (startup smoke on macOS/Windows/Linux) has exercised the 44 line since the ranges landed; the packaged-app launch smoke per the Electron-43 precedent is tracked in #802 and gates the next desktop release. Support floor: Electron 44 drops macOS 12 (Monterey) — macOS 13+ required from this release; Windows and Linux minimums unchanged (a 43.4.0 bump landed on main mid-cycle and was superseded before tagging — 44.1.1 is what ships)
+
 ### Fixed
 
 - Desktop windows (setup progress, error, diagnostic report, update prompts) are resizable — fixed-size windows clipped content that ran past their bounds; each keeps its previous size as the minimum
@@ -20,30 +33,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - The onboarding-reset race guard is now a shared helper covering the sibling smoke specs with the same window (contract-skillset, hostname-overlay, contract-endpoints-sweep), with redirects disabled so the raced 302 is actually visible to the retry (#794).
 - The race guard's retries are now spaced with a growing backoff (six attempts over ~6s): the previous three back-to-back attempts completed within tens of milliseconds and a single reset-adjacent window could cover them all — the 2026-09-04/05 nightly failures were exactly that (#809).
 - Tripwire issue lookups no longer read a failed GitHub API call as "no matching issue" — the three lookup paths (fire dedupe, ack dedupe, auto-clear) retry with backoff and fail loud on exhaustion instead of stacking duplicates, re-firing acknowledged conditions, or silently skipping closes (#797).
-
-### Changed
-
-- Dependency updates for electron and electron-builder now arrive as standalone PRs instead of riding grouped bumps — a grouped update once promoted an Electron major silently; standalone PRs can be held for the packaged-smoke release gate
-- Bundled desktop Electron → 44.1.1 (from 43.4.x). The version ranges landed on main through a grouped dependency update that moved only the pnpm lockfile; this change realigns the electron npm lockfile to the same resolution and pins both lockfiles to 44.1.1. Dev-mode CI (startup smoke on macOS/Windows/Linux) has exercised the 44 line since the ranges landed; the packaged-app launch smoke per the Electron-43 precedent is tracked in #802 and gates the next desktop release. Support floor: Electron 44 drops macOS 12 (Monterey) — macOS 13+ required from this release; Windows and Linux minimums unchanged
-- Bundled desktop Electron → 43.4.0 (Chromium 150, Node 24), from 42.8.0 in the npm lockfile and 42.5.1 in the pnpm lockfile — the bump also heals that pre-existing cross-lockfile skew. Verified with a packaged-app launch smoke on macOS arm64 (window renders, startup orchestrator runs, zero renderer errors, clean exit) plus the full startup test suite; Windows coverage is the CI dev-mode startup smoke — no packaged-exe install test exists yet
-
-### Security
-
-- fast-uri bumped to 3.1.7 in both lockfiles, clearing the eight high advisories of 2026-09-02 (fixed in 3.1.6); dev/build tooling consumer (ajv via the electron toolchain), not shipped runtime
-- Dependency-alert wave of 2026-09-01/02: browserslist 4.28.8 in both lockfiles (two high — untrusted browserslist-stats crash / prototype write, unbounded cache growth; via the grouped dependency PRs) and @xmldom/xmldom 0.8.15 / 0.9.12 in both lockfiles (three medium — XML fragment injection via invalid EntityReference.nodeName). All build-time or test tooling; none of the vulnerable paths ship in the container or desktop runtime.
-- upstream-watch no longer interpolates third-party-controlled values (upstream tag names, basis-check output) into workflow script text holding an issues:write token; all such values are env-routed (#777, completing #767).
-- Container base layer now applies Debian security upgrades at build time (`apt-get upgrade -y`) — packages frozen at the python:3.11-slim snapshot no longer ship known-fixed CVEs; clears the fixable portion of the container-scan backlog (#755)
-- js-yaml resolved to 4.3.1 in both lockfiles (root pnpm-lock.yaml and packages/electron/package-lock.json), clearing all four open js-yaml advisories. Corrects the 0.7.60 record: that entry listed js-yaml 4.3.1 in its security batch, but the lockfiles still resolved 4.2.0 at release time — this change is what lands it.
-- protobufjs resolved to 7.6.5 in both lockfiles, clearing the last two open dependabot alerts; with the js-yaml 4.3.1 bump this takes the open alert count to zero
-
-### Added
-
-- (carried from the v0.7.60 correction) `openssh-client` and `rsync` baked into the container image, plus the entrypoint self-heal bridge for stale images (#736 sunset) — merged just after the v0.7.60 tag, so this is their first tagged release
-
-### Fixed
-
 - The org's domain is `foxinthebox.io` — every doc, install instruction, the apt endpoint, legal/support email addresses, and the .deb package's Maintainer/Homepage fields previously pointed at `foxinthebox.ai` / `fox-in-the-box.ai`, neither of which was ever registered; `apt.foxinthebox.io` goes live once the R2 custom-domain attach lands
-
 - Desktop (macOS): guided setup no longer touches Homebrew when Docker Desktop is already installed — a present-but-stopped Docker is started, not (re)installed, so an existing install can never be upgraded (and its containers restarted) without consent; Homebrew runs only when Docker Desktop is absent (#749)
 - Desktop: launching the packaged app from a terminal whose pipe later closes no longer crashes with an EPIPE uncaught-exception dialog — stdout/stderr stream errors are guarded before the first log write; file logging is unaffected (#748)
 - Windows cleanup script (`clean-windows-desktop.ps1`) now removes every real path generation — the current dirs (`%APPDATA%\fox-in-the-box`, `%LOCALAPPDATA%\Programs\FoxInTheBox`) plus the legacy `@`-prefixed ones — and untags every locally-present Fox image tag instead of a hardcoded version range; previously modern installs kept their data, install dir, and newer image tags after a "full" cleanup while verification reported clean (#754)
@@ -55,6 +45,15 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - PowerShell support scripts are CI-linted: PRs touching `packages/scripts/*.ps1` run a hard parse gate plus PSScriptAnalyzer (parse errors and Error-severity findings fail; warnings annotate) — previously a broken script shipped invisibly until a user ran it on Windows (#759)
 - Failed CI runs on main pushes are no longer silent: build-container opens a rolling `ci-health` issue naming the run, the commit, and the `:latest`/`:stable` consequences (a failed merge-push once skipped the Option B `:stable` advance undetected for hours); the container vulnerability scan can also be re-run on demand now
 - Upstream-watch and tripwire detectors no longer spam the issue tracker: nightly watch reports dedupe by title and supersede older reports (previously up to one duplicate per night), the branch rewrite-regex requires whole path segments with frontend-framework tokens scoped to the webui repo, maintainer-absence recognizes both maintainer accounts, stage-batch keys on published releases instead of the retired Stamp-CHANGELOG commit pattern, and the patch rebase-clock floors ages at the last upstream-pin verification date; closing a subject-specific fire (issue-age, branch-watch, CVE-feed — the title names an issue number, branch, or advisory id) now counts as a standing acknowledgement and suppresses nightly re-creation of the same subject
+
+### Security
+
+- fast-uri bumped to 3.1.7 in both lockfiles, clearing the eight high advisories of 2026-09-02 (fixed in 3.1.6); dev/build tooling consumer (ajv via the electron toolchain), not shipped runtime
+- Dependency-alert wave of 2026-09-01/02: browserslist 4.28.8 in both lockfiles (two high — untrusted browserslist-stats crash / prototype write, unbounded cache growth; via the grouped dependency PRs) and @xmldom/xmldom 0.8.15 / 0.9.12 in both lockfiles (three medium — XML fragment injection via invalid EntityReference.nodeName). All build-time or test tooling; none of the vulnerable paths ship in the container or desktop runtime.
+- upstream-watch no longer interpolates third-party-controlled values (upstream tag names, basis-check output) into workflow script text holding an issues:write token; all such values are env-routed (#777, completing #767).
+- Container base layer now applies Debian security upgrades at build time (`apt-get upgrade -y`) — packages frozen at the python:3.11-slim snapshot no longer ship known-fixed CVEs; clears the fixable portion of the container-scan backlog (#755)
+- js-yaml resolved to 4.3.1 in both lockfiles (root pnpm-lock.yaml and packages/electron/package-lock.json), clearing all four open js-yaml advisories. Corrects the 0.7.60 record: that entry listed js-yaml 4.3.1 in its security batch, but the lockfiles still resolved 4.2.0 at release time — this change is what lands it.
+- protobufjs resolved to 7.6.5 in both lockfiles, clearing the last two open dependabot alerts; with the js-yaml 4.3.1 bump this takes the open alert count to zero
 
 ---
 
