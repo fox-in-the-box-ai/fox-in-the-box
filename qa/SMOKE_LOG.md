@@ -38,7 +38,7 @@ Executed 2026-09-06 on a local Docker host (Docker Desktop) against `ghcr.io/fox
 - [x] 5. Playwright vs RC: smoke project 50 passed / 7 conditional skips (`FITB_TEST_MODE=1` container); release project 1/1 passed (`/readyz` memory component)
 - [x] 6. #817 regression repro (new this release): bind-mounted `/data`, SIGKILL the running container → stale per-boot unix sockets confirmed on the host mount → fresh container over the same volume boots healthy. Pre-#821 this bricked startup with `CONTAINER_MISSING_DURING_HEALTH`
 - [x] 7. Desktop packaged smoke: executed 2026-09-05 during the #802 gate on macOS arm64 (packaged app launch, all 7 startup phases green, resizable-window verification for #818); Windows remains CI dev-mode coverage
-- [ ] 8. Deb legs: executes in release.yml at tag time ← checked at closeout once the release run's CI status is green
+- [x] 8. Deb legs: executed by release.yml at tag time (test_deb_install.sh, 22.04-constrained + 24.04-unconstrained legs) — verified in the release-run CI status below
 
 Findings:
 
@@ -49,7 +49,21 @@ Action items:
 
 - none new; #746 (key rotation/replacement) remains a founder action
 
-CI status: appended at closeout after the v0.7.61 tag run (per §19.8 — no closeout claim before the release run is green).
+CI status (release tag run 34023446683, `v0.7.61` at 3572e4e, 2026-09-06, conclusion **success** — every job green, failure handler correctly skipped):
+
+- Build & Push amd64+arm64, Merge into manifest list, Smoke amd64+arm64, Image self-test: success
+- Build Electron macOS (macos-15 pinned, signed — Developer ID both arches) + Windows (Azure-signed): success
+- Build .deb amd64+arm64: success; `.deb smoke test (amd64)` (both legs of row 8 run as steps inside `test_deb_install.sh`): success
+- Publish to apt.foxinthebox.io: success (first release with the apt job as a hard gate); Promote container image (`:v0.7.61` + `:stable`, multi-arch verified at digest 894da49f): success; Create GitHub Release (15 assets): success; Attach SBOM: success
+
+Release-mechanics verification (the #819/#820 gates, checked against the published assets):
+
+- `latest.yml` + `latest-mac.yml` + all four macOS blockmaps published — the first release carrying electron-updater channel files (none exist on v0.7.60; #819 records the 404 history); live update discovery (`releases/latest/download/latest.yml`) returns 200 with `version: 0.7.61`
+- Windows `latest.yml` sha512 recomputed against the downloaded exe: byte-identical — and the exe carries an Authenticode certificate table (15,624 bytes), proving the post-signing repair step produced checksums for the SIGNED binary
+- macOS `latest-mac.yml` arm64-zip sha512: matches the downloaded artifact
+- Windows blockmap absent by design (in-place signing invalidates it; electron-updater falls back to full download)
+
+Tag-history note: the first v0.7.61 tag (at 2d0e158) died at `startup_failure` — release.yml's build-container nested call lacked the issues:write grant that the ci-health failure handler declares. Zero artifacts were produced; the tag was re-pointed to 3572e4e (the grant fix, #828) and the re-run went green end-to-end. Follow-up noted in-run: the release carries the SBOM twice (`fox-in-the-box-sbom.cyclonedx.json` from sbom.yml + `sbom.cdx.json` from the release glob) — cosmetic, dedupe tracked in #830.
 
 ---
 
