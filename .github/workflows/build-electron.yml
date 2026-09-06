@@ -39,12 +39,22 @@ jobs:
         include:
           - os: windows-latest
             artifact-name: fox-windows
-            artifact-path: packages/electron/dist/*.exe
+            # latest.yml + blockmaps are electron-updater's channel
+            # files — without them in the release, every installed app
+            # 404s on update checks (#819; broken since the updater
+            # shipped because only the installer globs were collected).
+            artifact-path: |
+              packages/electron/dist/*.exe
+              packages/electron/dist/latest*.yml
+              packages/electron/dist/*.blockmap
           - os: macos-latest
             artifact-name: fox-macos
+            # latest-mac.yml + blockmaps: same rule as Windows (#819).
             artifact-path: |
               packages/electron/dist/*.dmg
               packages/electron/dist/*-mac.zip
+              packages/electron/dist/latest*.yml
+              packages/electron/dist/*.blockmap
 
     steps:
       - name: Checkout (with submodules)
