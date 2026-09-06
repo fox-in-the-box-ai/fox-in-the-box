@@ -29,7 +29,7 @@ Skipped sections are OK as long as they're explicitly noted with reason. Empty e
 
 HARD GATE per docs/RELEASE_WORKFLOW.md. The dedicated OpenRouter smoke key was retired at the v0.7.60 closeout (#746); key-dependent rows are skipped with rationale per the row-6 precedent — v0.7.61 carries no change to the memory wiring, provider resolution, or gateway key paths, so the v0.7.60 live verification of those rows stands.
 
-Executed 2026-09-06 on a local Docker host (Docker Desktop) against `ghcr.io/fox-in-the-box-ai/cloud@sha256:268766f7113a61f0b15c09d0c126ada062eec177061ee96bb644931ad7a9d44d` (`:latest`, main @ the v0.7.61 release cut). Container content equals release content: the three PRs merged after this digest (#820, #815; #816 closed obsolete) touch only CI workflows and test/desktop dev-dependencies, not the image.
+Executed 2026-09-06 on a local Docker host (Docker Desktop) against `ghcr.io/fox-in-the-box-ai/cloud@sha256:268766f7113a61f0b15c09d0c126ada062eec177061ee96bb644931ad7a9d44d` (`:latest`, main @ the v0.7.61 release cut). Container content equals release content: the changes merged after this digest — #820 (release workflow), #815 (playwright dev-dep manifest), #824 (lockfile realign for #815) — touch only CI workflows and test dev-dependencies, not the image; #816 was closed unmerged as obsolete. The run recorded 12 sub-checks, mapping to rows 1 and 3–6 below.
 
 - [x] 1. Keyless boot → `/health` green, `/readyz` `ready:true` with the memory component present and its finish-onboarding OFF reason
 - [ ] 2. Live provider round trips (store/recall, sleep-idle wake, embed-server stop/start, dims-mismatch breaker, catalog blackout, pool-only self-heal) ← skipped, no smoke key (retired at v0.7.60 closeout, #746). No memory-wire delta in this release; all rows verified live at v0.7.60
@@ -38,7 +38,7 @@ Executed 2026-09-06 on a local Docker host (Docker Desktop) against `ghcr.io/fox
 - [x] 5. Playwright vs RC: smoke project 50 passed / 7 conditional skips (`FITB_TEST_MODE=1` container); release project 1/1 passed (`/readyz` memory component)
 - [x] 6. #817 regression repro (new this release): bind-mounted `/data`, SIGKILL the running container → stale per-boot unix sockets confirmed on the host mount → fresh container over the same volume boots healthy. Pre-#821 this bricked startup with `CONTAINER_MISSING_DURING_HEALTH`
 - [x] 7. Desktop packaged smoke: executed 2026-09-05 during the #802 gate on macOS arm64 (packaged app launch, all 7 startup phases green, resizable-window verification for #818); Windows remains CI dev-mode coverage
-- [x] 8. Deb legs: executed by release.yml at tag time — verified in the release-run CI status in the closeout
+- [ ] 8. Deb legs: executes in release.yml at tag time ← checked at closeout once the release run's CI status is green
 
 Findings:
 
