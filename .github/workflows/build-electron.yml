@@ -39,14 +39,17 @@ jobs:
         include:
           - os: windows-latest
             artifact-name: fox-windows
-            # latest.yml + blockmaps are electron-updater's channel
-            # files — without them in the release, every installed app
-            # 404s on update checks (#819; broken since the updater
-            # shipped because only the installer globs were collected).
+            # latest.yml is electron-updater's channel file — without
+            # it in the release, every installed app 404s on update
+            # checks (#819; broken since the updater shipped because
+            # only the installer globs were collected). The Windows
+            # blockmap is deliberately NOT uploaded: in-place Azure
+            # signing invalidates it and electron-updater falls back
+            # to a full download when it's absent; latest.yml itself
+            # is repaired post-signing (see the repair step).
             artifact-path: |
               packages/electron/dist/*.exe
               packages/electron/dist/latest*.yml
-              packages/electron/dist/*.blockmap
           - os: macos-latest
             artifact-name: fox-macos
             # latest-mac.yml + blockmaps: same rule as Windows (#819).
@@ -170,6 +173,19 @@ jobs:
           }
           Write-Host "::endgroup::"
           Write-Host "::warning::The .exe will be uploaded UNSIGNED. See https://github.com/${{ github.repository }}/issues/494"
+
+      - name: Repair latest.yml after signing
+        # Azure signing modifies the exe in place AFTER electron-builder
+        # wrote latest.yml, so the recorded sha512/size no longer match
+        # the shipped binary — clients would download the update and
+        # refuse it on checksum mismatch (#819/#820 review). Recompute
+        # from the signed artifacts. Runs whenever signing was
+        # attempted; if signing failed, the exe is unchanged and the
+        # repair is a verified no-op.
+        if: runner.os == 'Windows' && inputs.signing-environment != ''
+        shell: bash
+        working-directory: packages/electron
+        run: node scripts/repair-updater-yml.js dist/latest.yml
 
       - name: Upload build artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
