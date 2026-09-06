@@ -296,8 +296,11 @@ jobs:
           fail_on_unmatched_files: true
           files: |
             release-artifacts/windows/*.exe
+            release-artifacts/windows/latest*.yml
             release-artifacts/macos/*.dmg
             release-artifacts/macos/*.zip
+            release-artifacts/macos/latest*.yml
+            release-artifacts/macos/*.blockmap
             release-artifacts/deb/*.deb
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
