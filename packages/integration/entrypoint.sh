@@ -137,11 +137,14 @@ fi
 # foreign socket, which aborts the fail-loud chown below — and with the
 # desktop app's AutoRemove container, the resulting exit vanishes before
 # anyone can read it ("Container disappeared", #817). Sockets are
-# per-boot runtime artifacts; every process that owned one is dead by
-# the time this entrypoint runs, so removing them is always safe. The
-# chown itself stays fail-loud for everything real.
+# per-boot runtime artifacts and this entrypoint is PID 1, so every
+# process that owned one is dead by definition — removal is always
+# safe, whatever the socket is named and wherever it lives. The sweep
+# therefore covers every tree the recursive chown walks, with no name
+# filter; the chown itself stays fail-loud for everything real.
 find /data/apps /data/config /data/data/hermes /data/data/mem0 \
-    -type s -name '*.sock' -delete 2>/dev/null || true
+    /data/data/memos /data/cache /data/logs /data/state \
+    -type s -delete 2>/dev/null || true
 echo "[entrypoint] Setting ownership on /data ..."
 chown foxinthebox:foxinthebox /data
 chown -R foxinthebox:foxinthebox \
