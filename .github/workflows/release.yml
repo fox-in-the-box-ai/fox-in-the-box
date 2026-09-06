@@ -17,6 +17,12 @@ jobs:
     permissions:
       contents: read
       packages: write
+      # build-container.yml's main-push failure handler declares issues:write.
+      # The job itself never runs on a tag ref, but nested-workflow permission
+      # validation is unconditional — without this grant the whole release run
+      # dies at startup ("requesting 'issues: write', but is only allowed
+      # 'issues: none'", the v0.7.61 first-tag failure).
+      issues: write
 
   wait-for-electron:
     name: Wait — build-electron.yml

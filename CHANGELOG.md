@@ -24,6 +24,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 
+- The release workflow starts again: its build-container nested call now grants issues:write — the ci-health failure handler added this cycle declares it, GitHub validates nested-workflow permission grants unconditionally, and the v0.7.61 tag run died at startup on the missing grant
 - Signed macOS desktop builds are pinned to the macos-15 runner: the 2026-08-31 macos-latest image (macOS 26.6.2) broke electron-builder's temp-keychain unlock, failing every signed build from 2026-09-05 — revert tracked in #827
 - Desktop windows (setup progress, error, diagnostic report, update prompts) are resizable — fixed-size windows clipped content that ran past their bounds; each keeps its previous size as the minimum
 - An ungracefully stopped container (Docker crash, force-quit, power loss) no longer bricks the next desktop startup: the entrypoint now deletes stale per-boot unix sockets before its fail-loud ownership pass — a leftover gateway socket made chown fail under macOS bind mounts, the auto-removed container vanished mid-startup, and the app showed "Container disappeared while waiting for services" until the socket was deleted by hand (#817)
