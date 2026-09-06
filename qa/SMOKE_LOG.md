@@ -25,6 +25,34 @@ Skipped sections are OK as long as they're explicitly noted with reason. Empty e
 
 ---
 
+## v0.7.61 — 2026-09-06 (DV — release-pipeline + startup-resilience fixes)
+
+HARD GATE per docs/RELEASE_WORKFLOW.md. The dedicated OpenRouter smoke key was retired at the v0.7.60 closeout (#746); key-dependent rows are skipped with rationale per the row-6 precedent — v0.7.61 carries no change to the memory wiring, provider resolution, or gateway key paths, so the v0.7.60 live verification of those rows stands.
+
+Executed 2026-09-06 on a local Docker host (Docker Desktop) against `ghcr.io/fox-in-the-box-ai/cloud@sha256:268766f7113a61f0b15c09d0c126ada062eec177061ee96bb644931ad7a9d44d` (`:latest`, main @ the v0.7.61 release cut). Container content equals release content: the three PRs merged after this digest (#820, #815; #816 closed obsolete) touch only CI workflows and test/desktop dev-dependencies, not the image.
+
+- [x] 1. Keyless boot → `/health` green, `/readyz` `ready:true` with the memory component present and its finish-onboarding OFF reason
+- [ ] 2. Live provider round trips (store/recall, sleep-idle wake, embed-server stop/start, dims-mismatch breaker, catalog blackout, pool-only self-heal) ← skipped, no smoke key (retired at v0.7.60 closeout, #746). No memory-wire delta in this release; all rows verified live at v0.7.60
+- [x] 3. Zero telemetry egress: no PostHog traces in any log; `MEM0_TELEMETRY=False` confirmed on pid 1
+- [x] 4. `--network none`: fully offline keyless boot → `/health` green, `/readyz` `ready:true`
+- [x] 5. Playwright vs RC: smoke project 50 passed / 7 conditional skips (`FITB_TEST_MODE=1` container); release project 1/1 passed (`/readyz` memory component)
+- [x] 6. #817 regression repro (new this release): bind-mounted `/data`, SIGKILL the running container → stale per-boot unix sockets confirmed on the host mount → fresh container over the same volume boots healthy. Pre-#821 this bricked startup with `CONTAINER_MISSING_DURING_HEALTH`
+- [x] 7. Desktop packaged smoke: executed 2026-09-05 during the #802 gate on macOS arm64 (packaged app launch, all 7 startup phases green, resizable-window verification for #818); Windows remains CI dev-mode coverage
+- [x] 8. Deb legs: executed by release.yml at tag time — verified in the release-run CI status in the closeout
+
+Findings:
+
+- First Playwright pass ran the container without `FITB_TEST_MODE=1` and the seven reset-dependent specs correctly failed on the missing `/test/reset` route — harness error, clean on rerun; noted as a reminder that the flag is part of the documented invocation
+- Stale-socket cleanup (#821) verified against the exact #817 failure mode; the repro precondition (sockets surviving SIGKILL on a bind mount) still holds, so the entrypoint guard is load-bearing
+
+Action items:
+
+- none new; #746 (key rotation/replacement) remains a founder action
+
+CI status: appended at closeout after the v0.7.61 tag run (per §19.8 — no closeout claim before the release run is green).
+
+---
+
 ## v0.7.60 — 2026-08-14 (DV — mem0 memory default-on)
 
 HARD GATE per docs/RELEASE_WORKFLOW.md — real-container smoke with a real OpenRouter-only key against the release-candidate image. No bypass permitted for these steps.
