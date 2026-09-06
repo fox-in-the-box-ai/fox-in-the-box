@@ -11,15 +11,19 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 
+- Desktop windows (setup progress, error, diagnostic report, update prompts) are resizable — fixed-size windows clipped content that ran past their bounds; each keeps its previous size as the minimum
+- An ungracefully stopped container (Docker crash, force-quit, power loss) no longer bricks the next desktop startup: the entrypoint now deletes stale per-boot unix sockets before its fail-loud ownership pass — a leftover gateway socket made chown fail under macOS bind mounts, the auto-removed container vanished mid-startup, and the app showed "Container disappeared while waiting for services" until the socket was deleted by hand (#817)
+- Tripwire re-fires no longer stack a near-identical comment per scheduled run on a held condition: the re-fire compares the new body against the newest comment with run-varying tokens (ages, timestamps, counts) normalized out, and skips the post when the condition's identity is unchanged — one rolling issue had collected 16 such comments (#812)
 - CI lints workflow files with actionlint (pinned, checksum-verified) — GitHub's server-side validator rejections previously surfaced only as zero-job push failures while silently stopping schedules (#777, the #767 duplicate-env incident class).
 - Provider-settings smoke spec no longer flakes when a parallel spec resets onboarding mid-test; the nightly failure tracked by #775 was this race, not an endpoint break (#778).
 - The onboarding-reset race guard is now a shared helper covering the sibling smoke specs with the same window (contract-skillset, hostname-overlay, contract-endpoints-sweep), with redirects disabled so the raced 302 is actually visible to the retry (#794).
+- The race guard's retries are now spaced with a growing backoff (six attempts over ~6s): the previous three back-to-back attempts completed within tens of milliseconds and a single reset-adjacent window could cover them all — the 2026-09-04/05 nightly failures were exactly that (#809).
 - Tripwire issue lookups no longer read a failed GitHub API call as "no matching issue" — the three lookup paths (fire dedupe, ack dedupe, auto-clear) retry with backoff and fail loud on exhaustion instead of stacking duplicates, re-firing acknowledged conditions, or silently skipping closes (#797).
 
 ### Changed
 
 - Dependency updates for electron and electron-builder now arrive as standalone PRs instead of riding grouped bumps — a grouped update once promoted an Electron major silently; standalone PRs can be held for the packaged-smoke release gate
-- Bundled desktop Electron → 44.1.1 (from 43.4.x). The version ranges landed on main through a grouped dependency update that moved only the pnpm lockfile; this change realigns the electron npm lockfile to the same resolution and pins both lockfiles to 44.1.1. Dev-mode CI (startup smoke on macOS/Windows/Linux) has exercised the 44 line since the ranges landed; the packaged-app launch smoke per the Electron-43 precedent is tracked in #802 and gates the next desktop release
+- Bundled desktop Electron → 44.1.1 (from 43.4.x). The version ranges landed on main through a grouped dependency update that moved only the pnpm lockfile; this change realigns the electron npm lockfile to the same resolution and pins both lockfiles to 44.1.1. Dev-mode CI (startup smoke on macOS/Windows/Linux) has exercised the 44 line since the ranges landed; the packaged-app launch smoke per the Electron-43 precedent is tracked in #802 and gates the next desktop release. Support floor: Electron 44 drops macOS 12 (Monterey) — macOS 13+ required from this release; Windows and Linux minimums unchanged
 - Bundled desktop Electron → 43.4.0 (Chromium 150, Node 24), from 42.8.0 in the npm lockfile and 42.5.1 in the pnpm lockfile — the bump also heals that pre-existing cross-lockfile skew. Verified with a packaged-app launch smoke on macOS arm64 (window renders, startup orchestrator runs, zero renderer errors, clean exit) plus the full startup test suite; Windows coverage is the CI dev-mode startup smoke — no packaged-exe install test exists yet
 
 ### Security

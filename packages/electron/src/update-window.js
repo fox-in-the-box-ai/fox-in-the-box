@@ -31,7 +31,9 @@ function show({ version, releaseNotes }) {
   _win = new BrowserWindow({
     width: 400,
     height: 220,
-    resizable: false,
+    minWidth: 400,
+    minHeight: 220,
+    resizable: true,
     minimizable: false,
     maximizable: false,
     alwaysOnTop: true,
@@ -54,7 +56,9 @@ function showDownloaded({ version }) {
   _win = new BrowserWindow({
     width: 400,
     height: 200,
-    resizable: false,
+    minWidth: 400,
+    minHeight: 200,
+    resizable: true,
     minimizable: false,
     maximizable: false,
     alwaysOnTop: true,
