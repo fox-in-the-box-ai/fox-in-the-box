@@ -27,6 +27,7 @@
     "electron-builder": "^26.15.3",
     "electron-builder-squirrel-windows": "26.15.3",
     "jest": "^30.5.0",
+    "js-yaml": "^4.1.0",
     "rcedit": "^5.0.0"
   },
   "overrides": {
