@@ -11,6 +11,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Fixed
 
+- Desktop windows (setup progress, error, diagnostic report, update prompts) are resizable — fixed-size windows clipped content that ran past their bounds; each keeps its previous size as the minimum
 - Tripwire re-fires no longer stack a near-identical comment per scheduled run on a held condition: the re-fire compares the new body against the newest comment with run-varying tokens (ages, timestamps, counts) normalized out, and skips the post when the condition's identity is unchanged — one rolling issue had collected 16 such comments (#812)
 - CI lints workflow files with actionlint (pinned, checksum-verified) — GitHub's server-side validator rejections previously surfaced only as zero-job push failures while silently stopping schedules (#777, the #767 duplicate-env incident class).
 - Provider-settings smoke spec no longer flakes when a parallel spec resets onboarding mid-test; the nightly failure tracked by #775 was this race, not an endpoint break (#778).
