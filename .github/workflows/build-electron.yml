@@ -54,7 +54,7 @@ jobs:
           # image 20260831.0337.3) broke electron-builder's temp-keychain unlock
           # (`security set-key-partition-list` → SecKeychainUnlock passphrase
           # error), failing every signed macOS build since 2026-09-05. Revert to
-          # macos-latest once electron-builder handles the new keychain semantics.
+          # macos-latest once the break is resolved — tracked in #827.
           - os: macos-15
             artifact-name: fox-macos
             # latest-mac.yml + blockmaps: same rule as Windows (#819).
