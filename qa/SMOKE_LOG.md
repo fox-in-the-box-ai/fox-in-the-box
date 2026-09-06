@@ -58,12 +58,12 @@ CI status (release tag run 34023446683, `v0.7.61` at 3572e4e, 2026-09-06, conclu
 
 Release-mechanics verification (the #819/#820 gates, checked against the published assets):
 
-- `latest.yml` + `latest-mac.yml` + all four macOS blockmaps published — first release ever carrying electron-updater channel files; live update discovery (`releases/latest/download/latest.yml`) returns 200 with `version: 0.7.61`
+- `latest.yml` + `latest-mac.yml` + all four macOS blockmaps published — the first release carrying electron-updater channel files (none exist on v0.7.60; #819 records the 404 history); live update discovery (`releases/latest/download/latest.yml`) returns 200 with `version: 0.7.61`
 - Windows `latest.yml` sha512 recomputed against the downloaded exe: byte-identical — and the exe carries an Authenticode certificate table (15,624 bytes), proving the post-signing repair step produced checksums for the SIGNED binary
 - macOS `latest-mac.yml` arm64-zip sha512: matches the downloaded artifact
 - Windows blockmap absent by design (in-place signing invalidates it; electron-updater falls back to full download)
 
-Tag-history note: the first v0.7.61 tag (at 2d0e158) died at `startup_failure` — release.yml's build-container nested call lacked the issues:write grant that the ci-health failure handler declares. Zero artifacts were produced; the tag was re-pointed to 3572e4e (the grant fix, #828) and the re-run went green end-to-end. Follow-up noted in-run: the release carries the SBOM twice (`fox-in-the-box-sbom.cyclonedx.json` from sbom.yml + `sbom.cdx.json` from the release glob) — cosmetic, dedupe queued.
+Tag-history note: the first v0.7.61 tag (at 2d0e158) died at `startup_failure` — release.yml's build-container nested call lacked the issues:write grant that the ci-health failure handler declares. Zero artifacts were produced; the tag was re-pointed to 3572e4e (the grant fix, #828) and the re-run went green end-to-end. Follow-up noted in-run: the release carries the SBOM twice (`fox-in-the-box-sbom.cyclonedx.json` from sbom.yml + `sbom.cdx.json` from the release glob) — cosmetic, dedupe tracked in #830.
 
 ---
 
