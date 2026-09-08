@@ -42,6 +42,16 @@ Overrides (precedence: computed defaults < env < $HERMES_HOME/mem0_oss.json):
   MEM0_OSS_COLLECTION          — Qdrant collection name (default: hermes)
   MEM0_OSS_USER_ID             — memory namespace (default: hermes-user)
   MEM0_OSS_TOP_K               — max results per search (default: 10)
+  MEM0_OSS_QDRANT_URL          — Qdrant server URL (e.g. http://127.0.0.1:6333).
+                                 When set, mem0 connects to a SHARED Qdrant server
+                                 over HTTP instead of the embedded on-disk store.
+                                 Required when the Hermes gateway and WebUI run in
+                                 the same container — both load this provider and
+                                 fight over the embedded store's exclusive file lock,
+                                 causing intermittent "Qdrant lock still held" failures.
+  MEM0_OSS_QDRANT_HOST         — Qdrant server hostname (alternative to URL).
+  MEM0_OSS_QDRANT_PORT         — Qdrant server port (default: 6333 when HOST is set).
+  MEM0_OSS_QDRANT_API_KEY      — optional Qdrant API key for server auth.
 """
 
 from __future__ import annotations
@@ -1091,6 +1101,13 @@ def _load_runtime_config() -> dict:
         "collection": os.environ.get("MEM0_OSS_COLLECTION", "hermes"),
         "user_id": os.environ.get("MEM0_OSS_USER_ID", "hermes-user"),
         "top_k": int(os.environ.get("MEM0_OSS_TOP_K", "10")),
+        # Qdrant server mode — when a server URL or host is set, mem0 connects
+        # to the shared server (HTTP, no file lock) instead of the embedded
+        # store.  Both gateway and WebUI can safely share it concurrently.
+        "qdrant_url": os.environ.get("MEM0_OSS_QDRANT_URL", "").strip(),
+        "qdrant_host": os.environ.get("MEM0_OSS_QDRANT_HOST", "").strip(),
+        "qdrant_port": os.environ.get("MEM0_OSS_QDRANT_PORT", "6333").strip(),
+        "qdrant_api_key": os.environ.get("MEM0_OSS_QDRANT_API_KEY", "").strip(),
     }
     for key in (
         "vector_store_path",
@@ -1098,6 +1115,10 @@ def _load_runtime_config() -> dict:
         "collection",
         "user_id",
         "top_k",
+        "qdrant_url",
+        "qdrant_host",
+        "qdrant_port",
+        "qdrant_api_key",
     ):
         if key in file_cfg:
             config[key] = file_cfg[key]
@@ -1123,6 +1144,38 @@ def _build_llm_cfg(resolved: ResolvedConfig) -> dict:
     return cfg
 
 
+def _build_qdrant_cfg(runtime_cfg: dict, store_dims: int) -> dict:
+    """Build the Qdrant vector-store config dict for mem0ai.
+
+    When a server URL or host is configured, connects to the shared Qdrant
+    server over HTTP (no exclusive file lock) so gateway and WebUI can both
+    use memory concurrently.  Falls back to the embedded on-disk store when
+    no server endpoint is configured (backward compatible).
+    """
+    qdrant_url = (runtime_cfg.get("qdrant_url") or "").strip()
+    qdrant_host = (runtime_cfg.get("qdrant_host") or "").strip()
+    base = {
+        "collection_name": runtime_cfg["collection"],
+        "embedding_model_dims": store_dims,
+    }
+    if qdrant_url or qdrant_host:
+        if qdrant_url:
+            base["url"] = qdrant_url
+        else:
+            base["host"] = qdrant_host
+            try:
+                base["port"] = int(runtime_cfg.get("qdrant_port") or 6333)
+            except (TypeError, ValueError):
+                base["port"] = 6333
+        if runtime_cfg.get("qdrant_api_key"):
+            base["api_key"] = runtime_cfg["qdrant_api_key"]
+            base["https"] = qdrant_url.startswith("https://") if qdrant_url else False
+    else:
+        base["path"] = runtime_cfg["vector_store_path"]
+        base["on_disk"] = True
+    return base
+
+
 def _build_mem0_config(
     resolved: ResolvedConfig, embedder: dict, runtime_cfg: dict
 ) -> dict:
@@ -1130,12 +1183,7 @@ def _build_mem0_config(
     return {
         "vector_store": {
             "provider": "qdrant",
-            "config": {
-                "collection_name": runtime_cfg["collection"],
-                "path": runtime_cfg["vector_store_path"],
-                "embedding_model_dims": embedder["store_dims"],
-                "on_disk": True,
-            },
+            "config": _build_qdrant_cfg(runtime_cfg, embedder["store_dims"]),
         },
         "llm": {
             "provider": resolved.mem0_llm_provider,
