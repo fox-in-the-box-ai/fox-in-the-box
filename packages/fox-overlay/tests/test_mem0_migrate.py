@@ -14,6 +14,7 @@ so it is loaded directly by file path to avoid dragging in that package init.
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -37,6 +38,7 @@ _spec.loader.exec_module(migrate_store_mod)
 
 migrate_store = migrate_store_mod.migrate_store
 MigrationError = migrate_store_mod.MigrationError
+run_boot_migration = migrate_store_mod.run_boot_migration
 
 
 # ── Fakes: a working in-memory stand-in for the qdrant-client surface ────────
@@ -114,6 +116,9 @@ class FakeQdrant:
         return self._collections[collection].points[pid]
 
     # -- qdrant-client surface ----------------------------------------------
+    def collection_exists(self, collection: str) -> bool:
+        return collection in self._collections
+
     def get_collection(self, collection: str):
         if collection not in self._collections:
             raise ValueError(f"collection {collection!r} not found")
@@ -158,6 +163,11 @@ class FakeQdrant:
         state = self._collections[collection_name]
         for point in points:
             state.points[point.id] = (point.vector, point.payload)
+
+    def count(self, collection_name: str, exact: bool = True):
+        # Mirrors qdrant-client's CountResult (an object with a .count attr).
+        n = len(self._collections[collection_name].points)
+        return type("CountResult", (), {"count": n})()
 
 
 def _make_records(n: int, dims: int = 768) -> List[FakeRecord]:
@@ -271,3 +281,352 @@ def test_read_failure_is_wrapped_fail_loud():
         migrate_store(source, dest, models=FakeModels())
 
     assert "connection reset" in str(excinfo.value)
+
+
+# ── Boot wrapper: run_boot_migration() decision ladder (issue #803) ──────────
+#
+# These drive the sentinel-guarded boot job end to end with hand-rolled fakes —
+# no network, no qdrant_client — by monkeypatching the module's three seams:
+# the /readyz poll (_wait_for_readyz), the client factory (_open_boot_clients),
+# and the models namespace (_load_qdrant_models).
+
+
+@pytest.fixture
+def boot_env(monkeypatch, tmp_path):
+    """A clean env for the boot wrapper: HERMES_HOME under tmp (sentinel lives
+    there), server mode on, and an existing embedded-store dir by default.  All
+    other MEM0_OSS_* knobs are cleared so leakage from the ambient shell can't
+    steer a test."""
+    for name in (
+        "MEM0_OSS_DISABLED",
+        "MEM0_OSS_QDRANT_URL",
+        "MEM0_OSS_QDRANT_HOST",
+        "MEM0_OSS_QDRANT_PORT",
+        "MEM0_OSS_QDRANT_API_KEY",
+        "MEM0_OSS_COLLECTION",
+        "MEM0_OSS_EMBEDDER_DIMS",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+    store_dir = tmp_path / "store"
+    store_dir.mkdir()
+    monkeypatch.setenv("HERMES_HOME", str(tmp_path / "hermes"))
+    monkeypatch.setenv("MEM0_OSS_QDRANT_URL", "http://127.0.0.1:6333")
+    monkeypatch.setenv("MEM0_OSS_VECTOR_STORE_PATH", str(store_dir))
+    # Default: server is ready.  Individual tests override.
+    monkeypatch.setattr(migrate_store_mod, "_wait_for_readyz", lambda *a, **k: True)
+    return tmp_path
+
+
+def _sentinel_file(hermes_home: Path) -> Path:
+    return hermes_home / "hermes" / "mem0_oss" / ".migrated-to-server"
+
+
+def _install_clients(monkeypatch, source: "FakeQdrant", dest: "FakeQdrant"):
+    monkeypatch.setattr(
+        migrate_store_mod, "_open_boot_clients", lambda *a, **k: (source, dest)
+    )
+    monkeypatch.setattr(migrate_store_mod, "_load_qdrant_models", lambda: FakeModels())
+
+
+def test_boot_skips_when_memory_disabled(boot_env, monkeypatch):
+    monkeypatch.setenv("MEM0_OSS_DISABLED", "1")
+    # If a client were opened this would raise — proving the skip is early.
+    monkeypatch.setattr(
+        migrate_store_mod,
+        "_open_boot_clients",
+        lambda *a, **k: pytest.fail("must not open clients when disabled"),
+    )
+
+    assert run_boot_migration() == 0
+    assert not _sentinel_file(boot_env).exists()
+
+
+def test_boot_skips_when_not_server_mode(boot_env, monkeypatch):
+    monkeypatch.delenv("MEM0_OSS_QDRANT_URL", raising=False)  # no URL and no HOST
+    monkeypatch.setattr(
+        migrate_store_mod,
+        "_open_boot_clients",
+        lambda *a, **k: pytest.fail("must not open clients in embedded mode"),
+    )
+
+    assert run_boot_migration() == 0
+    assert not _sentinel_file(boot_env).exists()
+
+
+def test_boot_skips_when_sentinel_present(boot_env, monkeypatch):
+    sentinel = _sentinel_file(boot_env)
+    sentinel.parent.mkdir(parents=True)
+    sentinel.write_text('{"schema": 1, "reason": "migrated"}', encoding="utf-8")
+    monkeypatch.setattr(
+        migrate_store_mod,
+        "_open_boot_clients",
+        lambda *a, **k: pytest.fail("must not re-migrate once the sentinel exists"),
+    )
+
+    assert run_boot_migration() == 0
+
+
+def test_boot_never_ready_no_sentinel_nonzero(boot_env, monkeypatch):
+    monkeypatch.setattr(migrate_store_mod, "_wait_for_readyz", lambda *a, **k: False)
+    monkeypatch.setattr(
+        migrate_store_mod,
+        "_open_boot_clients",
+        lambda *a, **k: pytest.fail("must not open clients when server never ready"),
+    )
+
+    assert run_boot_migration() == 1
+    assert not _sentinel_file(boot_env).exists()
+
+
+def test_boot_empty_source_absent_path(boot_env, monkeypatch):
+    # Point the embedded store at a path that does not exist.
+    monkeypatch.setenv("MEM0_OSS_VECTOR_STORE_PATH", str(boot_env / "does-not-exist"))
+    monkeypatch.setattr(
+        migrate_store_mod,
+        "_open_boot_clients",
+        lambda *a, **k: pytest.fail("must not open clients when store is absent"),
+    )
+
+    assert run_boot_migration() == 0
+    payload = json.loads(_sentinel_file(boot_env).read_text())
+    assert payload["reason"] == "empty-source"
+    assert payload["source_count"] == 0
+    assert payload["migrated"] == 0
+
+
+def test_boot_empty_source_no_collection(boot_env, monkeypatch):
+    source = FakeQdrant()  # store dir exists (fixture) but no "hermes" collection
+    dest = FakeQdrant()
+    _install_clients(monkeypatch, source, dest)
+
+    assert run_boot_migration() == 0
+    payload = json.loads(_sentinel_file(boot_env).read_text())
+    assert payload["reason"] == "empty-source"
+    assert "hermes" not in dest._collections  # nothing created on an empty source
+
+
+def test_boot_successful_migrate_writes_sentinel(boot_env, monkeypatch):
+    records = _make_records(5)
+    source = FakeQdrant()
+    source.seed("hermes", 768, records)
+    dest = FakeQdrant()
+    _install_clients(monkeypatch, source, dest)
+
+    assert run_boot_migration() == 0
+
+    # Points copied and verified via the dest read-back.
+    assert dest.point_count("hermes") == 5
+    payload = json.loads(_sentinel_file(boot_env).read_text())
+    assert payload["schema"] == 1
+    assert payload["reason"] == "migrated"
+    assert payload["collection"] == "hermes"
+    assert payload["dims"] == 768
+    assert payload["source_count"] == 5
+    assert payload["migrated"] == 5
+    assert isinstance(payload["migrated_at"], int)
+
+
+def test_boot_partial_run_no_sentinel_then_idempotent_rerun(boot_env, monkeypatch):
+    records = _make_records(4)
+
+    class FailOnceDest(FakeQdrant):
+        """Fails the first upsert (a partial/crashed run) then succeeds."""
+
+        def __init__(self) -> None:
+            super().__init__()
+            self.fail_next_upsert = True
+
+        def upsert(self, collection_name: str, points: List[Any]):
+            if self.fail_next_upsert:
+                self.fail_next_upsert = False
+                raise RuntimeError("qdrant write interrupted")
+            super().upsert(collection_name, points)
+
+    source = FakeQdrant()
+    source.seed("hermes", 768, records)
+    dest = FailOnceDest()
+    _install_clients(monkeypatch, source, dest)
+
+    # First boot: the write blows up mid-flight → loud failure, NO sentinel.
+    assert run_boot_migration() == 1
+    assert not _sentinel_file(boot_env).exists()
+
+    # Second boot: same stable ids upsert cleanly, verify passes, sentinel drops.
+    assert run_boot_migration() == 0
+    assert dest.point_count("hermes") == 4  # idempotent — no duplicates
+    payload = json.loads(_sentinel_file(boot_env).read_text())
+    assert payload["reason"] == "migrated"
+    assert payload["migrated"] == 4
+
+
+def test_boot_dims_mismatch_no_sentinel(boot_env, monkeypatch):
+    source = FakeQdrant()
+    source.seed("hermes", 512, _make_records(2, dims=512))  # wrong dimension
+    dest = FakeQdrant()
+    _install_clients(monkeypatch, source, dest)
+
+    assert run_boot_migration() == 1
+    assert not _sentinel_file(boot_env).exists()
+    assert "hermes" not in dest._collections  # aborted before any write
+
+
+def test_boot_present_but_unreadable_source_fails_loud_no_sentinel(
+    boot_env, monkeypatch
+):
+    """A source collection that EXISTS but whose body cannot be read (corrupt /
+    version-skewed / transient error) must NOT be misread as empty: fail loud,
+    write no sentinel, so the next boot retries instead of stranding the user's
+    memories behind a false "empty-source" completion (issue #803)."""
+
+    class UnreadableSource(FakeQdrant):
+        def get_collection(self, collection: str):
+            # collection_exists still reports it PRESENT (seeded below); only the
+            # read of its body fails.
+            raise RuntimeError("qdrant storage corrupt: cannot read collection")
+
+    source = UnreadableSource()
+    source.seed("hermes", 768, _make_records(3))  # present in the registry
+    dest = FakeQdrant()
+    _install_clients(monkeypatch, source, dest)
+
+    assert run_boot_migration() == 1
+    assert not _sentinel_file(boot_env).exists()
+    assert "hermes" not in dest._collections  # nothing written on a loud abort
+
+
+def test_boot_verify_undershoot_fails_loud_no_sentinel(boot_env, monkeypatch):
+    """If fewer points land than the source held (a silent upsert drop or an
+    under-reported count), the post-migration read-back guard must fail loud
+    with no sentinel — the migration retries next boot (issue #803)."""
+
+    class DroppingDest(FakeQdrant):
+        def upsert(self, collection_name: str, points: List[Any]):
+            pass  # silently drop every point — dest count stays under source
+
+    source = FakeQdrant()
+    source.seed("hermes", 768, _make_records(5))
+    dest = DroppingDest()
+    _install_clients(monkeypatch, source, dest)
+
+    assert run_boot_migration() == 1
+    assert not _sentinel_file(boot_env).exists()
+    assert dest.point_count("hermes") == 0  # collection created, points dropped
+
+
+# ── _wait_for_readyz: readiness contract, offline + deterministic (issue #803) ─
+#
+# Inject a fake urllib.urlopen and neutralize time.sleep so these exercise the
+# poll's decision logic with no real sockets and no wall-clock waits.
+
+
+def test_wait_for_readyz_success_returns_true(monkeypatch):
+    import urllib.request
+
+    calls = {"n": 0}
+
+    class _Resp:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    def fake_urlopen(req, timeout=None):
+        calls["n"] += 1
+        return _Resp()
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setattr(migrate_store_mod.time, "sleep", lambda _s: None)
+
+    assert migrate_store_mod._wait_for_readyz("http://127.0.0.1:6333") is True
+    assert calls["n"] == 1  # returns on first success — no needless polling
+
+
+def test_wait_for_readyz_http_error_counts_as_ready(monkeypatch):
+    import urllib.error
+    import urllib.request
+
+    def fake_urlopen(req, timeout=None):
+        raise urllib.error.HTTPError(
+            url="http://127.0.0.1:6333/readyz",
+            code=500,
+            msg="Internal Server Error",
+            hdrs=None,
+            fp=None,
+        )
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setattr(migrate_store_mod.time, "sleep", lambda _s: None)
+
+    # Any HTTP status means the server is live (readiness-agnostic).
+    assert migrate_store_mod._wait_for_readyz("http://127.0.0.1:6333") is True
+
+
+def test_wait_for_readyz_unreachable_returns_false_and_is_bounded(monkeypatch):
+    import socket
+    import urllib.error
+    import urllib.request
+
+    calls = {"n": 0}
+
+    def fake_urlopen(req, timeout=None):
+        calls["n"] += 1
+        # Alternate the two "not ready yet" transport failures across attempts.
+        if calls["n"] % 2:
+            raise urllib.error.URLError("connection refused")
+        raise socket.timeout("timed out")
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setattr(migrate_store_mod.time, "sleep", lambda _s: None)
+    # Cap attempts low so the bound is obvious and the test stays fast.
+    monkeypatch.setattr(migrate_store_mod, "_READYZ_ATTEMPTS", 4)
+
+    assert migrate_store_mod._wait_for_readyz("http://127.0.0.1:6333") is False
+    assert calls["n"] == 4  # bounded: exactly _READYZ_ATTEMPTS tries, no more
+
+
+# ── _boot_server_url: env → destination URL resolution (issue #803) ───────────
+
+
+def _clear_server_env(monkeypatch):
+    for name in (
+        "MEM0_OSS_QDRANT_URL",
+        "MEM0_OSS_QDRANT_HOST",
+        "MEM0_OSS_QDRANT_PORT",
+        "MEM0_OSS_QDRANT_API_KEY",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+
+def test_boot_server_url_url_wins_over_host(monkeypatch):
+    _clear_server_env(monkeypatch)
+    monkeypatch.setenv("MEM0_OSS_QDRANT_URL", "http://example:9999")
+    monkeypatch.setenv("MEM0_OSS_QDRANT_HOST", "ignored")  # URL takes priority
+
+    assert migrate_store_mod._boot_server_url() == "http://example:9999"
+
+
+def test_boot_server_url_composes_host_and_port_http(monkeypatch):
+    _clear_server_env(monkeypatch)
+    monkeypatch.setenv("MEM0_OSS_QDRANT_HOST", "qdrant.internal")
+    monkeypatch.setenv("MEM0_OSS_QDRANT_PORT", "6400")
+
+    # No API key → plain http, explicit port composed in.
+    assert migrate_store_mod._boot_server_url() == "http://qdrant.internal:6400"
+
+
+def test_boot_server_url_default_port_and_https_with_api_key(monkeypatch):
+    _clear_server_env(monkeypatch)
+    monkeypatch.setenv("MEM0_OSS_QDRANT_HOST", "secure.host")
+    monkeypatch.setenv("MEM0_OSS_QDRANT_API_KEY", "test-key")
+
+    # No port → default 6333; api key present → https.
+    assert migrate_store_mod._boot_server_url() == "https://secure.host:6333"
+
+
+def test_boot_server_url_empty_when_nothing_set(monkeypatch):
+    _clear_server_env(monkeypatch)
+
+    # Neither URL nor HOST → embedded mode, nothing to migrate to.
+    assert migrate_store_mod._boot_server_url() == ""

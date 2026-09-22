@@ -12,7 +12,11 @@ supervisord.conf is a reference copy kept in sync. These tests assert:
   model download must leave a stopped unit, not a FATAL retry loop;
 * MEM0_TELEMETRY="False" is set on both the gateway and webui environment=
   lines;
-* the reference copy mirrors the block and the telemetry entries.
+* the reference copy mirrors the block and the telemetry entries;
+* both the heredoc and the reference copy carry the [supervisord] baseline
+  MEM0_OSS_QDRANT_URL (issue #803 — a single shared surface, never per-program)
+  and the one-shot [program:mem0-migrate] unit (autorestart=false, startsecs=0,
+  priority=22) that runs the embedded → server migration.
 """
 
 import re
@@ -122,3 +126,110 @@ def test_reference_conf_mirrors_telemetry_off():
         assert 'MEM0_TELEMETRY="False"' in env_line.group(1), (
             f'reference conf {program} environment= must carry MEM0_TELEMETRY="False"'
         )
+
+
+# ── issue #803: shared server URL surface + one-shot migration unit ──────────
+
+
+def _supervisord_section(text, label):
+    """The [supervisord] block body (up to the next section header)."""
+    section = re.search(r"\[supervisord\]\n(.*?)\n\[", text, re.DOTALL)
+    assert section, f"[supervisord] block missing from {label}"
+    return section.group(1)
+
+
+def _program_block(text, program, label):
+    section = re.search(
+        rf"\[program:{program}\]\n(.*?)(?:\n\n|\n; ──|\Z)", text, re.DOTALL
+    )
+    assert section, f"[program:{program}] block missing from {label}"
+    return section.group(1)
+
+
+def _assert_supervisord_carries_qdrant_url(text, label):
+    body = _supervisord_section(text, label)
+    env_line = re.search(r"^environment=(.+)$", body, re.MULTILINE)
+    assert env_line, f"[supervisord] environment= line missing from {label}"
+    assert 'MEM0_OSS_QDRANT_URL="http://127.0.0.1:6333"' in env_line.group(1), (
+        f"{label} [supervisord] environment= must carry the shared "
+        'MEM0_OSS_QDRANT_URL="http://127.0.0.1:6333" baseline (issue #803)'
+    )
+
+
+def _assert_mem0_migrate_unit(text, label):
+    body = _program_block(text, "mem0-migrate", label)
+    command = re.search(r"^command=(.+)$", body, re.MULTILINE)
+    assert command, f"mem0-migrate command= line missing from {label}"
+    assert command.group(1).endswith(
+        "python3 -m plugins.memory.mem0_oss.migrate_store --boot"
+    ), f"{label} mem0-migrate must run the --boot wrapper via run-with-env.sh"
+    assert "run-with-env.sh" in command.group(1), (
+        f"{label} mem0-migrate must wrap run-with-env.sh so the opt-out "
+        "(empty MEM0_OSS_QDRANT_URL in hermes.env) still applies"
+    )
+    # One-shot job, not a supervised daemon.
+    assert re.search(r"^autostart=true$", body, re.MULTILINE), (
+        f"{label} mem0-migrate must autostart"
+    )
+    assert re.search(r"^autorestart=false$", body, re.MULTILINE), (
+        f"{label} mem0-migrate must set autorestart=false (one-shot job)"
+    )
+    assert re.search(r"^startsecs=0$", body, re.MULTILINE), (
+        f"{label} mem0-migrate must set startsecs=0 (clean exit is success)"
+    )
+    assert re.search(r"^startretries=0$", body, re.MULTILINE), (
+        f"{label} mem0-migrate must set startretries=0"
+    )
+    assert re.search(r"^priority=22$", body, re.MULTILINE), (
+        f"{label} mem0-migrate must run at priority=22 (after qdrant=20, "
+        "before embed-server=25)"
+    )
+    # The URL must be inherited from [supervisord], never redeclared per-program.
+    env_line = re.search(r"^environment=(.+)$", body, re.MULTILINE)
+    assert env_line, f"{label} mem0-migrate environment= line missing"
+    assert "MEM0_OSS_QDRANT_URL" not in env_line.group(1), (
+        f"{label} mem0-migrate must NOT redeclare MEM0_OSS_QDRANT_URL — it "
+        "inherits the [supervisord] baseline (per-program divergence is the "
+        "split-brain bug #803 kills)"
+    )
+
+
+def _assert_no_per_program_qdrant_url(text, label):
+    for program in ("hermes-gateway", "hermes-webui"):
+        body = _program_block(text, program, label)
+        env_line = re.search(r"^environment=(.+)$", body, re.MULTILINE)
+        assert env_line, f"{program} environment= line missing from {label}"
+        assert "MEM0_OSS_QDRANT_URL" not in env_line.group(1), (
+            f"{label} {program} must NOT carry a per-program MEM0_OSS_QDRANT_URL "
+            "— it inherits the [supervisord] baseline (issue #803)"
+        )
+
+
+def test_heredoc_supervisord_carries_shared_qdrant_url():
+    _assert_supervisord_carries_qdrant_url(_heredoc(), "install-core.sh heredoc")
+
+
+def test_reference_conf_supervisord_carries_shared_qdrant_url():
+    _assert_supervisord_carries_qdrant_url(
+        REFERENCE_CONF_PATH.read_text(), "reference supervisord.conf"
+    )
+
+
+def test_heredoc_has_mem0_migrate_unit():
+    _assert_mem0_migrate_unit(_heredoc(), "install-core.sh heredoc")
+
+
+def test_reference_conf_has_mem0_migrate_unit():
+    _assert_mem0_migrate_unit(
+        REFERENCE_CONF_PATH.read_text(), "reference supervisord.conf"
+    )
+
+
+def test_heredoc_no_per_program_qdrant_url():
+    _assert_no_per_program_qdrant_url(_heredoc(), "install-core.sh heredoc")
+
+
+def test_reference_conf_no_per_program_qdrant_url():
+    _assert_no_per_program_qdrant_url(
+        REFERENCE_CONF_PATH.read_text(), "reference supervisord.conf"
+    )

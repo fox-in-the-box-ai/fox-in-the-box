@@ -9,9 +9,17 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+---
+
+## [0.7.63] — 2026-09-22
+
+### Changed
+
+- Long-term memory now defaults to the bundled Qdrant server (reachable in-container at `127.0.0.1:6333`) instead of the embedded on-disk store. This ends the file-lock contention between the gateway and the WebUI, which previously could not open the embedded store at the same time. Existing memories are migrated automatically, once, on the first boot after upgrade: a one-shot job copies every stored memory (id, vector, and payload, verbatim — never a re-embed) into the server and records a sentinel so later boots are no-ops. The embedded store is left in place untouched for rollback. To stay on (or return to) the embedded store, set `MEM0_OSS_QDRANT_URL=` (empty) in `/data/config/hermes.env`; that empty value applies to the gateway, the WebUI, and the migration job alike.
+
 ### Added
 
-- Optional Qdrant server mode for long-term memory: point memory at a shared Qdrant server over HTTP instead of the embedded on-disk store, so more than one process (for example the gateway and the WebUI in the same container) can use memory at once without the embedded store's file-lock contention. Opt in with `MEM0_OSS_QDRANT_URL` (or `MEM0_OSS_QDRANT_HOST` + `MEM0_OSS_QDRANT_PORT`) and an optional `MEM0_OSS_QDRANT_API_KEY`; the same keys are also accepted in `mem0_oss.json`. Server mode is opt-in and does not migrate existing embedded memories — switching starts with an empty store until automatic migration ships. Memory stays on the embedded store when none of these are set.
+- Qdrant server mode for long-term memory (now the default, see above; also usable against an external Qdrant): point memory at a shared Qdrant server over HTTP instead of the embedded on-disk store, so more than one process (for example the gateway and the WebUI in the same container) can use memory at once. Configure with `MEM0_OSS_QDRANT_URL` (or `MEM0_OSS_QDRANT_HOST` + `MEM0_OSS_QDRANT_PORT`) and an optional `MEM0_OSS_QDRANT_API_KEY`; the same keys are also accepted in `mem0_oss.json`.
 
 ---
 
