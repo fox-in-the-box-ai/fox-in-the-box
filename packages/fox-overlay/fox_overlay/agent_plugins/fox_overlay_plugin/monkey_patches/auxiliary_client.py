@@ -26,28 +26,27 @@ def apply() -> None:
     # `cfg_base_url, cfg_api_key` instead of `None, None` in this branch.
     # The Fox-added fallback below still uses `None, None` because the
     # cfg_provider="auto" path doesn't have an explicit base_url/api_key.
+    # Re-anchored for v2026.9.21 (#849): the two-return tail is now 4-space
+    # indented (was 8) and upstream dropped the blank line between the returns.
     substitute_function(
         upstream_module=_u,
         function_name="_resolve_task_provider_model",
         substitutions=[
             (
-                '        if cfg_provider and cfg_provider != "auto":\n'
-                '            return cfg_provider, resolved_model, cfg_base_url, cfg_api_key, resolved_api_mode\n'
-                '\n'
-                '        return "auto", resolved_model, None, None, resolved_api_mode\n',
-                '        if cfg_provider and cfg_provider != "auto":\n'
-                '            return cfg_provider, resolved_model, cfg_base_url, cfg_api_key, resolved_api_mode\n'
-                '\n'
-                '        # Fox patch (#242): provider is "auto" (or unset) but config specified\n'
-                '        # an explicit model (e.g. auxiliary.default.model = us.anthropic.claude-...).\n'
-                '        # _resolve_auto ignores the model hint and always uses the main model,\n'
-                '        # so we must resolve the provider explicitly here to honour cfg_model.\n'
-                '        if resolved_model:\n'
-                '            explicit_provider = _read_main_provider() or "auto"\n'
-                '            if explicit_provider and explicit_provider != "auto":\n'
-                '                return explicit_provider, resolved_model, None, None, resolved_api_mode\n'
-                '\n'
-                '        return "auto", resolved_model, None, None, resolved_api_mode\n',
+                '    if cfg_provider and cfg_provider != "auto":\n'
+                '        return cfg_provider, resolved_model, cfg_base_url, cfg_api_key, resolved_api_mode\n'
+                '    return "auto", resolved_model, None, None, resolved_api_mode\n',
+                '    if cfg_provider and cfg_provider != "auto":\n'
+                '        return cfg_provider, resolved_model, cfg_base_url, cfg_api_key, resolved_api_mode\n'
+                '    # Fox patch (#242): provider is "auto" (or unset) but config specified\n'
+                '    # an explicit model (e.g. auxiliary.default.model = us.anthropic.claude-...).\n'
+                '    # _resolve_auto ignores the model hint and always uses the main model,\n'
+                '    # so we must resolve the provider explicitly here to honour cfg_model.\n'
+                '    if resolved_model:\n'
+                '        explicit_provider = _read_main_provider() or "auto"\n'
+                '        if explicit_provider and explicit_provider != "auto":\n'
+                '            return explicit_provider, resolved_model, None, None, resolved_api_mode\n'
+                '    return "auto", resolved_model, None, None, resolved_api_mode\n',
             ),
         ],
         sentinel="_fox_patched_provider_auto_fallback",
