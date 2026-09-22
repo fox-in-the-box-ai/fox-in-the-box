@@ -39,6 +39,10 @@ def main() -> int:
 
     from . import (
         MemoryUnavailable,
+        _load_runtime_config,
+        _qdrant_server_healthy,
+        _qdrant_server_mode,
+        _qdrant_unreachable_reason,
         _read_file_overrides,
         _resolve_embedder,
         _resolve_memoized,
@@ -53,6 +57,16 @@ def main() -> int:
             status = "error" if exc.severity == "error" else "off"
             _write_state(status, exc.reason, strict=True)
             print(f"memory: {'ERROR' if status == 'error' else 'OFF'} — {exc.reason}")
+            return 0
+        # Qdrant server mode (go-gate Q5): the shared server is a boot-time
+        # dependency (unlike the lazily-started embed-server, which preflight
+        # deliberately does not probe).  Fail loud on unreachable; exit 0 so
+        # boot never blocks (warn-never-fail, matching the entrypoint wrapper).
+        runtime_cfg = _load_runtime_config()
+        if _qdrant_server_mode(runtime_cfg) and not _qdrant_server_healthy(runtime_cfg):
+            reason = _qdrant_unreachable_reason(runtime_cfg)
+            _write_state("error", reason, strict=True)
+            print(f"memory: ERROR — {reason}")
             return 0
         _write_state(
             "ready",
