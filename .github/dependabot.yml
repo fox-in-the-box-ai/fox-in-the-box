@@ -9,6 +9,12 @@ updates:
       actions:
         patterns: ["*"]
 
+  # Single npm scope for the whole pnpm workspace. The root pnpm-lock.yaml
+  # already resolves every workspace member (packages/electron, qa/playwright),
+  # so this one scope covers them all in ONE grouped PR per run. The separate
+  # /packages/electron and /qa/playwright scopes were removed (#856): they
+  # re-scanned member manifests the root scope already owns, so each run
+  # produced 2-3 PRs racing to edit the same package.json lines.
   - package-ecosystem: npm
     directory: /
     schedule:
@@ -24,27 +30,10 @@ updates:
         # PR that can be held for the packaged-smoke arc (#750/#802
         # pattern). electron-builder is excluded for the same reason:
         # packaging breakage is invisible to PR CI (no job builds
-        # installers) and surfaces only at release time.
+        # installers) and surfaces only at release time. These excludes
+        # must stay on the workspace-wide scope so the electron manifest
+        # is still held here now that the per-directory scope is gone.
         exclude-patterns: ["electron", "electron-builder"]
-
-  - package-ecosystem: npm
-    directory: /packages/electron
-    schedule:
-      interval: weekly
-    groups:
-      electron-deps:
-        patterns: ["*"]
-        # Same rule as root-deps: electron and electron-builder get
-        # standalone PRs.
-        exclude-patterns: ["electron", "electron-builder"]
-
-  - package-ecosystem: npm
-    directory: /qa/playwright
-    schedule:
-      interval: weekly
-    groups:
-      playwright-deps:
-        patterns: ["*"]
 
   - package-ecosystem: pip
     directory: /packages/fox-overlay
