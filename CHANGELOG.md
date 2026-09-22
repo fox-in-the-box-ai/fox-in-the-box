@@ -9,6 +9,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+
+- Optional Qdrant server mode for long-term memory: point memory at a shared Qdrant server over HTTP instead of the embedded on-disk store, so more than one process (for example the gateway and the WebUI in the same container) can use memory at once without the embedded store's file-lock contention. Opt in with `MEM0_OSS_QDRANT_URL` (or `MEM0_OSS_QDRANT_HOST` + `MEM0_OSS_QDRANT_PORT`) and an optional `MEM0_OSS_QDRANT_API_KEY`; the same keys are also accepted in `mem0_oss.json`. Server mode is opt-in and does not migrate existing embedded memories — switching starts with an empty store until automatic migration ships. Memory stays on the embedded store when none of these are set.
+
 ---
 
 ## [0.7.62] — 2026-09-22
