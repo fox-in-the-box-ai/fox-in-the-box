@@ -111,7 +111,7 @@ Set `MEM0_OSS_QDRANT_URL` **or** the `HOST`/`PORT` pair — not both.
 
 Upgrading a live install to v0.7.63 does not strand your existing memories.
 On the first boot after upgrade, a one-shot job (`[program:mem0-migrate]`,
-run once before the gateway and WebUI open memory) copies every memory from
+started before the gateway and WebUI) copies every memory from
 the embedded store into the server — ids, vectors, and payloads verbatim,
 never a re-embed — then writes a sentinel
 (`$HERMES_HOME/mem0_oss/.migrated-to-server`) so later boots are no-ops. The
@@ -127,6 +127,14 @@ every memory process wraps `run-with-env.sh` (which sources `hermes.env`
 after the supervisord baseline), the empty value overrides the default for
 the gateway, the WebUI, and the migration job alike, and memory returns to
 the embedded on-disk store.
+
+Rollback (reading your old embedded data) is supported, but a round-trip
+toggle is not: once the migration sentinel exists, opting back to embedded,
+writing **new** embedded memories, then opting back into the server will
+**not** migrate those new embedded memories — the sentinel is present, so the
+migration never re-runs. To force a re-migration, delete
+`$HERMES_HOME/mem0_oss/.migrated-to-server` before switching back to the
+server.
 
 ## models.dev catalog troubleshooting
 

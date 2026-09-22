@@ -475,8 +475,13 @@ stderr_logfile_backups=3
 priority=20
 
 ; ── mem0 embedded → server migration (one-shot, issue #803) ───────────────────
-; Runs once per boot AFTER qdrant is up and BEFORE gateway/webui open memory:
-; copies any embedded on-disk memories into the bundled Qdrant server, then
+; Runs once per boot: started after qdrant (priority 20) and before gateway
+; (30) / webui (40). priority=22 + startsecs=0 order the SPAWN, not a
+; completion barrier — supervisord marks this RUNNING immediately, so
+; gateway/webui may start while the copy is still in flight. That is safe:
+; all three write the same server collection and upserts are idempotent by
+; stable point id, so a concurrent reader/writer never sees a torn state.
+; It copies any embedded on-disk memories into the bundled Qdrant server, then
 ; drops a sentinel so subsequent boots are no-ops. autorestart=false +
 ; startsecs=0 + startretries=0 make this a one-shot job, not a supervised
 ; daemon — a clean exit is success, a nonzero exit is logged and retried on the

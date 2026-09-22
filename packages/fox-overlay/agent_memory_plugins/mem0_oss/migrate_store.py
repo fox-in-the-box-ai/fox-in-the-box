@@ -89,8 +89,9 @@ _TRUE_VALUES = {"1", "true", "yes", "on"}
 
 # Boot /readyz poll bounds: a one-shot job can wait out a slow Qdrant start, but
 # must give up rather than hang the migration unit forever.  A 2 s per-attempt
-# timeout across up to 15 attempts with a 2 s sleep between them ≈ 30 s worst
-# case before the job gives up (and retries on the next boot).
+# timeout across up to 15 attempts with a 2 s sleep between them ≈ 58 s worst
+# case (15 × 2 s timeout + 14 × 2 s sleep) before the job gives up (and retries
+# on the next boot).
 _READYZ_TIMEOUT_S = 2.0
 _READYZ_ATTEMPTS = 15
 _READYZ_SLEEP_S = 2.0
@@ -538,6 +539,40 @@ def _dest_count(client: Any, collection: str) -> int:
     return int(getattr(result, "count", result))
 
 
+def _boot_source_present(client: Any, collection: str) -> bool:
+    """BOOT-path existence probe: is the embedded source collection actually
+    PRESENT?
+
+    Returns ``True`` when the collection exists and ``False`` ONLY when it is
+    genuinely absent.  Unlike :func:`_vector_size` — which deliberately collapses
+    *every* read failure to ``None`` so its non-boot callers can create-or-skip —
+    this re-raises anything that is not a definite "collection absent" signal as
+    a :class:`MigrationError`.
+
+    The distinction is load-bearing on the boot path: a corrupt, version-skewed,
+    or transiently-unreadable but PRESENT store must NEVER be misread as "empty
+    source", because that would write the ``empty-source`` sentinel and
+    permanently strand the user's memories behind a false completion (issue
+    #803).  ``collection_exists`` answers absent-vs-present without reading the
+    (possibly unreadable) collection body; a failure to even determine existence
+    fails loud so the next boot retries."""
+    exists = getattr(client, "collection_exists", None)
+    if not callable(exists):
+        # The pinned qdrant-client exposes collection_exists; its absence means
+        # we cannot safely tell "absent" from "unreadable", so fail loud rather
+        # than risk a false empty-source sentinel.
+        raise MigrationError(
+            "qdrant client lacks collection_exists — cannot verify whether the "
+            f"embedded collection {collection!r} is absent or merely unreadable"
+        )
+    try:
+        return bool(exists(collection))
+    except Exception as exc:  # existence itself unknowable — fail loud
+        raise MigrationError(
+            f"failed probing embedded collection {collection!r} for existence: {exc}"
+        ) from exc
+
+
 def run_boot_migration() -> int:
     """One-shot boot migration.  Returns a process exit code: 0 for migrated,
     skipped, or verified-empty; 1 when the server never came up or a migration
@@ -606,18 +641,27 @@ def run_boot_migration() -> int:
 
     source, dest = _open_boot_clients(source_path, server_url, api_key)
     try:
-        # 5b. Store present but no source collection → also verified empty.
-        if _vector_size(source, collection) is None:
-            logger.info(
-                "mem0_oss.migrate: embedded store has no %r collection — "
-                "nothing to migrate",
-                collection,
-            )
-            _write_sentinel("empty-source", source_count=0, migrated=0)
-            return 0
-
-        # 6. Migrate, then read the destination count back to confirm it landed.
+        # 5b + 6 share one fail-loud boundary: any MigrationError below exits 1
+        # with NO sentinel, so the next boot retries rather than falsely marking
+        # the migration done (issue #803).
         try:
+            # 5b. Distinguish a genuinely ABSENT source collection (→ verified
+            #     empty: sentinel + exit 0) from one that is PRESENT but
+            #     unreadable (corrupt / version-skewed / transient read error).
+            #     The latter must fail loud, never sentinel — misreading it as
+            #     absent would strand the user's memories behind a false
+            #     "empty-source" completion.
+            if not _boot_source_present(source, collection):
+                logger.info(
+                    "mem0_oss.migrate: embedded store has no %r collection — "
+                    "nothing to migrate",
+                    collection,
+                )
+                _write_sentinel("empty-source", source_count=0, migrated=0)
+                return 0
+
+            # 6. Migrate, then read the destination count back to confirm it
+            #    landed.
             summary = migrate_store(
                 source,
                 dest,
