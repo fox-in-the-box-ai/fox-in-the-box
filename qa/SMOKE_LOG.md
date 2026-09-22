@@ -47,7 +47,14 @@ Action items:
 
 - #850 (reconcile js-yaml onto a single major across pnpm/npm) — non-blocking follow-up.
 
-CI status: appended at closeout after the re-run (per §19.8 — no closeout claim before the release run is green).
+CI status (v0.7.62 shipped via two release runs — the first was fixed forward):
+
+- Run 1 (35672256238): failed the SMOKE_LOG hard gate — this entry did not yet exist (the release PR #848 omitted it). Container promote (:0.7.62 + :stable), apt publish, and the deb legs had already completed **success** before the gate; `Create GitHub Release` blocked correctly. Fixed by adding this entry (#853) and re-pointing the tag.
+- Run 2 (35673510519): `Create GitHub Release` (15 assets), Attach SBOM, signed Build Electron (macOS macos-15 + Windows), container promote (:0.7.62 + :stable, multi-arch), and the deb legs all **success**. The only red was `Publish to apt.foxinthebox.io` — a benign re-run idempotency error (reprepro refuses to overwrite the run-1 deb with differing rebuilt bytes; the deb is served from run 1). Robustness follow-up: #854.
+
+Release-mechanics verification (published assets): GitHub Release live (not draft) with both channel files (latest.yml + latest-mac.yml) and all blockmaps; live update discovery `releases/latest/download/latest.yml` → 200, `version: 0.7.62`. SBOM double-shipped here (sbom.cdx.json + fox-in-the-box-sbom.cyclonedx.json) — expected, because #830's dedup landed in #852 which is not in this tag; it takes effect next release.
+
+Post-release container advance (separate from this desktop release): #855 advanced the container `:stable` to hermes-agent v2026.9.21 (Option-B, no desktop rebuild) with the cron-diagnostics overlay refresh (#849).
 
 ---
 
