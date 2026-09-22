@@ -206,6 +206,6 @@ ENV FITB_DEV=${FITB_DEV}
 # and the entrypoint's export (e.g. docker exec sessions).
 ENV MEM0_TELEMETRY=False
 VOLUME ["/data"]
-EXPOSE 8787 6333
+EXPOSE 8787
 
 ENTRYPOINT ["/app/entrypoint.sh"]
