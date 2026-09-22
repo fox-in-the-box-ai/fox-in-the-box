@@ -130,6 +130,9 @@ def _memory_qdrant_readyz_url() -> str | None:
         port_default = 6333
     if url:
         parsed = urllib.parse.urlparse(url)
+        # Intentional divergence from the plugin's _resolve_qdrant_target,
+        # which falls back to "" here: this side builds a dial-able probe URL,
+        # so a hostless URL falls back to 127.0.0.1 (the co-located server).
         host = parsed.hostname or "127.0.0.1"
         port = parsed.port or port_default
         scheme = "https" if parsed.scheme == "https" else "http"

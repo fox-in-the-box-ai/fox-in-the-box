@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 import sys
 import types
+import urllib.parse
+from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
@@ -394,3 +396,171 @@ class TestMemoryCheck:
         result = readyz._check_memory()
         assert result["ok"] is False
         assert "openrouter" in result["detail"]
+
+
+# ── Qdrant server-mode reachability (boot-race fail-loud, #780 blocker) ──
+
+
+class _FakeResponse:
+    """Hand-rolled context-manager response for a reachable probe."""
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
+class _FakeUrlopen:
+    """Hand-rolled stand-in for ``urllib.request.urlopen`` (not a mock).
+
+    Records every call so a test can assert the probe did — or did not —
+    dial; raises ``raises`` when set (unreachable), else returns a reachable
+    response."""
+
+    def __init__(self, *, raises=None):
+        self._raises = raises
+        self.calls: list[str] = []
+
+    def __call__(self, req, timeout=None):
+        self.calls.append(getattr(req, "full_url", req))
+        if self._raises is not None:
+            raise self._raises
+        return _FakeResponse()
+
+
+class TestMemoryQdrantReachability:
+    """``_check_memory`` re-probes the Qdrant server at request time in
+    server mode (boot-race fail-loud); embedded mode never dials."""
+
+    def _write_ready_state(self, tmp_path, monkeypatch):
+        state_path = tmp_path / "state.json"
+        state_path.write_text(
+            json.dumps(
+                {
+                    "status": "ready",
+                    "reason": "",
+                    "llm": "openrouter",
+                    "embedder": "local:nomic-embed-text-v1.5",
+                }
+            ),
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("MEM0_OSS_STATE_PATH", str(state_path))
+
+    def test_server_mode_unreachable_qdrant_fails(self, tmp_path, monkeypatch):
+        import urllib.error
+        import urllib.request
+
+        readyz = _load_readyz()
+        self._write_ready_state(tmp_path, monkeypatch)
+        monkeypatch.setenv("MEM0_OSS_QDRANT_URL", "http://127.0.0.1:6333")
+        monkeypatch.setattr(readyz, "_embed_server_alive", lambda: True)
+        fake = _FakeUrlopen(raises=urllib.error.URLError("refused"))
+        monkeypatch.setattr(urllib.request, "urlopen", fake)
+
+        result = readyz._check_memory()
+        assert result["ok"] is False
+        assert "qdrant server unreachable" in result["detail"]
+        # The probe actually dialed the server-mode /readyz endpoint.
+        assert fake.calls and fake.calls[0].endswith("/readyz")
+
+    def test_embedded_mode_does_not_probe_qdrant(self, tmp_path, monkeypatch):
+        import urllib.request
+
+        readyz = _load_readyz()
+        self._write_ready_state(tmp_path, monkeypatch)
+        # No MEM0_OSS_QDRANT_URL / _HOST → embedded store, nothing to dial.
+        monkeypatch.delenv("MEM0_OSS_QDRANT_URL", raising=False)
+        monkeypatch.delenv("MEM0_OSS_QDRANT_HOST", raising=False)
+        monkeypatch.setattr(readyz, "_embed_server_alive", lambda: True)
+        fake = _FakeUrlopen()
+        monkeypatch.setattr(urllib.request, "urlopen", fake)
+
+        assert readyz._memory_qdrant_reachable() is True
+        assert fake.calls == []  # embedded mode never probes
+        result = readyz._check_memory()
+        assert result["ok"] is True
+
+
+# ── Cross-boundary drift guard (readyz resolver vs plugin resolver) ─────
+
+
+class TestQdrantResolverDriftGuard:
+    """``readyz._memory_qdrant_readyz_url`` hand-copies the plugin's
+    ``_resolve_qdrant_target`` across the webui/agent process boundary (the
+    webui cannot import the plugin — legitimate).  This guard — in the one
+    suite that CAN import both — fails if the two ever disagree on
+    host/port/scheme for representative configs, so a one-sided edit is
+    caught."""
+
+    def _plugin(self):
+        repo_root = Path(__file__).resolve().parents[3]
+        hermes_agent = repo_root / "forks" / "hermes-agent"
+        if hermes_agent.is_dir() and str(hermes_agent) not in sys.path:
+            sys.path.insert(0, str(hermes_agent))
+        pytest.importorskip(
+            "hermes_cli.providers",
+            reason="forks/hermes-agent not importable in this environment",
+        )
+        return pytest.importorskip("agent_memory_plugins.mem0_oss")
+
+    @pytest.mark.parametrize(
+        "env",
+        [
+            pytest.param(
+                {"MEM0_OSS_QDRANT_URL": "http://127.0.0.1:6333"}, id="keyless_url"
+            ),
+            pytest.param(
+                {
+                    "MEM0_OSS_QDRANT_URL": "http://qdrant.internal:6333",
+                    "MEM0_OSS_QDRANT_API_KEY": "secret",
+                },
+                id="url_key_http",
+            ),
+            pytest.param(
+                {
+                    "MEM0_OSS_QDRANT_URL": "https://qdrant.example.com",
+                    "MEM0_OSS_QDRANT_API_KEY": "secret",
+                },
+                id="url_key_https",
+            ),
+            pytest.param(
+                {
+                    "MEM0_OSS_QDRANT_HOST": "qdrant.local",
+                    "MEM0_OSS_QDRANT_PORT": "6399",
+                },
+                id="host_port",
+            ),
+        ],
+    )
+    def test_resolvers_agree_on_host_port_scheme(self, env, monkeypatch):
+        plugin = self._plugin()
+        readyz = _load_readyz()
+        for var in (
+            "MEM0_OSS_QDRANT_URL",
+            "MEM0_OSS_QDRANT_HOST",
+            "MEM0_OSS_QDRANT_PORT",
+            "MEM0_OSS_QDRANT_API_KEY",
+        ):
+            monkeypatch.delenv(var, raising=False)
+        for key, value in env.items():
+            monkeypatch.setenv(key, value)
+
+        # Feed the plugin resolver the same inputs the readyz side reads
+        # from the environment.
+        runtime_cfg = {
+            "qdrant_url": env.get("MEM0_OSS_QDRANT_URL", ""),
+            "qdrant_host": env.get("MEM0_OSS_QDRANT_HOST", ""),
+            "qdrant_port": env.get("MEM0_OSS_QDRANT_PORT", "6333"),
+            "qdrant_api_key": env.get("MEM0_OSS_QDRANT_API_KEY", ""),
+        }
+        p_host, p_port, p_https = plugin._resolve_qdrant_target(runtime_cfg)
+        p_scheme = "https" if p_https else "http"
+
+        url = readyz._memory_qdrant_readyz_url()
+        assert url is not None
+        parsed = urllib.parse.urlparse(url)
+        assert parsed.hostname == p_host
+        assert parsed.port == p_port
+        assert parsed.scheme == p_scheme

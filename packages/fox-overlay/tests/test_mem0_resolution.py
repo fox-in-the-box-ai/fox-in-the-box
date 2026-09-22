@@ -11,10 +11,15 @@ network surfaces are stubbed:
   * ``agent.auxiliary_client``— deterministic config.yaml readers
   * ``mem0`` / ``openai``    — behavioral fakes for the §1.3 truth table
 
-Where forks/hermes-agent is not importable (e.g. the validate-overlay CI
-context, which has neither the fork on PYTHONPATH nor httpx installed) the
-whole module skips; the ``_WELL_KNOWN``/``_POOL_ID_MAP`` sync assertions run
-in-image (image-selftest phase A), not here.
+In validate-overlay CI the fork IS importable: the workflow checks out
+submodules recursively, and the ``sys.path.insert`` below makes
+``hermes_cli.providers`` importable with only pyyaml present — so this module
+no longer skips there.  The QdrantConfig acceptance tests
+(``importorskip("mem0.configs.vector_stores.qdrant")``) additionally require
+``mem0ai``, which the CI job installs (``mem0ai==2.0.10``); leave that install
+in place — drop it and the #780 acceptance gate silently reverts to skipped.
+The ``_WELL_KNOWN``/``_POOL_ID_MAP`` sync assertions still run in-image
+(image-selftest phase A), not here.
 """
 
 from __future__ import annotations
