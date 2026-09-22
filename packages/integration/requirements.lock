@@ -1,6 +1,7 @@
 # Frozen Python dependencies for the Fox container image.
 # Generated from ghcr.io/fox-in-the-box-ai/cloud:v0.7.51 on 2026-06-20,
 # refreshed for hermes-agent v2026.8.31 / 0.21.0 (2026-09-02, #792).
+# refreshed for hermes-agent v2026.9.21 / 0.21.4 (2026-09-22, #855 / #849).
 # hermes-agent hard-pins cryptography==50.0.0 in pyproject.toml — this
 # CLOSES the long-tracked GHSA-537c-gmf6-5ccf accepted risk (fix was
 # 48.0.1; 46.0.7 was below it while upstream pinned there).
@@ -25,6 +26,16 @@
 # extraction; genuine firecrawl org, MIT, zero runtime deps; hosted OCR is
 # opt-in via FIRECRAWL_API_KEY which the Fox image never sets — default
 # ocr="reject" is fully offline) + snowballstemmer==3.1.1 (zero deps).
+# 2026-09-22 (#849): hermes-agent v2026.9.21 (0.21.4) core-dependency
+# changes. nemo-relay 0.7.3 -> 0.8.4 (upstream raised the floor to
+# >=0.8.3,<0.9). +pillow_heif==1.7.0 (new core dep: HEIF/HEIC/AVIF decode
+# for vision tools; prebuilt wheels bundle libheif). -uvloop==0.22.1
+# (upstream split uvicorn[standard] into plain uvicorn + core httptools/
+# watchfiles and gated uvloop behind the optional [uvloop] extra, which the
+# [anthropic,bedrock,google,mem0] install target does not include; uvicorn
+# falls back to the stdlib asyncio loop). Re-resolved via the documented
+# `pip freeze` method; no other pins moved.
+
 annotated-doc==0.0.4
 annotated-types==0.7.0
 anthropic==0.87.0
@@ -68,13 +79,14 @@ Markdown==3.10.2
 MarkupSafe==3.0.3
 mdurl==0.1.2
 mem0ai==2.0.10
-nemo-relay==0.7.3
+nemo-relay==0.8.4
 numpy==2.4.6
 oauthlib==3.3.1
 openai==2.24.0
 packaging==26.0
 pathspec==1.1.1
 pillow==12.3.0
+pillow_heif==1.7.0
 portalocker==3.2.0
 posthog==7.38.4
 prompt_toolkit==3.0.52
@@ -117,7 +129,6 @@ typing_extensions==4.15.0
 uritemplate==4.2.0
 urllib3==2.7.0
 uvicorn==0.49.0
-uvloop==0.22.1
 watchfiles==1.2.0
 wcwidth==0.8.1
 websockets==15.0.1
