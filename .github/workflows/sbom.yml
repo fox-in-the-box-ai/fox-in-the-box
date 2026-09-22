@@ -47,6 +47,14 @@ jobs:
           path: .
           format: cyclonedx-json
           output-file: sbom.cdx.json
+          # Suppress sbom-action's built-in release-asset upload. On a tag ref
+          # it attaches its own `fox-in-the-box-sbom.cyclonedx.json`, which
+          # duplicated the deliberate `sbom.cdx.json` attach below — every
+          # release since v0.7.61 carried the SBOM twice (#830). The softprops
+          # step is the canonical, engineered path: it targets the right tag on
+          # the workflow_call / manual-release / workflow_dispatch-backfill
+          # triggers via `tag_name`, which this default upload does not.
+          upload-release-assets: false
       - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           files: sbom.cdx.json

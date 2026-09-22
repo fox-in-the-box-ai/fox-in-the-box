@@ -12,18 +12,19 @@
 [upstream]
 hermes_webui_tag = "v0.52.113"
 hermes_webui_url = "https://github.com/nesquena/hermes-webui"
-hermes_agent_tag = "v2026.8.31"
+hermes_agent_tag = "v2026.9.21"
 hermes_agent_url = "https://github.com/NousResearch/hermes-agent"
 
 [meta]
-pinned_at = "2026-09-02"
-pinned_in_pr = "fox-in-the-box-ai/fox-in-the-box#791"
+pinned_at = "2026-09-22"
+pinned_in_pr = "fox-in-the-box-ai/fox-in-the-box#849"
 phase = "option-b-bump"
-notes = "Agent-only bump v2026.8.18 to v2026.8.31 (upstream 0.20.4 to 0.21.0, ~3,091 commits; closes #790; webui stays v0.52.113). Anchor audit: gateway/run.py static patch applies cleanly at the new tag; all four cron_diagnostics substitution anchors (create_job, _mark_job_run_locked, run_job FAILED template, _format_job) present exactly once in the new function bodies; auxiliary_client anchors byte-identical. Dep delta: uvicorn floor 0.24 to 0.31 (lock already at 0.49.0), psutil pinned 7.2.2 upstream (lock matches), new exact-pinned firecrawl-anydoc==0.2.4 + snowballstemmer==3.1.1 float in via upstream; requirements.lock untouched (refreshed separately in #793 for #792)."
+notes = "Agent-only bump v2026.8.31 to v2026.9.21 with the #849 cron-diagnostics overlay refresh (webui stays v0.52.113). The upstream v2026.9.7 cron refactor broke 4 of the 6 Fox agent monkey-patch anchors; KEEP decision -> cron_diagnostics.py re-implemented against v2026.9.21 seams using the FUNCTION-WRAP idiom. Anchor audit (all verified against the checked-out submodule at v2026.9.21): cron.jobs._record_run_outcome wrapped (native failure_streak preserved); cron.scheduler.run_job FAILED splice re-anchored on the `output = _run_doc_header(...) + format_run_error(e)` expression (unique in run_job); tools.cronjob_job_args._format_job wrapped at the relocated definition module; auxiliary_client patch #1 re-anchored (two-return tail dedented 8->4, blank line dropped), patch #2 byte-identical. Old create_job + _mark_job_run_locked substitution patches retired (the _record_run_outcome wrap handles history + lazy init). Gateway bootstrap shim regenerated against gateway/run_startup.py::_start_recover_previous_run (relocated from gateway/run.py). requirements.lock untouched (all pins satisfied)."
 
 [history]
 prior_pins = [
   # newest first
+  "webui=v0.52.113, agent=v2026.8.31 -- agent-only bump #791 (2026-09-02)",
   "webui=v0.52.113, agent=v2026.8.18 -- upstream bump #764 (2026-08-19)",
   "webui=v0.52.113, agent=v2026.8.16.2 -- upstream bump #740 (2026-08-18)",
   "webui=v0.52.0, agent=v2026.7.7.2 -- upstream bump #644 (2026-07-10)",

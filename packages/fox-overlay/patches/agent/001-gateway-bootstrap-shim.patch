@@ -1,18 +1,16 @@
-diff --git a/gateway/run.py b/gateway/run.py
-index f9a282a41..aad5d58cb 100644
---- a/gateway/run.py
-+++ b/gateway/run.py
-@@ -3497,6 +3497,33 @@ class GatewayRunner:
-                 exc_info=True,
-             )
- 
+diff --git a/gateway/run_startup.py b/gateway/run_startup.py
+--- a/gateway/run_startup.py
++++ b/gateway/run_startup.py
+@@ -1026,6 +1026,31 @@
+         """Plugins, relay, hooks, then crash/clean-exit recovery of processes and sessions."""
+         from gateway.run import _hermes_home
+         self._start_register_plugins_relay_hooks()
 +        # === FITB ===
-+        # Trigger fox-overlay's agent plugins so the monkey-patches and
-+        # mem0_oss plugin actually fire at gateway boot. Upstream's
-+        # PluginManager (which discovers hermes_agent.plugins entry-points)
-+        # is invoked only from `hermes` CLI commands, not from this gateway
-+        # startup path. Bootstrap shim restores the Phase 3 behavior on
-+        # virgin upstream content (post-Phase-8 re-point).
++        # Trigger fox-overlay's agent plugins so the monkey-patches actually
++        # fire at gateway boot. Upstream's PluginManager (which discovers
++        # hermes_agent.plugins entry-points) is invoked only from `hermes` CLI
++        # commands, not from this gateway startup path; this shim restores the
++        # Phase 3 behavior on virgin upstream content.
 +        #
 +        # Set FITB_DISABLE_AGENT_OVERLAY=1 to disable in production without
 +        # rebuilding the image.
@@ -27,12 +25,11 @@ index f9a282a41..aad5d58cb 100644
 +            except Exception:
 +                logger.warning(
 +                    "fox-overlay agent-plugin bootstrap failed; gateway will "
-+                    "boot without Fox monkey-patches (target_model fix, "
-+                    "auxiliary.default fallback, cron failure diagnostics)",
++                    "boot without Fox monkey-patches (auxiliary.default "
++                    "fallback, cron failure diagnostics, Bedrock IMDS gate)",
 +                    exc_info=True,
 +                )
 +        # === /FITB ===
-+
-         # Discover and load event hooks
          self.hooks.discover_and_load()
- 
+         # Recover background processes from checkpoint (crash recovery). ``_checkpoint_path`` is
+         # scope-relative, so a served secondary's turn wrote ITS home's processes.json; recover each
