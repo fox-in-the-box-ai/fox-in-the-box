@@ -33,8 +33,8 @@ importers:
         version: 6.8.9
     devDependencies:
       electron:
-        specifier: ^44.1.1
-        version: 44.1.1
+        specifier: ^44.4.3
+        version: 44.4.3
       electron-builder:
         specifier: ^26.15.3
         version: 26.15.3(electron-builder-squirrel-windows@26.15.3(dmg-builder@26.15.3))
@@ -46,7 +46,7 @@ importers:
         version: 30.5.1(@types/node@26.4.1)
       js-yaml:
         specifier: ^4.3.1
-        version: 5.4.1
+        version: 4.3.2
       rcedit:
         specifier: ^5.0.0
         version: 5.0.2
@@ -1166,8 +1166,8 @@ packages:
     resolution: {integrity: sha512-bO3y10YikuUwUuDUQRM4KfwNkKhnpVO7IPdbsrejwN9/AABJzzTQ4GeHwyzNSrVO+tEH3/Np255a3sVZpZDjvg==}
     engines: {node: '>=8.0.0'}
 
-  electron@44.1.1:
-    resolution: {integrity: sha512-N2WCq2sbOkqQgvXJYx2lS6UiO8bF+Yr67trDnS6JKa2WxTCRQsAjGl57SUtdW9h6r5PlduBFjIhxhgd3dzv1hg==}
+  electron@44.4.3:
+    resolution: {integrity: sha512-LTpSFTB40qVCXIX5xMo+cgHI/Jjkbjw7VpB26PccEbroqOn72LBukeaDwPVo1fBYzSzs0c9iPuAucFCO7Tw81Q==}
     engines: {node: '>= 22.12.0'}
     hasBin: true
 
@@ -1651,10 +1651,6 @@ packages:
 
   js-yaml@4.3.2:
     resolution: {integrity: sha512-SFNOvSJ+Dgf/9An904Yx+CgSlIPCkIpao4qo51lpee25TIRejdH3rhR4EZMGoNx3/TP3O+wzWuiTFl4sqbltzA==}
-    hasBin: true
-
-  js-yaml@5.4.1:
-    resolution: {integrity: sha512-28R/k+NAjeuf7+CKlTxWZVExJGwVVLwY06DgEnOMz2gEpfNkDcD7QvyiVPT0xy0XXhU8vHsd4Ot42OOPdJG7dQ==}
     hasBin: true
 
   jsesc@3.1.0:
@@ -3743,7 +3739,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  electron@44.1.1:
+  electron@44.4.3:
     dependencies:
       '@electron-internal/extract-zip': 1.0.5
       '@electron/get': 5.1.0
@@ -4436,10 +4432,6 @@ snapshots:
   js-tokens@4.0.0: {}
 
   js-yaml@4.3.2:
-    dependencies:
-      argparse: 2.0.1
-
-  js-yaml@5.4.1:
     dependencies:
       argparse: 2.0.1
 
