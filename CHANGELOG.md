@@ -11,6 +11,18 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.7.62] — 2026-09-22
+
+### Security
+
+- Cleared a high-severity js-yaml advisory that was flagged against the desktop package's committed npm lockfile: that lockfile still pinned the vulnerable 4.x line even though the desktop package manifest already moved to the 5.x release in v0.7.61. Regenerating the lockfile resolves the patched 5.x version, so the audited artifact now matches the manifest and the alert is resolved.
+
+### Changed
+
+- Bundled desktop Electron 44.1.1 → 44.4.3 (within-major security and stability update).
+
+---
+
 ## [0.7.61] — 2026-09-06
 
 ### Added
