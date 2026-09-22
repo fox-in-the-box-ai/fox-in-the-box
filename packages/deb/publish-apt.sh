@@ -70,11 +70,23 @@ debs=(dist/*.deb)
 [ ${#debs[@]} -gt 0 ] || _die "No .deb files found in dist/"
 for deb in "${debs[@]}"; do
     arch=$(dpkg --field "$deb" Architecture)
-    _log "  includedeb stable $deb (arch=$arch)"
+    pkg=$(dpkg --field "$deb" Package)
+    ver=$(dpkg --field "$deb" Version)
     if [ "$DRY_RUN" != "1" ]; then
+        # Idempotency (#854): reprepro refuses to overwrite an already-present
+        # version whose bytes differ, which reds every same-version release
+        # re-run (hit at v0.7.62). If this exact package+version+arch is
+        # already in the pool, skip it with success. A genuine publish error
+        # on a NEW version still fails loud via `set -e`.
+        existing=$(reprepro -b ./apt-repo -A "$arch" list stable "$pkg" | awk '{print $NF}')
+        if printf '%s\n' "$existing" | grep -qxF "$ver"; then
+            _log "  skip $pkg $ver ($arch) — already published"
+            continue
+        fi
+        _log "  includedeb stable $deb (arch=$arch)"
         reprepro -b ./apt-repo includedeb stable "$deb"
     else
-        _log "  (DRY_RUN) would includedeb stable $deb"
+        _log "  (DRY_RUN) would includedeb stable $deb (arch=$arch)"
     fi
 done
 
