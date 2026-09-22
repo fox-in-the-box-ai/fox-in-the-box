@@ -407,6 +407,15 @@ logfile_maxbytes=10MB
 logfile_backups=3
 pidfile=${pid_path}
 childlogdir=${data}/logs
+; Baseline env inherited by every program (a program's own environment= only
+; overrides the keys it lists).  MEM0_OSS_QDRANT_URL points memory at the
+; bundled Qdrant server (issue #803) for gateway, webui, AND the migration
+; unit alike — a single shared surface, so gateway and webui can never diverge
+; into a backend split-brain.  A user can still opt back to the embedded store
+; by setting MEM0_OSS_QDRANT_URL= (empty) in hermes.env: run-with-env.sh sources
+; that file with `set -a` after this baseline, so the empty value wins for all
+; three processes.
+environment=MEM0_OSS_QDRANT_URL="http://127.0.0.1:6333"
 
 ; Unix socket must NOT live under the data volume: bind-mounting from macOS or
 ; Windows (Docker Desktop) breaks AF_UNIX bind() with EINVAL.
@@ -464,6 +473,31 @@ stdout_logfile_backups=3
 stderr_logfile_maxbytes=10MB
 stderr_logfile_backups=3
 priority=20
+
+; ── mem0 embedded → server migration (one-shot, issue #803) ───────────────────
+; Runs once per boot AFTER qdrant is up and BEFORE gateway/webui open memory:
+; copies any embedded on-disk memories into the bundled Qdrant server, then
+; drops a sentinel so subsequent boots are no-ops. autorestart=false +
+; startsecs=0 + startretries=0 make this a one-shot job, not a supervised
+; daemon — a clean exit is success, a nonzero exit is logged and retried on the
+; next boot (the wrapper writes its sentinel only on verified success, never on
+; a partial run). MEM0_OSS_QDRANT_URL is inherited from [supervisord] (a
+; per-program value here would risk diverging from gateway/webui).
+[program:mem0-migrate]
+command=${app}/scripts/run-with-env.sh python3 -m plugins.memory.mem0_oss.migrate_store --boot
+user=foxinthebox
+autostart=true
+autorestart=false
+startsecs=0
+startretries=0
+stdout_logfile=${data}/logs/mem0-migrate.log
+stderr_logfile=${data}/logs/mem0-migrate.err
+stdout_logfile_maxbytes=10MB
+stdout_logfile_backups=3
+stderr_logfile_maxbytes=10MB
+stderr_logfile_backups=3
+environment=HOME="${app}",PYTHONPATH="${data}/apps/hermes-agent",PATH="${app}/venv/bin:/usr/local/bin:/usr/bin:/bin",HERMES_HOME="${data}/data/hermes",HERMES_ENV_PATH="${data}/config/hermes.env",MEM0_TELEMETRY="False"
+priority=22
 
 ; ── embed-server (local embeddings for mem0 memory) ───────────────────────────
 ; Serves the pinned embedding model (see embed-model.lock) over the OpenAI-compat

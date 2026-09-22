@@ -46,12 +46,14 @@ fakes without the dependency installed.
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import os
 import sys
+import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +71,29 @@ DEFAULT_SCROLL_BATCH = 256
 # infinite hang on a stuck server; the migration is a one-shot job, so a
 # generous-but-bounded value is right.
 _SERVER_TIMEOUT_S = 30.0
+
+# ── Boot migration (issue #803) ────────────────────────────────────────────
+# The sentinel that records a completed (or verified-empty) embedded→server
+# migration.  It lives beside the embedded store under $HERMES_HOME/mem0_oss/.
+# WRITE-ORDERING invariant: the sentinel is written ONLY after a verified
+# success or a verified-empty source — NEVER before the server is touched and
+# NEVER on a partial/crashed run — so a crashed run re-attempts on the next
+# boot instead of silently marking itself done.
+_SENTINEL_NAME = ".migrated-to-server"
+_SENTINEL_SCHEMA = 1
+
+# Truthy spellings for MEM0_OSS_DISABLED.  Mirrors __init__._TRUE_VALUES, restated
+# so this module stays free of the heavy plugin package (issue #803 keeps the
+# boot wrapper decoupled from __init__).
+_TRUE_VALUES = {"1", "true", "yes", "on"}
+
+# Boot /readyz poll bounds: a one-shot job can wait out a slow Qdrant start, but
+# must give up rather than hang the migration unit forever.  A 2 s per-attempt
+# timeout across up to 15 attempts with a 2 s sleep between them ≈ 30 s worst
+# case before the job gives up (and retries on the next boot).
+_READYZ_TIMEOUT_S = 2.0
+_READYZ_ATTEMPTS = 15
+_READYZ_SLEEP_S = 2.0
 
 
 class MigrationError(RuntimeError):
@@ -390,6 +415,250 @@ def _safe_close(client: Any) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Boot migration (issue #803) — one-shot, sentinel-guarded, self-contained
+# ---------------------------------------------------------------------------
+#
+# Wired into supervisord as [program:mem0-migrate] (autostart, autorestart=false)
+# ahead of the gateway/webui, so a live install that just flipped to Qdrant
+# server mode copies its embedded memories across exactly once, before either
+# process opens memory.  This wrapper stays decoupled from the heavy plugin
+# ``__init__`` (no import of it): server-mode detection, the /readyz poll, and
+# the state idioms are reimplemented here against stdlib only.
+
+
+def _boot_server_url() -> str:
+    """Resolve the destination server URL from the env exactly as the plugin
+    does — ``MEM0_OSS_QDRANT_URL`` wins; otherwise a bare
+    ``MEM0_OSS_QDRANT_HOST`` (+ ``_PORT``) is composed into one (HTTPS iff an
+    api key is present, mirroring ``__init__._resolve_qdrant_target``).  Returns
+    ``""`` when neither is set — i.e. the install is still on the embedded
+    store and there is nothing to migrate to."""
+    url = os.environ.get("MEM0_OSS_QDRANT_URL", "").strip()
+    if url:
+        return url
+    host = os.environ.get("MEM0_OSS_QDRANT_HOST", "").strip()
+    if not host:
+        return ""
+    port = os.environ.get("MEM0_OSS_QDRANT_PORT", "6333").strip() or "6333"
+    scheme = (
+        "https" if os.environ.get("MEM0_OSS_QDRANT_API_KEY", "").strip() else "http"
+    )
+    return f"{scheme}://{host}:{port}"
+
+
+def _sentinel_path() -> Path:
+    """``$HERMES_HOME/mem0_oss/.migrated-to-server`` — HERMES_HOME from the env,
+    same default the embedded-store path resolution uses."""
+    hermes_home = os.environ.get("HERMES_HOME", "/data/data/hermes")
+    return Path(hermes_home) / "mem0_oss" / _SENTINEL_NAME
+
+
+def _write_sentinel(reason: str, source_count: int, migrated: int) -> None:
+    """Atomically write the migration sentinel (tmp + os.replace, mirroring
+    ``__init__._write_state``).  Called ONLY on verified success or a
+    verified-empty source — see the WRITE-ORDERING invariant above."""
+    payload = {
+        "schema": _SENTINEL_SCHEMA,
+        "reason": reason,
+        "migrated_at": int(time.time()),
+        "collection": DEFAULT_COLLECTION,
+        "dims": DEFAULT_DIMS,
+        "source_count": source_count,
+        "migrated": migrated,
+    }
+    path = _sentinel_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.parent / f".{path.name}.{os.getpid()}.tmp"
+    tmp.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    os.replace(tmp, path)
+
+
+def _wait_for_readyz(server_url: str, api_key: str = "") -> bool:
+    """Poll ``<server_url>/readyz`` until the server answers or the bounded
+    budget is spent.  ANY HTTP response (including 5xx while Qdrant warms up)
+    means the server is live; only connection-refused / timeout / DNS failure
+    counts as not-ready.  Self-contained ``urllib`` — deliberately NOT importing
+    ``__init__._qdrant_server_healthy`` (same shape, local reimplementation)."""
+    import urllib.error
+    import urllib.request
+
+    readyz_url = server_url.rstrip("/") + "/readyz"
+    for attempt in range(1, _READYZ_ATTEMPTS + 1):
+        req = urllib.request.Request(readyz_url, method="GET")
+        if api_key:
+            req.add_header("api-key", api_key)
+        try:
+            with urllib.request.urlopen(req, timeout=_READYZ_TIMEOUT_S):
+                return True
+        except urllib.error.HTTPError:
+            return True  # an HTTP status IS a live server (readiness-agnostic)
+        except Exception:
+            pass  # refused / timeout / DNS — not ready yet, keep polling
+        if attempt < _READYZ_ATTEMPTS:
+            time.sleep(_READYZ_SLEEP_S)
+    return False
+
+
+def _load_qdrant_models() -> Any:
+    """The ``qdrant_client.models`` namespace — a seam so tests can inject
+    fakes without the dependency installed."""
+    from qdrant_client import models  # lazy: prod-only dep
+
+    return models
+
+
+def _open_boot_clients(
+    source_path: str, server_url: str, api_key: str
+) -> Tuple[Any, Any]:
+    """Open the embedded (local-mode) source and server (HTTP) dest clients.
+    The sole ``qdrant_client``-touching seam of the boot path, monkeypatched in
+    tests with hand-rolled fakes."""
+    from qdrant_client import QdrantClient  # lazy: prod-only dep
+
+    source = QdrantClient(path=source_path)
+    dest = QdrantClient(
+        url=server_url,
+        api_key=api_key or None,
+        timeout=int(_SERVER_TIMEOUT_S),
+        check_compatibility=False,
+    )
+    return source, dest
+
+
+def _dest_count(client: Any, collection: str) -> int:
+    """Read the destination point count back from the server to VERIFY the
+    upsert actually landed — the migration core returns the *attempted* count,
+    not a server-confirmed one."""
+    try:
+        result = client.count(collection_name=collection, exact=True)
+    except Exception as exc:  # external read boundary — wrap with context
+        raise MigrationError(
+            f"failed verifying destination collection {collection!r}: {exc}"
+        ) from exc
+    return int(getattr(result, "count", result))
+
+
+def run_boot_migration() -> int:
+    """One-shot boot migration.  Returns a process exit code: 0 for migrated,
+    skipped, or verified-empty; 1 when the server never came up or a migration
+    failed.  Every "skip" exits 0.
+
+    Decision ladder (issue #803), each rung failing closed toward "leave the
+    embedded store in place":
+
+      1. memory disabled       → exit 0, no sentinel (re-check if re-enabled)
+      2. not in server mode    → exit 0, no sentinel (embedded store is live)
+      3. sentinel already present → exit 0 (single source of truth)
+      4. server /readyz poll   → exit 1, no sentinel if it never comes up
+      5. empty source          → sentinel reason:"empty-source", exit 0
+      6. migrate + verify count→ sentinel reason:"migrated", exit 0
+      7. any MigrationError    → exit 1, no sentinel
+    """
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
+
+    # 1. Memory disabled → nothing to migrate; no sentinel, so a later enable
+    #    re-evaluates from scratch.
+    if os.environ.get("MEM0_OSS_DISABLED", "").strip().lower() in _TRUE_VALUES:
+        logger.info("mem0_oss.migrate: memory disabled — skipping boot migration")
+        return 0
+
+    # 2. Not in server mode → the embedded store is still the live store.
+    server_url = _boot_server_url()
+    if not server_url:
+        logger.info(
+            "mem0_oss.migrate: no Qdrant server target set — embedded store "
+            "mode, skipping boot migration"
+        )
+        return 0
+
+    # 3. Already migrated → the sentinel is the single source of truth.
+    sentinel = _sentinel_path()
+    if sentinel.exists():
+        logger.info("mem0_oss.migrate: already migrated (%s) — skipping", sentinel)
+        return 0
+
+    api_key = os.environ.get("MEM0_OSS_QDRANT_API_KEY", "").strip()
+
+    # 4. Wait for the server — fail loud (exit 1, no sentinel) if it never comes
+    #    up, so the migration retries on the next boot rather than losing data.
+    if not _wait_for_readyz(server_url, api_key):
+        logger.error(
+            "mem0_oss.migrate: Qdrant server at %s never became ready after %d "
+            "attempts — leaving the embedded store in place, will retry next boot",
+            server_url,
+            _READYZ_ATTEMPTS,
+        )
+        return 1
+
+    collection = os.environ.get("MEM0_OSS_COLLECTION", DEFAULT_COLLECTION)
+    expected_dims = int(os.environ.get("MEM0_OSS_EMBEDDER_DIMS", DEFAULT_DIMS))
+
+    # 5a. No embedded store on disk at all → verified empty; record the sentinel
+    #     so we never re-check, and exit success.
+    source_path = _default_source_path()
+    if not Path(source_path).exists():
+        logger.info(
+            "mem0_oss.migrate: no embedded store at %s — nothing to migrate",
+            source_path,
+        )
+        _write_sentinel("empty-source", source_count=0, migrated=0)
+        return 0
+
+    source, dest = _open_boot_clients(source_path, server_url, api_key)
+    try:
+        # 5b. Store present but no source collection → also verified empty.
+        if _vector_size(source, collection) is None:
+            logger.info(
+                "mem0_oss.migrate: embedded store has no %r collection — "
+                "nothing to migrate",
+                collection,
+            )
+            _write_sentinel("empty-source", source_count=0, migrated=0)
+            return 0
+
+        # 6. Migrate, then read the destination count back to confirm it landed.
+        try:
+            summary = migrate_store(
+                source,
+                dest,
+                collection=collection,
+                expected_dims=expected_dims,
+                models=_load_qdrant_models(),
+            )
+            landed = _dest_count(dest, collection)
+        except MigrationError as exc:  # 7. loud, no sentinel — retry next boot
+            logger.error("mem0_oss.migrate: boot migration FAILED — %s", exc)
+            return 1
+
+        if landed < summary.source_count:
+            logger.error(
+                "mem0_oss.migrate: post-migration verify FAILED — destination "
+                "collection %r holds %d point(s) but the source had %d; refusing "
+                "to record the migration as complete (will retry next boot)",
+                collection,
+                landed,
+                summary.source_count,
+            )
+            return 1
+
+        _write_sentinel(
+            "migrated",
+            source_count=summary.source_count,
+            migrated=summary.migrated,
+        )
+        logger.info(
+            "mem0_oss.migrate: boot migration OK — %s (embedded store kept for "
+            "rollback)",
+            summary,
+        )
+        return 0
+    finally:
+        # Release the embedded file lock promptly so the plugin can reopen it.
+        _safe_close(dest)
+        _safe_close(source)
+
+
+# ---------------------------------------------------------------------------
 # CLI entry point
 # ---------------------------------------------------------------------------
 
@@ -414,7 +683,21 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument(
         "--dims", type=int, default=None, help="expected source dimension"
     )
+    parser.add_argument(
+        "--boot",
+        action="store_true",
+        help=(
+            "one-shot boot migration: sentinel-guarded, self-contained "
+            "readiness poll, resolves everything from the env; safe to run on "
+            "every container start (used by [program:mem0-migrate])"
+        ),
+    )
     args = parser.parse_args(argv)
+
+    # Boot mode is env-driven and idempotent; it ignores the explicit
+    # source/server/collection/dims flags (those are for manual invocations).
+    if args.boot:
+        return run_boot_migration()
 
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     try:
