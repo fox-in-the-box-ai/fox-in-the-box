@@ -1,0 +1,90 @@
+name: Lockfile consistency
+
+# Hard gate (#806). A PR that changes a manifest without regenerating its
+# lockfile — or the reverse — desyncs the tree so that `pnpm install
+# --frozen-lockfile` / `npm ci` break on a LATER, unrelated PR. That exact
+# class caused #815/#824/#843/#845: grouped dependabot bumps (or squash
+# merges) landed a package.json hunk without its lockfile hunk and main went
+# red only on the next contributor's PR.
+#
+# Two lockfiles must stay in sync with their manifests:
+#   1. pnpm-lock.yaml  ↔  every workspace package.json (root, packages/electron,
+#      qa/playwright). `pnpm install --frozen-lockfile` errors
+#      (ERR_PNPM_OUTDATED_LOCKFILE) the moment they disagree.
+#   2. packages/electron/package-lock.json  ↔  packages/electron/package.json.
+#      This SECOND (npm) lockfile is read only by build-electron.yml's Windows
+#      leg on push/release — no PR job exercises it, so a desync (#788: a
+#      grouped bump changed the manifest but regenerated only pnpm-lock.yaml)
+#      merges unnoticed and breaks `npm ci` on main.
+#
+# Runs UNCONDITIONALLY on every PR to main — no `paths:` filter. A path-filtered
+# required status check never reports on a PR that misses the filter, which
+# hangs that PR forever; the repo's other required gates avoid this the same way
+# (playwright.yml's unconditional gate, option-b-diff-guard's always-resolving
+# contexts). Add the `Lockfile consistency / lockfiles` context to branch
+# protection to make this a hard gate.
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lockfiles:
+    # No `name:` on purpose — the required status-check context must be the job
+    # id `lockfiles`, listed verbatim in branch protection (same convention as
+    # option-b-diff-guard's `guard` / `freeze`).
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+
+      - name: Verify pnpm-lock.yaml matches every workspace manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          # --frozen-lockfile validates the lockfile against every workspace
+          # package.json before any download; --ignore-scripts skips lifecycle
+          # scripts since this job only checks lock/manifest consistency.
+          pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Pin npm for a deterministic lockfile recompute
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The recompute below diffs its output against the committed lock, so
+          # the npm that generates it must be fixed. setup-node ships whatever
+          # npm is bundled with the Node 22 runner image; a future image bump
+          # could rewrite an otherwise-consistent package-lock.json (format /
+          # lockfileVersion) and trip this required gate on EVERY PR. Pin the
+          # version that reproduces the committed lock (lockfileVersion 3).
+          npm install -g npm@10.9.8
+          npm --version
+
+      - name: Verify packages/electron/package-lock.json matches its manifest
+        working-directory: packages/electron
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Recompute the npm lockfile from package.json without a full install;
+          # any drift from the committed lock fails the gate (the cheap
+          # --package-lock-only class the issue calls for). npm is pinned above
+          # so the diff reflects real manifest/lock drift, not npm-version churn.
+          npm install --package-lock-only --ignore-scripts
+          if ! git diff --exit-code -- package-lock.json; then
+            echo "::error::packages/electron/package-lock.json is out of sync with packages/electron/package.json. Regenerate it with: (cd packages/electron && npm install --package-lock-only) and commit the result."
+            exit 1
+          fi
+          echo "packages/electron/package-lock.json matches package.json"
