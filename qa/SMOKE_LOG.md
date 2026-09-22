@@ -25,6 +25,32 @@ Skipped sections are OK as long as they're explicitly noted with reason. Empty e
 
 ---
 
+## v0.7.62 — 2026-09-22 (DV — Electron 44.4.3 + js-yaml HIGH remediation)
+
+HARD GATE per docs/RELEASE_WORKFLOW.md. Desktop dependency/security release: bundled Electron 44.1.1 -> 44.4.3 (within-major) and the js-yaml HIGH advisory (dependabot alert #147) cleared in the desktop npm lockfile. **No container, runtime, memory-wire, or provider changes** — the Hermes image content is unchanged by this release, so live provider/memory rows carry forward from v0.7.60/v0.7.61 and manual real-key rows are N/A here. Verification is CI-backed on the release PR (#848) HEAD and the release run.
+
+- [x] 1. Electron packaged smoke — macOS (hosted, launch) green on 44.4.3 (electron-smoke.yml on #848 HEAD); the earlier red was a dropped pnpm-lock hunk, not a 44.4.3 regression
+- [x] 2. Electron packaged smoke — Windows (hosted) green on 44.4.3 (electron-smoke.yml on #848 HEAD)
+- [x] 3. Lockfile consistency: `pnpm install --frozen-lockfile` green — `pnpm-lock.yaml` and `packages/electron/package-lock.json` regenerated atomically for 44.4.3 (the #815/#824 dropped-hunk class, verified clean)
+- [x] 4. Unit suite: `packages/electron` jest — 10 suites / 144 tests green
+- [x] 5. js-yaml HIGH remediation: npm lockfile js-yaml 4.3.1 -> 5.4.2 (patched); alert #147 cleared. Split-brain vs the root pnpm override (4.3.2) is patched on both sides, tracked in #850
+- [x] 6. Signed desktop builds: Build Electron macOS (macos-15 pinned, Developer ID both arches) + Windows (Azure-signed) green in the release run
+- [x] 7. Container unaffected: build + promote (`:0.7.62` + `:stable`, multi-arch) + Smoke (amd64+arm64) + image self-test green in the release run — this desktop bump does not change image content
+- [x] 8. Deb legs: Build .deb amd64+arm64 + `.deb smoke test (amd64)` + apt publish green in the release run
+- [ ] 9. Manual real-key provider/memory round trips ← N/A this release: no memory-wire or provider-path delta; live verification carried from v0.7.60. Smoke key retired (#746)
+
+Findings:
+
+- Release-process miss caught by the gate: the first v0.7.62 tag lacked this SMOKE_LOG entry, so the SMOKE_LOG hard gate correctly failed `Create GitHub Release` (container/apt/deb had already published). Fixed forward by adding this entry and re-pointing the tag — nothing shipped past the gate.
+
+Action items:
+
+- #850 (reconcile js-yaml onto a single major across pnpm/npm) — non-blocking follow-up.
+
+CI status: appended at closeout after the re-run (per §19.8 — no closeout claim before the release run is green).
+
+---
+
 ## v0.7.61 — 2026-09-06 (DV — release-pipeline + startup-resilience fixes)
 
 HARD GATE per docs/RELEASE_WORKFLOW.md. The dedicated OpenRouter smoke key was retired at the v0.7.60 closeout (#746); key-dependent rows are skipped with rationale per the row-6 precedent — v0.7.61 carries no change to the memory wiring, provider resolution, or gateway key paths, so the v0.7.60 live verification of those rows stands.
