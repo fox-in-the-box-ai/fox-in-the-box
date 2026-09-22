@@ -40,7 +40,13 @@ jobs:
           python-version: '3.11'
 
       - name: Install pytest + coverage + overlay deps
-        run: pip install pytest pytest-cov pyyaml pillow --quiet
+        # mem0ai==2.0.10 (matching the container pin) is required so the
+        # real-QdrantConfig contract tests in test_mem0_resolution.py
+        # (test_emitted_config_constructs_real_qdrantconfig +
+        # test_op_path_injected_client_config_constructs_real_qdrantconfig)
+        # actually run instead of importorskip-ing; it transitively installs
+        # qdrant-client (>=1.12.0, currently 1.19.x).
+        run: pip install pytest pytest-cov pyyaml pillow mem0ai==2.0.10 --quiet
 
       - name: Run validate-overlay
         run: bash packages/fox-overlay/scripts/validate-overlay.sh

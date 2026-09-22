@@ -8,10 +8,15 @@ Properties:
   * refuses to run as root (uid 0) — must run as the service user so the
     seeded state.json is writable by the gateway;
   * resolves the memory provider via the plugin's ``_resolve`` pipeline —
-    NO embed-server (:8644) probe.  Resolution MAY perform one bounded
-    models.dev catalog fetch (15 s library timeout, at most once per memo
-    window, and only when no disk cache exists) — the flagship providers
-    never need it (well-known table, §a.0);
+    NO embed-server (:8644) probe, and NO Qdrant server-mode probe.  Both
+    are started by supervisord *after* this preflight execs, so probing
+    either here would always fail the boot-race and seed a false
+    ``state=error`` on every clean boot.  Their reachability is authoritative
+    only post-boot, via ``is_available()`` (gateway) and ``/readyz`` (webui),
+    which DO fail loud when the server is genuinely down.  Resolution MAY
+    perform one bounded models.dev catalog fetch (15 s library timeout, at
+    most once per memo window, and only when no disk cache exists) — the
+    flagship providers never need it (well-known table, §a.0);
   * prints exactly one ``memory: READY|OFF|ERROR — <reason>`` line;
   * atomically seeds state.json;
   * exits 0 on every resolution outcome; a ``PermissionError`` writing
@@ -39,10 +44,6 @@ def main() -> int:
 
     from . import (
         MemoryUnavailable,
-        _load_runtime_config,
-        _qdrant_server_healthy,
-        _qdrant_server_mode,
-        _qdrant_unreachable_reason,
         _read_file_overrides,
         _resolve_embedder,
         _resolve_memoized,
@@ -58,16 +59,13 @@ def main() -> int:
             _write_state(status, exc.reason, strict=True)
             print(f"memory: {'ERROR' if status == 'error' else 'OFF'} — {exc.reason}")
             return 0
-        # Qdrant server mode (go-gate Q5): the shared server is a boot-time
-        # dependency (unlike the lazily-started embed-server, which preflight
-        # deliberately does not probe).  Fail loud on unreachable; exit 0 so
-        # boot never blocks (warn-never-fail, matching the entrypoint wrapper).
-        runtime_cfg = _load_runtime_config()
-        if _qdrant_server_mode(runtime_cfg) and not _qdrant_server_healthy(runtime_cfg):
-            reason = _qdrant_unreachable_reason(runtime_cfg)
-            _write_state("error", reason, strict=True)
-            print(f"memory: ERROR — {reason}")
-            return 0
+        # Qdrant server mode is intentionally NOT probed here: the co-located
+        # server is started by supervisord *after* this preflight execs, so a
+        # boot-time probe would always fail the boot-race and seed a false
+        # error on every clean server-mode boot.  Reachability is authoritative
+        # post-boot (is_available() + /readyz), which fail loud when the server
+        # is genuinely down.  Preflight seeds "ready" from resolution alone,
+        # exactly as it does for the lazily-started embed-server.
         _write_state(
             "ready",
             "",

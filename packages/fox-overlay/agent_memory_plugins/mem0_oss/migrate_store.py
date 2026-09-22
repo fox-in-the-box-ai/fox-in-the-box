@@ -28,9 +28,15 @@ invariants hold it together:
 
 This module ships the mechanism only.  It is NOT auto-invoked from
 preflight or plugin initialize — #803 wires it into the mode switch.  Run
-it explicitly:
+it explicitly inside the running container, where the overlay is installed
+as the ``plugins.memory`` package (``agent_memory_plugins/`` is COPYd to
+``<hermes-agent>/plugins/memory/`` at build/install time):
 
-    python3 -m agent_memory_plugins.mem0_oss.migrate_store
+    python3 -m plugins.memory.mem0_oss.migrate_store
+
+(with the hermes-agent root on ``PYTHONPATH`` — the same invocation shape
+as the boot preflight).  From a source checkout under
+``packages/fox-overlay/`` the package is instead ``agent_memory_plugins``.
 
 ``qdrant_client`` is imported lazily (only ``run_migration`` / the CLI need
 it), so the pure ``migrate_store`` core can be exercised against hand-rolled
@@ -351,7 +357,14 @@ def run_migration(
     source = QdrantClient(path=source_path)
     try:
         dest = QdrantClient(
-            url=server_url, api_key=api_key, timeout=int(_SERVER_TIMEOUT_S)
+            url=server_url,
+            api_key=api_key,
+            timeout=int(_SERVER_TIMEOUT_S),
+            # Suppress qdrant-client's client/server version-skew warning on an
+            # otherwise-successful migrate, matching the op-path client in
+            # __init__._build_qdrant_client (the server is pinned in lockstep
+            # with the client, so the check is noise here).
+            check_compatibility=False,
         )
         try:
             return migrate_store(
@@ -385,7 +398,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     """CLI job boundary.  Exit 0 on success, 1 on a migration failure, 2 on a
     usage error (argparse convention)."""
     parser = argparse.ArgumentParser(
-        prog="python -m agent_memory_plugins.mem0_oss.migrate_store",
+        prog="python -m plugins.memory.mem0_oss.migrate_store",
         description=(
             "Copy Fox memories from the embedded Qdrant store to the "
             "in-container Qdrant server (point-copy, never a re-embed)."

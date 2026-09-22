@@ -824,6 +824,69 @@ class TestQdrantConfigContract:
         cfg = self._build(qdrant_url="http://127.0.0.1:6333")
         assert cfg["embedding_model_dims"] == 768
 
+    @pytest.mark.parametrize(
+        "overrides",
+        [
+            pytest.param({"qdrant_url": "http://127.0.0.1:6333"}, id="keyless_url"),
+            pytest.param(
+                {"qdrant_host": "qdrant.internal", "qdrant_port": "6399"},
+                id="host_port",
+            ),
+            pytest.param(
+                {
+                    "qdrant_url": "https://qdrant.example.com",
+                    "qdrant_api_key": "secret",
+                },
+                id="url_api_key",
+            ),
+        ],
+    )
+    def test_op_path_injected_client_config_constructs_real_qdrantconfig(
+        self, overrides
+    ):
+        """Prove the PRODUCTION op-path config validates, not just the
+        pre-injection dict.
+
+        ``_get_memory`` builds ``_build_qdrant_cfg(...)`` and, in server mode,
+        injects ``config["client"] = _build_qdrant_client(...)`` before handing
+        it to mem0.  The real ``QdrantConfig`` validator still requires one of
+        ``host``+``port`` / ``url``+``api_key`` / ``path`` even when a client is
+        present, so the injected dict must keep a valid combo — this asserts the
+        exact merged shape the plugin hands to mem0, for every server variant.
+        """
+        qdrant_mod = pytest.importorskip("mem0.configs.vector_stores.qdrant")
+        QdrantConfig = qdrant_mod.QdrantConfig
+        from agent_memory_plugins.mem0_oss import (  # noqa: PLC0415
+            _build_qdrant_client,
+        )
+
+        runtime = _qdrant_runtime(**overrides)
+        cfg = self._build(**overrides)
+        # Mirror _get_memory's server-mode injection exactly.
+        cfg["client"] = _build_qdrant_client(runtime)
+        QdrantConfig(**cfg)  # production op-path shape must not raise
+
+
+class TestQdrantPortFailLoud:
+    """A non-numeric MEM0_OSS_QDRANT_PORT fails loud (§19.4 #3), never a
+    silent coerce to 6333 that would mask a typo."""
+
+    def test_garbage_port_raises_explicit_error(self):
+        from agent_memory_plugins.mem0_oss import _build_qdrant_cfg  # noqa: PLC0415
+
+        runtime = _qdrant_runtime(qdrant_host="127.0.0.1", qdrant_port="not-a-port")
+        with pytest.raises(MemoryUnavailable) as excinfo:
+            _build_qdrant_cfg(runtime, store_dims=768)
+        assert excinfo.value.severity == "error"
+        assert "MEM0_OSS_QDRANT_PORT" in excinfo.value.reason
+
+    def test_empty_port_falls_back_to_default(self):
+        from agent_memory_plugins.mem0_oss import _build_qdrant_cfg  # noqa: PLC0415
+
+        runtime = _qdrant_runtime(qdrant_host="127.0.0.1", qdrant_port="")
+        cfg = _build_qdrant_cfg(runtime, store_dims=768)
+        assert cfg["port"] == 6333
+
 
 class TestEmbeddedRegression:
     """Embedded default must not drift when server mode is unconfigured."""

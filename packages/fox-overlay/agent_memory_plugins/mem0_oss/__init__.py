@@ -1041,11 +1041,26 @@ _qdrant_health_cache: Dict[str, Any] = {"ts": 0.0, "ok": None}
 
 
 def _coerce_qdrant_port(raw: Any) -> int:
-    """Parse a configured Qdrant port, defaulting to 6333 on empty/garbage."""
-    try:
-        return int(raw)
-    except (TypeError, ValueError):
+    """Parse a configured Qdrant port.
+
+    Empty / unset falls back to the 6333 default.  A NON-EMPTY, non-numeric
+    value is a fail-loud config error (§19.4 #3) — silently coercing a typo'd
+    ``MEM0_OSS_QDRANT_PORT`` to 6333 would mask the misconfiguration and connect
+    memory to the wrong port.  Raises ``MemoryUnavailable`` (severity=error),
+    which the resolution/op paths surface into state.json like any other
+    explicit misconfiguration."""
+    if raw is None:
         return 6333
+    text = str(raw).strip()
+    if not text:
+        return 6333
+    try:
+        return int(text)
+    except ValueError:
+        raise MemoryUnavailable(
+            f"invalid MEM0_OSS_QDRANT_PORT value {raw!r} — must be an integer",
+            severity="error",
+        )
 
 
 def _qdrant_server_mode(runtime_cfg: dict) -> bool:
@@ -1516,9 +1531,19 @@ class Mem0OSSMemoryProvider(MemoryProvider):
 
         # Qdrant server mode (go-gate Q5): fail loud when the shared server is
         # unreachable.  Warn-never-fail like the embed probe — state carries the
-        # reason; boot does not block.
+        # reason; boot does not block.  A bad MEM0_OSS_QDRANT_PORT surfaces here
+        # as a MemoryUnavailable (severity=error) from target resolution; catch
+        # it so availability never raises on the boot path (§a.2).
         runtime_cfg = self._runtime_cfg or _load_runtime_config()
-        if _qdrant_server_mode(runtime_cfg) and not _qdrant_server_healthy(runtime_cfg):
+        try:
+            server_mode = _qdrant_server_mode(runtime_cfg)
+            server_healthy = (
+                _qdrant_server_healthy(runtime_cfg) if server_mode else True
+            )
+        except MemoryUnavailable as exc:
+            _write_state("error" if exc.severity == "error" else "off", exc.reason)
+            return False
+        if server_mode and not server_healthy:
             _write_state("error", _qdrant_unreachable_reason(runtime_cfg))
             return False
 
