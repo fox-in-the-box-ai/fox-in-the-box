@@ -1,3 +1,6 @@
-# Intentionally empty — hermes-agent customizations live as monkey-patches via
-# the hermes_agent.plugins entry-point (Phase 3), not as patch-series files.
+# hermes-agent customizations live as runtime monkey-patches via the
+# hermes_agent.plugins entry-point (Phase 3). The single static patch below is
+# the exception: the gateway startup path never invokes the plugin manager, so a
+# source-level shim in gateway/run_startup.py is required to fire register() at
+# gateway boot. Applied in order via `git apply` at image build time.
 001-gateway-bootstrap-shim.patch
