@@ -1,0 +1,110 @@
+name: Electron lockfile audit
+
+# Compensating control (#861). Collapsing the dependabot npm scopes (#856)
+# removed the per-directory scan of packages/electron/package-lock.json — the
+# npm lockfile that pins the transitive tree of the code-signed Windows .exe
+# (build-electron.yml installs it with `npm install`). The root pnpm scope does
+# not regenerate that npm lock, and lockfile-consistency.yml (#806) only checks
+# lock<->manifest sync, not advisories — so after #856 nothing else scans it for
+# known CVEs. This job scans that ONE lockfile against the OSV database and
+# fails on HIGH/CRITICAL (CVSS >= 7.0), matching the Trivy/CodeQL fail-on-high
+# posture. #850 keeps the js-yaml split intact, so it does not close this gap.
+#
+# NOTE: keep this OFF branch protection's required-check list while it carries a
+# paths filter. A path-filtered required check never reports on a PR that misses
+# the filter and hangs that PR forever (see lockfile-consistency.yml's rationale
+# for why the hard gates run unconditionally instead).
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'packages/electron/package-lock.json'
+      - 'packages/electron/package.json'
+  schedule:
+    # Weekly, so a newly disclosed CVE against the pinned tree surfaces even
+    # when no PR is touching the electron lockfile.
+    - cron: '0 6 * * 1'
+  workflow_dispatch: {}
+
+concurrency:
+  group: electron-lock-audit-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: Scan electron npm lockfile
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Run OSV-Scanner on packages/electron/package-lock.json
+        id: scan
+        uses: google/osv-scanner-action/osv-scanner-action@a345acffa64b0eaede81a3d9aae6141214d9c8fc # v2.6.0
+        continue-on-error: true
+        with:
+          # Scope to the single npm lockfile — cheap, and the only tree this
+          # gate is responsible for. JSON output is graded by the next step.
+          scan-args: |-
+            --output=osv-results.json
+            --format=json
+            --lockfile=packages/electron/package-lock.json
+
+      - name: Fail on a genuine scanner error
+        if: ${{ steps.scan.outcome == 'failure' }}
+        run: |
+          set -euo pipefail
+          # osv-scanner exits non-zero BOTH when it finds vulnerabilities (graded
+          # by the severity gate below) and when the scan itself fails. A failed
+          # scan writes no results, so an empty/missing file here means the
+          # scanner broke — fail loud rather than silently passing the PR.
+          if [ ! -s osv-results.json ]; then
+            echo "::error::OSV-Scanner failed without writing results — see the scan step log."
+            exit 1
+          fi
+
+      - name: Gate on HIGH/CRITICAL advisories
+        run: |
+          python3 - <<'PY'
+          import json, pathlib, sys
+
+          THRESHOLD = 7.0  # CVSS v3: HIGH starts at 7.0, CRITICAL at 9.0.
+          results = pathlib.Path("osv-results.json")
+          if not results.is_file() or results.stat().st_size == 0:
+              print("No results file — no known advisories in the electron lockfile.")
+              sys.exit(0)
+
+          data = json.loads(results.read_text() or "{}")
+          blocking, unscored = [], []
+          for result in data.get("results", []):
+              for pkg in result.get("packages", []):
+                  meta = pkg.get("package", {})
+                  name, ver = meta.get("name", "?"), meta.get("version", "?")
+                  for grp in pkg.get("groups", []):
+                      ids = ",".join(grp.get("ids", []))
+                      try:
+                          score = float(grp.get("max_severity", ""))
+                      except (TypeError, ValueError):
+                          unscored.append((name, ver, ids))
+                          continue
+                      if score >= THRESHOLD:
+                          blocking.append((name, ver, ids, score))
+
+          for name, ver, ids in unscored:
+              print(f"::warning::unscored advisory (no CVSS) in {name}@{ver}: {ids}")
+
+          if blocking:
+              print("HIGH/CRITICAL advisories in packages/electron/package-lock.json:")
+              for name, ver, ids, score in blocking:
+                  print(f"  {name}@{ver}  CVSS {score}  {ids}")
+              print(f"::error::{len(blocking)} HIGH/CRITICAL advisory group(s) found (CVSS >= {THRESHOLD}).")
+              sys.exit(1)
+
+          print("No HIGH/CRITICAL advisories (CVSS >= 7.0) in the electron lockfile.")
+          PY
