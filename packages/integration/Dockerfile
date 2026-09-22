@@ -17,12 +17,17 @@ FROM python:3.11-slim
 # unset (some non-buildkit pathway), the case statements default to x64
 # anyway, so this change cannot make non-buildkit builds worse.
 ARG TARGETARCH
-# Pin QDRANT_VERSION deliberately. The standalone server and the pip-installed
-# qdrant-client are intentionally independent: mem0 uses the client in embedded
-# *path* mode (no server connection on any default path), and nothing on a
-# default install path dials this server with a version-coupled client.
-# Do NOT use "latest" in production builds.
-ARG QDRANT_VERSION=v1.9.4
+# Pin QDRANT_VERSION deliberately. This server IS dialed by a version-coupled
+# client: the mem0_oss plugin's Qdrant server mode (MEM0_OSS_QDRANT_*) connects
+# over HTTP through qdrant-client (mem0ai 2.0.10 requires >=1.12.0; currently
+# resolves to 1.19.x), whose recall path calls
+# POST /collections/{c}/points/query (query_points, added server-side in
+# Qdrant 1.10). The old v1.9.4 pin 404'd on every recall/search against that
+# endpoint. Keep the server minor in lockstep with the resolved client minor
+# (1.19.x) so the query API and wire format match; bump both together. musl
+# static binaries for x86_64 and aarch64 are published for this tag (verified
+# on the release). Do NOT use "latest" in production builds.
+ARG QDRANT_VERSION=v1.19.1
 # Pin LLAMACPP_VERSION — daily build tags on ggml-org/llama.cpp ship pre-built
 # CPU binaries for both ubuntu-x64 and ubuntu-arm64. Avoid "latest"; pick a
 # tested tag and bump deliberately. (#9)
@@ -206,6 +211,6 @@ ENV FITB_DEV=${FITB_DEV}
 # and the entrypoint's export (e.g. docker exec sessions).
 ENV MEM0_TELEMETRY=False
 VOLUME ["/data"]
-EXPOSE 8787 6333
+EXPOSE 8787
 
 ENTRYPOINT ["/app/entrypoint.sh"]

@@ -17,6 +17,7 @@ import os
 import shutil
 import subprocess
 import urllib.error
+import urllib.parse
 import urllib.request
 
 logger = logging.getLogger(__name__)
@@ -107,6 +108,61 @@ def _embed_server_alive() -> bool:
         return False
 
 
+def _memory_qdrant_readyz_url() -> str | None:
+    """When the mem0_oss plugin is in Qdrant server mode (MEM0_OSS_QDRANT_URL
+    or _HOST set), return the ``/readyz`` URL of that server; else ``None``.
+
+    Read from env only — this module runs inside the webui process and must
+    not import the hermes-agent plugin package.  Mirrors the plugin's
+    ``_resolve_qdrant_target`` scheme/port rules so the readiness snapshot
+    reflects the same endpoint memory actually dials."""
+    url = os.environ.get("MEM0_OSS_QDRANT_URL", "").strip()
+    host_env = os.environ.get("MEM0_OSS_QDRANT_HOST", "").strip()
+    if not (url or host_env):
+        return None
+    api_key = os.environ.get("MEM0_OSS_QDRANT_API_KEY", "").strip()
+    port_env = os.environ.get("MEM0_OSS_QDRANT_PORT", "").strip()
+    try:
+        port_default = int(port_env) if port_env else 6333
+    except ValueError:
+        # A bad port is a plugin-side config error surfaced via state.json;
+        # here just fall back so the probe URL is still well-formed.
+        port_default = 6333
+    if url:
+        parsed = urllib.parse.urlparse(url)
+        # Intentional divergence from the plugin's _resolve_qdrant_target,
+        # which falls back to "" here: this side builds a dial-able probe URL,
+        # so a hostless URL falls back to 127.0.0.1 (the co-located server).
+        host = parsed.hostname or "127.0.0.1"
+        port = parsed.port or port_default
+        scheme = "https" if parsed.scheme == "https" else "http"
+    else:
+        host = host_env
+        port = port_default
+        scheme = "https" if api_key else "http"
+    return f"{scheme}://{host}:{port}/readyz"
+
+
+def _memory_qdrant_reachable() -> bool:
+    """Probe the server-mode Qdrant ``/readyz`` (2 s timeout).  Any HTTP
+    response means live (readiness-agnostic, mirroring the plugin's probe);
+    only connection refused / timeout / DNS failure is unreachable."""
+    url = _memory_qdrant_readyz_url()
+    if url is None:
+        return True  # not server mode — nothing to probe
+    req = urllib.request.Request(url, method="GET")
+    api_key = os.environ.get("MEM0_OSS_QDRANT_API_KEY", "").strip()
+    if api_key:
+        req.add_header("api-key", api_key)
+    try:
+        with urllib.request.urlopen(req, timeout=2):
+            return True
+    except urllib.error.HTTPError:
+        return True
+    except (urllib.error.URLError, OSError, ValueError):
+        return False
+
+
 def _check_memory() -> dict:
     """Memory component (design §a.2): read state.json; ``ok: false`` ONLY
     for severity=error states.  "off" is a visible-but-healthy state; a
@@ -132,6 +188,14 @@ def _check_memory() -> dict:
         embedder = str(state.get("embedder", "") or "").strip()
         if embedder.startswith("local:") and not _embed_server_alive():
             return {"ok": False, "detail": "embed-server :8644 unreachable"}
+        # Re-evaluate the Qdrant server reachability at request time (boot
+        # ordering: preflight seeds "ready" before supervisord starts qdrant,
+        # so state.json alone would contradict vector_store during the window
+        # before the server is up).  In server mode a genuinely-down qdrant
+        # fails loud here — consistent with vector_store — rather than reading
+        # ready while the store is unreachable.
+        if not _memory_qdrant_reachable():
+            return {"ok": False, "detail": "memory qdrant server unreachable"}
         llm = str(state.get("llm", "") or "").strip()
         detail = f"memory ready (llm={llm})" if llm else "memory ready"
         return {"ok": True, "detail": detail}

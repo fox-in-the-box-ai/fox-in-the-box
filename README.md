@@ -77,6 +77,17 @@ A practical tour of what's in the box. Most of this is wired up by the bundled [
 - Embeddings computed entirely on-device by a bundled local model (nomic-embed-text-v1.5 via llama.cpp) — no extra API key, works with any provider; facts are extracted via your configured chat provider
 - Memory state visible in **Settings** and on `/readyz` — active, off with a reason, or error. Fail-loud: memory is never a silent no-op.
 - Existing installs opt in with one line (`memory: provider: mem0_oss`) — see [docs/MEMORY.md](docs/MEMORY.md)
+- Optional **Qdrant server mode** for setups where more than one process shares memory (e.g. gateway + WebUI in one container), avoiding the embedded store's file-lock contention. Opt in with any of these env vars (or the same keys in `mem0_oss.json`):
+
+  | Variable                  | Purpose                                                               |
+  | ------------------------- | --------------------------------------------------------------------- |
+  | `MEM0_OSS_QDRANT_URL`     | Qdrant server URL (e.g. `http://127.0.0.1:6333`); enables server mode |
+  | `MEM0_OSS_QDRANT_HOST`    | Qdrant hostname (alternative to URL)                                  |
+  | `MEM0_OSS_QDRANT_PORT`    | Qdrant port for `MEM0_OSS_QDRANT_HOST` (default `6333`)               |
+  | `MEM0_OSS_QDRANT_API_KEY` | API key for an authenticated Qdrant server (optional)                 |
+
+  **Server mode is opt-in and does not migrate your existing memories** — switching starts with an empty store until the #803 default-flip ships migration. See [docs/MEMORY.md](docs/MEMORY.md#qdrant-server-mode-opt-in).
+
 - mem0's telemetry is disabled (`MEM0_TELEMETRY=False`)
 - Read, edit, and prune entries from the Memory panel
 - Per-profile personality (`SOUL.md`) — give your assistant a different voice in different profiles

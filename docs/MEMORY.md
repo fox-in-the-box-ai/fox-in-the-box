@@ -82,6 +82,34 @@ pool). Changes made only through a shell `export` self-heal within 10
 minutes or on restart. Custom providers use the `custom:<name>` credential
 convention, and the kimi/opencode/kilo pool ids are bridged automatically.
 
+## Qdrant server mode (opt-in)
+
+By default memory uses an **embedded** Qdrant that lives on disk under the
+instance data volume. That store keeps an exclusive file lock, so only one
+process can open it. When two processes need memory at once — most commonly
+the Hermes gateway and the WebUI running in the same container — the second
+one hits intermittent `Qdrant lock still held` failures.
+
+Server mode fixes this by pointing memory at a **shared Qdrant server** over
+HTTP instead of the embedded file store. Set one of the following (env var,
+or the same key in `$HERMES_HOME/mem0_oss.json`, which takes precedence):
+
+| Variable                  | Purpose                                                                    | Default   |
+| ------------------------- | -------------------------------------------------------------------------- | --------- |
+| `MEM0_OSS_QDRANT_URL`     | Full Qdrant server URL (e.g. `http://127.0.0.1:6333`). Enables server mode | _(unset)_ |
+| `MEM0_OSS_QDRANT_HOST`    | Qdrant hostname (alternative to URL)                                       | _(unset)_ |
+| `MEM0_OSS_QDRANT_PORT`    | Qdrant port, used with `MEM0_OSS_QDRANT_HOST`                              | `6333`    |
+| `MEM0_OSS_QDRANT_API_KEY` | API key for an authenticated Qdrant server (optional)                      | _(unset)_ |
+
+Set `MEM0_OSS_QDRANT_URL` **or** the `HOST`/`PORT` pair — not both. When none
+of these is set, memory stays on the embedded on-disk store (unchanged).
+
+> **Server mode is opt-in, and switching starts you with an empty store.**
+> Existing embedded memories do **not** auto-migrate to a Qdrant server —
+> after you enable server mode, memory begins fresh in the server's
+> collection. Automatic migration ships with the default-flip in #803; until
+> then, treat the switch as a clean start.
+
 ## models.dev catalog troubleshooting
 
 The flagship providers (OpenRouter, Anthropic, direct OpenAI, openai-mode

@@ -11,10 +11,15 @@ network surfaces are stubbed:
   * ``agent.auxiliary_client``— deterministic config.yaml readers
   * ``mem0`` / ``openai``    — behavioral fakes for the §1.3 truth table
 
-Where forks/hermes-agent is not importable (e.g. the validate-overlay CI
-context, which has neither the fork on PYTHONPATH nor httpx installed) the
-whole module skips; the ``_WELL_KNOWN``/``_POOL_ID_MAP`` sync assertions run
-in-image (image-selftest phase A), not here.
+In validate-overlay CI the fork IS importable: the workflow checks out
+submodules recursively, and the ``sys.path.insert`` below makes
+``hermes_cli.providers`` importable with only pyyaml present — so this module
+no longer skips there.  The QdrantConfig acceptance tests
+(``importorskip("mem0.configs.vector_stores.qdrant")``) additionally require
+``mem0ai``, which the CI job installs (``mem0ai==2.0.10``); leave that install
+in place — drop it and the #780 acceptance gate silently reverts to skipped.
+The ``_WELL_KNOWN``/``_POOL_ID_MAP`` sync assertions still run in-image
+(image-selftest phase A), not here.
 """
 
 from __future__ import annotations
@@ -718,3 +723,223 @@ class TestNegativeInvariants:
         # auth.py's own resolve_provider (registry-space) — the plugin must
         # only use providers.resolve_provider_full.
         assert "from hermes_cli.auth import resolve_provider" not in source
+
+
+# ── Qdrant server-mode config (frozen contract — #780 blocker / #803) ──
+#
+# The vector_store config dict emitted by ``_build_qdrant_cfg`` must be a
+# shape the REAL ``mem0.configs.vector_stores.qdrant.QdrantConfig`` accepts.
+# That model's validator requires exactly one of: ``path`` (embedded),
+# ``host``+``port`` (server), or ``url``+``api_key`` (authenticated server).
+# A keyless ``url`` therefore RAISES — so server mode with no API key must
+# normalize the URL down to ``host``+``port`` and never emit a bare ``url``.
+# The contributor's original dict-shape tests asserted key presence but
+# never fed the dict to the real model, so that keyless-url shape slipped
+# through.  This block is the frozen contract the plugin SWE builds against.
+
+
+def _qdrant_runtime(**overrides):
+    """A runtime_cfg dict with the frozen MEM0_OSS_QDRANT_* keys defaulted."""
+    runtime = {
+        "collection": "hermes",
+        "vector_store_path": "/data/mem0_oss/qdrant",
+        "qdrant_url": "",
+        "qdrant_host": "",
+        "qdrant_port": "6333",
+        "qdrant_api_key": "",
+    }
+    runtime.update(overrides)
+    return runtime
+
+
+class TestQdrantConfigContract:
+    """``_build_qdrant_cfg`` emits a shape the real QdrantConfig accepts."""
+
+    def _build(self, **overrides):
+        from agent_memory_plugins.mem0_oss import _build_qdrant_cfg  # noqa: PLC0415
+
+        return _build_qdrant_cfg(_qdrant_runtime(**overrides), store_dims=768)
+
+    def test_embedded_shape_when_no_server_configured(self):
+        cfg = self._build()
+        assert cfg["path"] == "/data/mem0_oss/qdrant"
+        assert cfg["on_disk"] is True
+        for server_key in ("url", "host", "port", "api_key", "https"):
+            assert server_key not in cfg
+
+    def test_keyless_url_normalizes_to_host_port(self):
+        """A URL with no API key becomes host+port — never a bare ``url``,
+        which the real QdrantConfig validator rejects."""
+        cfg = self._build(qdrant_url="http://127.0.0.1:6333")
+        assert cfg["host"] == "127.0.0.1"
+        assert cfg["port"] == 6333
+        assert "url" not in cfg
+        assert "path" not in cfg
+
+    def test_host_port_shape(self):
+        cfg = self._build(qdrant_host="qdrant.internal", qdrant_port="6399")
+        assert cfg["host"] == "qdrant.internal"
+        assert cfg["port"] == 6399
+        assert "url" not in cfg
+        assert "path" not in cfg
+
+    def test_url_with_api_key_honors_https(self):
+        cfg = self._build(
+            qdrant_url="https://qdrant.example.com", qdrant_api_key="secret"
+        )
+        assert cfg["url"] == "https://qdrant.example.com"
+        assert cfg["api_key"] == "secret"
+        assert cfg["https"] is True
+        assert "path" not in cfg
+
+    def test_url_with_api_key_http_is_not_https(self):
+        cfg = self._build(qdrant_url="http://127.0.0.1:6333", qdrant_api_key="secret")
+        assert cfg["https"] is False
+
+    @pytest.mark.parametrize(
+        "overrides",
+        [
+            pytest.param({}, id="embedded"),
+            pytest.param({"qdrant_url": "http://127.0.0.1:6333"}, id="keyless_url"),
+            pytest.param(
+                {"qdrant_host": "qdrant.internal", "qdrant_port": "6399"},
+                id="host_port",
+            ),
+            pytest.param(
+                {
+                    "qdrant_url": "https://qdrant.example.com",
+                    "qdrant_api_key": "secret",
+                },
+                id="url_api_key",
+            ),
+        ],
+    )
+    def test_emitted_config_constructs_real_qdrantconfig(self, overrides):
+        """Acceptance proof for the #780 blocker: every emitted dict must
+        construct the REAL QdrantConfig without raising.  The ``keyless_url``
+        case fails against today's ``_build_qdrant_cfg`` (bare url → validator
+        raises) and passes once the plugin normalizes it to host+port."""
+        QdrantConfig = pytest.importorskip(
+            "mem0.configs.vector_stores.qdrant"
+        ).QdrantConfig
+        cfg = self._build(**overrides)
+        QdrantConfig(**cfg)  # must not raise
+
+    def test_dims_forwarded(self):
+        cfg = self._build(qdrant_url="http://127.0.0.1:6333")
+        assert cfg["embedding_model_dims"] == 768
+
+    @pytest.mark.parametrize(
+        "overrides",
+        [
+            pytest.param({"qdrant_url": "http://127.0.0.1:6333"}, id="keyless_url"),
+            pytest.param(
+                {"qdrant_host": "qdrant.internal", "qdrant_port": "6399"},
+                id="host_port",
+            ),
+            pytest.param(
+                {
+                    "qdrant_url": "https://qdrant.example.com",
+                    "qdrant_api_key": "secret",
+                },
+                id="url_api_key",
+            ),
+        ],
+    )
+    def test_op_path_injected_client_config_constructs_real_qdrantconfig(
+        self, overrides
+    ):
+        """Prove the PRODUCTION op-path config validates, not just the
+        pre-injection dict.
+
+        ``_get_memory`` builds ``_build_qdrant_cfg(...)`` and, in server mode,
+        injects ``config["client"] = _build_qdrant_client(...)`` before handing
+        it to mem0.  The real ``QdrantConfig`` validator still requires one of
+        ``host``+``port`` / ``url``+``api_key`` / ``path`` even when a client is
+        present, so the injected dict must keep a valid combo — this asserts the
+        exact merged shape the plugin hands to mem0, for every server variant.
+        """
+        qdrant_mod = pytest.importorskip("mem0.configs.vector_stores.qdrant")
+        QdrantConfig = qdrant_mod.QdrantConfig
+        from agent_memory_plugins.mem0_oss import (  # noqa: PLC0415
+            _build_qdrant_client,
+        )
+
+        runtime = _qdrant_runtime(**overrides)
+        cfg = self._build(**overrides)
+        # Mirror _get_memory's server-mode injection exactly.
+        cfg["client"] = _build_qdrant_client(runtime)
+        QdrantConfig(**cfg)  # production op-path shape must not raise
+
+
+class TestQdrantPortFailLoud:
+    """A non-numeric MEM0_OSS_QDRANT_PORT fails loud (§19.4 #3), never a
+    silent coerce to 6333 that would mask a typo."""
+
+    def test_garbage_port_raises_explicit_error(self):
+        from agent_memory_plugins.mem0_oss import _build_qdrant_cfg  # noqa: PLC0415
+
+        runtime = _qdrant_runtime(qdrant_host="127.0.0.1", qdrant_port="not-a-port")
+        with pytest.raises(MemoryUnavailable) as excinfo:
+            _build_qdrant_cfg(runtime, store_dims=768)
+        assert excinfo.value.severity == "error"
+        assert "MEM0_OSS_QDRANT_PORT" in excinfo.value.reason
+
+    def test_empty_port_falls_back_to_default(self):
+        from agent_memory_plugins.mem0_oss import _build_qdrant_cfg  # noqa: PLC0415
+
+        runtime = _qdrant_runtime(qdrant_host="127.0.0.1", qdrant_port="")
+        cfg = _build_qdrant_cfg(runtime, store_dims=768)
+        assert cfg["port"] == 6333
+
+
+class TestEmbeddedRegression:
+    """Embedded default must not drift when server mode is unconfigured."""
+
+    def test_embedded_config_identical_to_pre_server_default(self):
+        """With no MEM0_OSS_QDRANT_* set, the emitted config equals the
+        embedded default shipped before server mode — byte-for-byte, no
+        stray server keys."""
+        from agent_memory_plugins.mem0_oss import _build_qdrant_cfg  # noqa: PLC0415
+
+        cfg = _build_qdrant_cfg(_qdrant_runtime(), store_dims=768)
+        assert cfg == {
+            "collection_name": "hermes",
+            "path": "/data/mem0_oss/qdrant",
+            "embedding_model_dims": 768,
+            "on_disk": True,
+        }
+
+
+class TestQdrantConfigPrecedence:
+    """Defaults < env < $HERMES_HOME/mem0_oss.json for the server keys."""
+
+    def test_defaults_when_unset(self, env):
+        from agent_memory_plugins.mem0_oss import _load_runtime_config  # noqa: PLC0415
+
+        cfg = _load_runtime_config()
+        assert cfg["qdrant_url"] == ""
+        assert cfg["qdrant_host"] == ""
+        assert cfg["qdrant_port"] == "6333"
+        assert cfg["qdrant_api_key"] == ""
+
+    def test_env_overrides_default(self, env, monkeypatch):
+        from agent_memory_plugins.mem0_oss import _load_runtime_config  # noqa: PLC0415
+
+        monkeypatch.setenv("MEM0_OSS_QDRANT_URL", "http://qdrant.local:6333")
+        monkeypatch.setenv("MEM0_OSS_QDRANT_API_KEY", "envkey")
+        cfg = _load_runtime_config()
+        assert cfg["qdrant_url"] == "http://qdrant.local:6333"
+        assert cfg["qdrant_api_key"] == "envkey"
+
+    def test_file_overrides_env(self, env, monkeypatch):
+        """mem0_oss.json wins over the env var (precedence: defaults < env
+        < file, per the module docstring)."""
+        from agent_memory_plugins.mem0_oss import _load_runtime_config  # noqa: PLC0415
+
+        monkeypatch.setenv("MEM0_OSS_QDRANT_URL", "http://from-env:6333")
+        (env.home / "mem0_oss.json").write_text(
+            json.dumps({"qdrant_url": "http://from-file:6333"}), encoding="utf-8"
+        )
+        cfg = _load_runtime_config()
+        assert cfg["qdrant_url"] == "http://from-file:6333"

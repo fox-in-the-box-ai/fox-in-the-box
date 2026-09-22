@@ -42,6 +42,16 @@ Overrides (precedence: computed defaults < env < $HERMES_HOME/mem0_oss.json):
   MEM0_OSS_COLLECTION          — Qdrant collection name (default: hermes)
   MEM0_OSS_USER_ID             — memory namespace (default: hermes-user)
   MEM0_OSS_TOP_K               — max results per search (default: 10)
+  MEM0_OSS_QDRANT_URL          — Qdrant server URL (e.g. http://127.0.0.1:6333).
+                                 When set, mem0 connects to a SHARED Qdrant server
+                                 over HTTP instead of the embedded on-disk store.
+                                 Required when the Hermes gateway and WebUI run in
+                                 the same container — both load this provider and
+                                 fight over the embedded store's exclusive file lock,
+                                 causing intermittent "Qdrant lock still held" failures.
+  MEM0_OSS_QDRANT_HOST         — Qdrant server hostname (alternative to URL).
+  MEM0_OSS_QDRANT_PORT         — Qdrant server port (default: 6333 when HOST is set).
+  MEM0_OSS_QDRANT_API_KEY      — optional Qdrant API key for server auth.
 """
 
 from __future__ import annotations
@@ -54,6 +64,7 @@ import time
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+from urllib.parse import urlparse
 
 # Telemetry kill layer 1 (design §c): must run before any ``import mem0``
 # anywhere in this process.  All mem0 imports in this package are lazy, so
@@ -88,6 +99,17 @@ _LOCAL_EMBED_API_KEY = "fox-local"
 # healthy (sleep-agnostic), refused/timeout is an error; 15 s TTL cache.
 _EMBED_HEALTH_TIMEOUT_S = 2.0
 _EMBED_HEALTH_TTL_S = 15.0
+
+# Qdrant server-mode reachability probe (go-gate Q5): mirrors the embed-server
+# probe above — 2 s timeout, ANY HTTP response is a live server, only
+# refused/timeout/DNS is unreachable; 15 s per-process TTL cache.
+_QDRANT_HEALTH_TIMEOUT_S = 2.0
+_QDRANT_HEALTH_TTL_S = 15.0
+
+# Bounded op-path timeout for the server-mode Qdrant client (go-gate Q5) so a
+# down server fails fast into the breaker path instead of hanging on the
+# qdrant-client/httpx default. Integer seconds (qdrant-client rounds up).
+_QDRANT_OP_TIMEOUT_S = 5
 
 # Resolution memo negative-cache window (design §a.0).
 _NEGATIVE_MEMO_TTL_S = 600.0
@@ -1012,6 +1034,133 @@ def _embed_server_healthy() -> bool:
 
 
 # ---------------------------------------------------------------------------
+# Qdrant server-mode helpers (go-gate Q1/Q2/Q5)
+# ---------------------------------------------------------------------------
+
+_qdrant_health_cache: Dict[str, Any] = {"ts": 0.0, "ok": None}
+
+
+def _coerce_qdrant_port(raw: Any) -> int:
+    """Parse a configured Qdrant port.
+
+    Empty / unset falls back to the 6333 default.  A NON-EMPTY, non-numeric
+    value is a fail-loud config error (§19.4 #3) — silently coercing a typo'd
+    ``MEM0_OSS_QDRANT_PORT`` to 6333 would mask the misconfiguration and connect
+    memory to the wrong port.  Raises ``MemoryUnavailable`` (severity=error),
+    which the resolution/op paths surface into state.json like any other
+    explicit misconfiguration."""
+    if raw is None:
+        return 6333
+    text = str(raw).strip()
+    if not text:
+        return 6333
+    try:
+        return int(text)
+    except ValueError:
+        raise MemoryUnavailable(
+            f"invalid MEM0_OSS_QDRANT_PORT value {raw!r} — must be an integer",
+            severity="error",
+        )
+
+
+def _qdrant_server_mode(runtime_cfg: dict) -> bool:
+    """True when a Qdrant server endpoint (URL or host) is configured — i.e.
+    the plugin talks HTTP to a shared server instead of the embedded store."""
+    return bool(
+        (runtime_cfg.get("qdrant_url") or "").strip()
+        or (runtime_cfg.get("qdrant_host") or "").strip()
+    )
+
+
+def _resolve_qdrant_target(runtime_cfg: dict) -> Tuple[str, int, bool]:
+    """Resolve the server endpoint to ``(host, port, https)`` — the single
+    source of truth shared by the config builder, the op-path client, and the
+    reachability probe.
+
+    A configured URL's explicit scheme wins; in bare host mode HTTPS follows
+    qdrant-client's default (on whenever an api_key is present)."""
+    qdrant_url = (runtime_cfg.get("qdrant_url") or "").strip()
+    if qdrant_url:
+        parsed = urlparse(qdrant_url)
+        host = parsed.hostname or ""
+        port = parsed.port or _coerce_qdrant_port(runtime_cfg.get("qdrant_port"))
+        return host, port, parsed.scheme == "https"
+    host = (runtime_cfg.get("qdrant_host") or "").strip()
+    port = _coerce_qdrant_port(runtime_cfg.get("qdrant_port"))
+    https = bool((runtime_cfg.get("qdrant_api_key") or "").strip())
+    return host, port, https
+
+
+def _qdrant_unreachable_reason(runtime_cfg: dict) -> str:
+    """Fail-loud reason string shared by is_available() and preflight (Q5)."""
+    host, port, _ = _resolve_qdrant_target(runtime_cfg)
+    return (
+        f"Qdrant server at {host}:{port} unreachable (connection "
+        "refused/timeout) — check the Qdrant container/service and its port"
+    )
+
+
+def _qdrant_server_healthy(runtime_cfg: dict) -> bool:
+    """GET ``<scheme>://<host>:<port>/readyz``, 2 s timeout.  ANY HTTP response
+    (including 5xx while the server warms up) means the server is live; only
+    connection-refused / timeout / DNS failure is unreachable.  15 s TTL cache.
+    Mirrors _embed_server_healthy (design §1.4)."""
+    now = time.monotonic()
+    with _memo_lock:
+        if (
+            _qdrant_health_cache["ok"] is not None
+            and (now - _qdrant_health_cache["ts"]) < _QDRANT_HEALTH_TTL_S
+        ):
+            return _qdrant_health_cache["ok"]
+
+    import urllib.error
+    import urllib.request
+
+    host, port, https = _resolve_qdrant_target(runtime_cfg)
+    scheme = "https" if https else "http"
+    req = urllib.request.Request(f"{scheme}://{host}:{port}/readyz", method="GET")
+    api_key = (runtime_cfg.get("qdrant_api_key") or "").strip()
+    if api_key:
+        req.add_header("api-key", api_key)
+    try:
+        with urllib.request.urlopen(req, timeout=_QDRANT_HEALTH_TIMEOUT_S):
+            ok = True
+    except urllib.error.HTTPError:
+        ok = True  # an HTTP status IS a live server (readiness-agnostic)
+    except Exception:
+        ok = False  # refused / timeout / DNS — unreachable
+
+    with _memo_lock:
+        _qdrant_health_cache.update({"ts": now, "ok": ok})
+    return ok
+
+
+def _build_qdrant_client(runtime_cfg: dict) -> Any:
+    """Construct a server-mode QdrantClient with a bounded op-path timeout so a
+    down server fails fast into the breaker path (design §a.2) instead of
+    hanging.  mem0ai==2.0.10 does not forward a timeout to its own client, so
+    we build and inject the client via QdrantConfig.client (go-gate Q5)."""
+    from qdrant_client import QdrantClient
+
+    kwargs: Dict[str, Any] = {
+        "timeout": _QDRANT_OP_TIMEOUT_S,
+        "check_compatibility": False,
+    }
+    api_key = (runtime_cfg.get("qdrant_api_key") or "").strip()
+    if api_key:
+        kwargs["api_key"] = api_key
+    qdrant_url = (runtime_cfg.get("qdrant_url") or "").strip()
+    if qdrant_url:
+        kwargs["url"] = qdrant_url  # preserve the full configured URL
+    else:
+        host, port, https = _resolve_qdrant_target(runtime_cfg)
+        kwargs["host"] = host
+        kwargs["port"] = port
+        kwargs["https"] = https
+    return QdrantClient(**kwargs)
+
+
+# ---------------------------------------------------------------------------
 # state.json (design §a.2) — atomic, tolerant readers
 # ---------------------------------------------------------------------------
 
@@ -1091,6 +1240,13 @@ def _load_runtime_config() -> dict:
         "collection": os.environ.get("MEM0_OSS_COLLECTION", "hermes"),
         "user_id": os.environ.get("MEM0_OSS_USER_ID", "hermes-user"),
         "top_k": int(os.environ.get("MEM0_OSS_TOP_K", "10")),
+        # Qdrant server mode — when a server URL or host is set, mem0 connects
+        # to the shared server (HTTP, no file lock) instead of the embedded
+        # store.  Both gateway and WebUI can safely share it concurrently.
+        "qdrant_url": os.environ.get("MEM0_OSS_QDRANT_URL", "").strip(),
+        "qdrant_host": os.environ.get("MEM0_OSS_QDRANT_HOST", "").strip(),
+        "qdrant_port": os.environ.get("MEM0_OSS_QDRANT_PORT", "6333").strip(),
+        "qdrant_api_key": os.environ.get("MEM0_OSS_QDRANT_API_KEY", "").strip(),
     }
     for key in (
         "vector_store_path",
@@ -1098,6 +1254,10 @@ def _load_runtime_config() -> dict:
         "collection",
         "user_id",
         "top_k",
+        "qdrant_url",
+        "qdrant_host",
+        "qdrant_port",
+        "qdrant_api_key",
     ):
         if key in file_cfg:
             config[key] = file_cfg[key]
@@ -1123,6 +1283,66 @@ def _build_llm_cfg(resolved: ResolvedConfig) -> dict:
     return cfg
 
 
+def _build_qdrant_cfg(runtime_cfg: dict, store_dims: int) -> dict:
+    """Build the Qdrant vector-store config dict for mem0ai (go-gate Q1/Q2).
+
+    When a server URL or host is configured, connects to the shared Qdrant
+    server over HTTP (no exclusive file lock) so gateway and WebUI can both
+    use memory concurrently.  Falls back to the embedded on-disk store when
+    no server endpoint is configured (backward compatible).
+
+    Every returned dict must construct a valid mem0ai ``QdrantConfig``.  That
+    validator rejects a *keyless* ``url`` (its accepted keyless form is
+    ``host`` + ``port``), so a keyless endpoint is normalized to host+port
+    here; ``url`` + ``api_key`` is only emitted when a key is present (Q1).
+    HTTPS follows qdrant-client's key-present default rather than a hard-coded
+    ``False``; a deliberate plaintext ``http://`` + key combo is honored but
+    logged as a WARN (Q2).
+    """
+    qdrant_url = (runtime_cfg.get("qdrant_url") or "").strip()
+    qdrant_host = (runtime_cfg.get("qdrant_host") or "").strip()
+    qdrant_api_key = (runtime_cfg.get("qdrant_api_key") or "").strip()
+    base = {
+        "collection_name": runtime_cfg["collection"],
+        "embedding_model_dims": store_dims,
+    }
+
+    if not (qdrant_url or qdrant_host):
+        # Embedded on-disk store — byte-identical to the pre-server default.
+        base["path"] = runtime_cfg["vector_store_path"]
+        base["on_disk"] = True
+        return base
+
+    host, port, https = _resolve_qdrant_target(runtime_cfg)
+
+    if qdrant_api_key:
+        base["api_key"] = qdrant_api_key
+        if qdrant_url:
+            # url + api_key passthrough (a QdrantConfig-accepted keyed form).
+            base["url"] = qdrant_url
+            base["https"] = https
+            if not https:
+                logger.warning(
+                    "mem0_oss: Qdrant api_key is being sent over plaintext "
+                    "http:// to %s:%d — credentials are unencrypted in transit; "
+                    "use https:// unless the server is loopback-local",
+                    host,
+                    port,
+                )
+        else:
+            # host + port + api_key (the host/port branch, key attached).
+            base["host"] = host
+            base["port"] = port
+            base["https"] = https
+    else:
+        # Keyless: QdrantConfig rejects a bare url, so emit host+port instead.
+        base["host"] = host
+        base["port"] = port
+        base["https"] = https
+
+    return base
+
+
 def _build_mem0_config(
     resolved: ResolvedConfig, embedder: dict, runtime_cfg: dict
 ) -> dict:
@@ -1130,12 +1350,7 @@ def _build_mem0_config(
     return {
         "vector_store": {
             "provider": "qdrant",
-            "config": {
-                "collection_name": runtime_cfg["collection"],
-                "path": runtime_cfg["vector_store_path"],
-                "embedding_model_dims": embedder["store_dims"],
-                "on_disk": True,
-            },
+            "config": _build_qdrant_cfg(runtime_cfg, embedder["store_dims"]),
         },
         "llm": {
             "provider": resolved.mem0_llm_provider,
@@ -1314,6 +1529,24 @@ class Mem0OSSMemoryProvider(MemoryProvider):
             )
             return False
 
+        # Qdrant server mode (go-gate Q5): fail loud when the shared server is
+        # unreachable.  Warn-never-fail like the embed probe — state carries the
+        # reason; boot does not block.  A bad MEM0_OSS_QDRANT_PORT surfaces here
+        # as a MemoryUnavailable (severity=error) from target resolution; catch
+        # it so availability never raises on the boot path (§a.2).
+        runtime_cfg = self._runtime_cfg or _load_runtime_config()
+        try:
+            server_mode = _qdrant_server_mode(runtime_cfg)
+            server_healthy = (
+                _qdrant_server_healthy(runtime_cfg) if server_mode else True
+            )
+        except MemoryUnavailable as exc:
+            _write_state("error" if exc.severity == "error" else "off", exc.reason)
+            return False
+        if server_mode and not server_healthy:
+            _write_state("error", _qdrant_unreachable_reason(runtime_cfg))
+            return False
+
         # Op-failure latch (§a.2): a sub-threshold op failure stays visible
         # until a successful memory OP or a FRESH resolution clears it — a
         # memo-hit resolution must not downgrade error→ready.  Memory itself
@@ -1343,7 +1576,13 @@ class Mem0OSSMemoryProvider(MemoryProvider):
             self._fail_count = 0
             self._last_fail_ts = 0.0
         self._prefetch_result = ""
-        Path(self._runtime_cfg["vector_store_path"]).mkdir(parents=True, exist_ok=True)
+        # The embedded on-disk store needs its directory; server mode must not
+        # create a stray local Qdrant dir.  The history DB (sqlite) is used in
+        # both modes, so its parent is always ensured.
+        if not _qdrant_server_mode(self._runtime_cfg):
+            Path(self._runtime_cfg["vector_store_path"]).mkdir(
+                parents=True, exist_ok=True
+            )
         Path(self._runtime_cfg["history_db_path"]).parent.mkdir(
             parents=True, exist_ok=True
         )
@@ -1376,6 +1615,15 @@ class Mem0OSSMemoryProvider(MemoryProvider):
                 from mem0.configs.base import MemoryConfig
 
                 mem0_dict = _build_mem0_config(resolved, embedder, self._runtime_cfg)
+                if _qdrant_server_mode(self._runtime_cfg):
+                    # Inject a timeout-bounded client (go-gate Q5): mem0 does
+                    # not forward a timeout, so a down server would otherwise
+                    # hang the op path.  Connection errors carry no lock-error
+                    # substring, so they skip the (embedded-only) lock-retry
+                    # loop below and route straight to _record_failure.
+                    mem0_dict["vector_store"]["config"]["client"] = (
+                        _build_qdrant_client(self._runtime_cfg)
+                    )
                 mem_cfg = MemoryConfig(
                     **{
                         "vector_store": mem0_dict["vector_store"],

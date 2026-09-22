@@ -8,4 +8,6 @@ packages/electron/node_modules/
 
 __pycache__/
 *.py[cod]
+.coverage
+coverage/
 CLAUDE.md
