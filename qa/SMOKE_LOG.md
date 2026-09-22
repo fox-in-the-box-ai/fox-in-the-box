@@ -25,6 +25,33 @@ Skipped sections are OK as long as they're explicitly noted with reason. Empty e
 
 ---
 
+## v0.7.63 — 2026-09-22 (DV — mem0_oss default → bundled Qdrant server + one-shot boot migration, #803)
+
+HARD GATE per docs/RELEASE_WORKFLOW.md. Container/overlay behavior release: mem0_oss's default memory backend flips from the embedded on-disk store to the bundled in-container Qdrant server (127.0.0.1:6333), ending the gateway↔WebUI embedded-file-lock contention ("Qdrant lock still held after 10 attempts"). A one-shot `[program:mem0-migrate]` copies existing embedded memories to the server on first server-mode boot (sentinel-guarded, idempotent by stable point id, embedded store kept for rollback). No desktop-code change; ships a new container image + v0.7.63. Verification: independent Phase-4 QA built the container from the release branch and drove the migration at both the real-`qdrant-client` (1.19.0 + Qdrant v1.19.1) integration level and the live in-container supervisord level.
+
+- [x] 1. Unit suite: `packages/fox-overlay` pytest — 449 passed / 7 skipped / 0 failed (fork on PYTHONPATH); covers the full boot-ladder + `/readyz` contract + verify-count + fail-loud-on-unreadable-source guards
+- [x] 2. Production container build: `docker build -f packages/integration/Dockerfile` → exit 0 (clean)
+- [x] 3. Generated in-image supervisord.conf correct: `MEM0_OSS_QDRANT_URL` on the `[supervisord]` baseline only (no per-program dup); `[program:mem0-migrate]` priority=22 / autorestart=false / startsecs=0; ordering qdrant(20)→mem0-migrate(22)→gateway(30)→webui(40)
+- [x] 4. Live upgrade (seeded 4-point embedded store → boot new image on same /data volume): migrated 4/4 verbatim into the server `hermes` collection (ids/payloads exact, verified via server HTTP), sentinel `reason:"migrated"`, embedded store kept on disk
+- [x] 5. Idempotent restart: sentinel short-circuit ("already migrated"), server count unchanged (no dupes)
+- [x] 6. Fresh empty volume: sentinel `reason:"empty-source"`, migrate exits 0, gateway/webui up
+- [x] 7. Fail-loud, no brick: dead Qdrant target → mem0-migrate exhausts the `/readyz` budget, exits nonzero, NO sentinel, embedded intact — WHILE gateway+webui stay RUNNING and `/health` OK (chat not bricked); restore → next boot migrates
+- [x] 8. Opt-out: empty `MEM0_OSS_QDRANT_URL=` in hermes.env → migrate skips (not server mode), embedded still readable
+- [x] 9. `bash -n` on install-core.sh + entrypoint.sh → OK
+- [ ] 10. Native-arch (arm64/amd64 buildx) + real provider-key end-to-end: agent stores a NEW memory and recalls it against the server backend ← release-time smoke on the CI multi-arch image; QA validated the migration mechanism (#803's actual change) with deterministic seeded stores but could not drive agent writes (no provider key; the local classic-build `embed-server` arch artifact is not a #803 defect — the copy is verbatim / never re-embeds)
+- [ ] 11. Rollback smoke: boot a pre-v0.7.63 image on a post-migration /data volume, confirm the embedded store still reads ← release-time; documented behavior (embedded kept for rollback)
+
+Findings:
+
+- `embed-server` FATAL in the local QA run was a classic-`docker build` arch artifact (no `TARGETARCH` → x86_64 binaries on an arm64 host), NOT a #803 defect; CI buildx multi-arch produces correct per-arch binaries. `embed-server` is untouched by #803 and migration never re-embeds.
+- Minor/non-blocking: `qdrant-client` httpx INFO logs land in `mem0-migrate.err` (informational HTTP lines, not errors).
+
+Action items:
+
+- Complete rows 10–11 as release-time smoke on the published multi-arch image.
+
+---
+
 ## v0.7.62 — 2026-09-22 (DV — Electron 44.4.3 + js-yaml HIGH remediation)
 
 HARD GATE per docs/RELEASE_WORKFLOW.md. Desktop dependency/security release: bundled Electron 44.1.1 -> 44.4.3 (within-major) and the js-yaml HIGH advisory (dependabot alert #147) cleared in the desktop npm lockfile. **No container, runtime, memory-wire, or provider changes** — the Hermes image content is unchanged by this release, so live provider/memory rows carry forward from v0.7.60/v0.7.61 and manual real-key rows are N/A here. Verification is CI-backed on the release PR (#848) HEAD and the release run.
