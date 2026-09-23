@@ -9,6 +9,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+
+- Image-level Docker `HEALTHCHECK` on the container image, probing the shallow `/health` endpoint, so orchestrators that key off container health (`docker ps` status, Compose `depends_on: condition: service_healthy`, Swarm) now get a signal. (#884)
+
 ## [0.7.65] — 2026-09-23
 
 ### Removed

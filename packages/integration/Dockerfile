@@ -213,4 +213,16 @@ ENV MEM0_TELEMETRY=False
 VOLUME ["/data"]
 EXPOSE 8787
 
+# Image-level health probe for orchestrators (compose service_healthy, Swarm,
+# `docker ps`). Probes the shallow /health (process-up) endpoint, NOT /readyz
+# (deep dependency snapshot) — deep readiness is left to external Fleet/DO
+# probing. The 45s start-period covers qdrant + the one-shot mem0 migration
+# cold boot on top of the ~6-9s webui start before failures count. The full
+# grace before the container can flip to unhealthy is start-period +
+# retries*interval = 45 + 3*30 = 135s, which sits under the entrypoint's own
+# 240s /health budget and above the CI 90s startup-fail ship ceiling — keep
+# that 135s effective window above the ship ceiling if these knobs change. (#884)
+HEALTHCHECK --interval=30s --timeout=8s --start-period=45s --retries=3 \
+  CMD curl -fsS http://127.0.0.1:8787/health || exit 1
+
 ENTRYPOINT ["/app/entrypoint.sh"]
