@@ -70,6 +70,16 @@ def _check_vector_store() -> dict:
     the embed-server or memory state is unhealthy but the store itself is up
     (those are ``_check_memory``'s concern, not this one).  Re-probed each
     request, like memory — no caching."""
+    # Opt-out wins over any baked-in server URL.  MEM0_OSS_QDRANT_URL is set
+    # unconditionally at the supervisord baseline and is NOT cleared when
+    # memory is disabled (the entrypoint only sets MEM0_OSS_DISABLED=1), so
+    # the server-mode branch would otherwise always win on a disabled
+    # instance — reporting a misleading "reachable" and, if [program:qdrant]
+    # is ever gated off alongside memory, a false ok:false.  Check disabled
+    # FIRST, keyed off the SAME state.json "off" signal _check_memory reads
+    # (via _memory_disabled), so the two fields can never contradict (#865).
+    if _memory_disabled():
+        return {"ok": True, "detail": "qdrant not in use (memory disabled)"}
     url = _memory_qdrant_readyz_url()
     if url is not None:
         # Server mode (MEM0_OSS_QDRANT_URL / _HOST set — the v0.7.63 default).
@@ -78,10 +88,8 @@ def _check_vector_store() -> dict:
         if _memory_qdrant_reachable():
             return {"ok": True, "detail": f"qdrant server {target} reachable"}
         return {"ok": False, "detail": f"qdrant server {target} unreachable"}
-    # No server to dial: either memory is off, or the embedded on-disk store
-    # is in use.  Neither is a reachability failure — never probe here.
-    if _memory_disabled():
-        return {"ok": True, "detail": "qdrant not in use (memory disabled)"}
+    # No server to dial and memory is on: the embedded on-disk store is in
+    # use.  Not a reachability failure — never probe here.
     return {"ok": True, "detail": "qdrant embedded (on-disk store)"}
 
 

@@ -656,6 +656,10 @@ class TestVectorStoreMemoryConsistency:
         assert result["ready"] is True
 
     def test_memory_disabled_vector_store_ok(self, tmp_path, monkeypatch):
+        # Real disabled-instance config: MEM0_OSS_QDRANT_URL stays baked in at
+        # the supervisord baseline (never cleared on disable) AND state.json
+        # reads "off".  vector_store must report disabled off the same signal
+        # as memory — never dial the still-configured server (#865).
         import urllib.request
 
         readyz = _load_readyz()
@@ -665,6 +669,7 @@ class TestVectorStoreMemoryConsistency:
             {"status": "off", "reason": "disabled (MEM0_OSS_DISABLED=1)"},
         )
         _clear_qdrant_env(monkeypatch)
+        monkeypatch.setenv("MEM0_OSS_QDRANT_URL", "http://127.0.0.1:6333")
         monkeypatch.setattr(readyz, "_check_agent_runtime", lambda: {"ok": True})
         fake = _FakeUrlopen()
         monkeypatch.setattr(urllib.request, "urlopen", fake)
@@ -673,7 +678,10 @@ class TestVectorStoreMemoryConsistency:
         checks = result["checks"]
         assert checks["memory"]["ok"] is True
         assert checks["vector_store"]["ok"] is True
-        assert fake.calls == []  # disabled + embedded → nothing to dial
+        # Disabled reported off the same state.json signal as memory, not a probe.
+        assert "disabled" in checks["vector_store"]["detail"]
+        assert checks["vector_store"]["ok"] == checks["memory"]["ok"]
+        assert fake.calls == []  # disabled → nothing to dial despite the URL
         assert result["ready"] is True
 
     def test_embed_dead_keeps_vector_store_true(self, tmp_path, monkeypatch):
