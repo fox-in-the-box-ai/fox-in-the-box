@@ -9,6 +9,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.7.65] — 2026-09-23
+
 ### Removed
 
 - The no-op ssh/rsync self-heal from the container entrypoint. It was bridge code for images built before `openssh-client` and `rsync` were baked into the image; both tools have shipped baked since v0.7.61, so every image carrying the heal also carries the tools and the heal never had a live purpose. (#736)
@@ -17,6 +19,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 - `/readyz`'s embed-server check now honors `MEM0_OSS_EMBED_HEALTH_URL` instead of always probing the hardcoded `http://127.0.0.1:8644/health`. When an operator overrides the embedder endpoint (with a `local:` embedder), `/readyz` previously reported the embed-server unreachable while memory was fine; it now probes the same endpoint the memory plugin dials and names the resolved endpoint in the detail string.
 - The `mem0_oss` migration CLI (`python -m plugins.memory.mem0_oss.migrate_store`) now honors a bare-host Qdrant configuration (`MEM0_OSS_QDRANT_HOST`/`_PORT`) when run manually without `--server-url`. It previously resolved only `MEM0_OSS_QDRANT_URL` and otherwise defaulted to `127.0.0.1:6333`, so a manual recovery migration in bare-host mode could target the wrong endpoint; it now uses the same resolution as the automatic boot-time migration.
+- `/readyz` no longer returns HTTP 500 when `MEM0_OSS_QDRANT_URL` carries a malformed port (non-numeric, out of range, negative) or an unbracketed IPv6 host. The readiness check now falls back to a well-formed probe target and returns a structured result; the misconfiguration is still surfaced as an explicit error by the memory check (via the plugin's state), rather than as an uncaught exception.
 
 ---
 
