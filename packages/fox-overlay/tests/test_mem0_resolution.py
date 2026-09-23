@@ -932,14 +932,69 @@ class TestQdrantConfigPrecedence:
         assert cfg["qdrant_url"] == "http://qdrant.local:6333"
         assert cfg["qdrant_api_key"] == "envkey"
 
-    def test_file_overrides_env(self, env, monkeypatch):
-        """mem0_oss.json wins over the env var (precedence: defaults < env
-        < file, per the module docstring)."""
+
+class TestQdrantFileKeysEnvOnly:
+    """#883: the Qdrant endpoint is ENV-ONLY.  mem0_oss.json can no longer set
+    it (readyz.py / migrate_store.py read the env directly, so a file layer
+    would silently drift), and a stale ``qdrant_*`` key there is a loud ERROR."""
+
+    def test_file_qdrant_url_does_not_override_env(self, env, monkeypatch):
+        """A ``qdrant_url`` in mem0_oss.json is ignored by runtime-config
+        loading — the env value stands; non-endpoint keys still override."""
         from agent_memory_plugins.mem0_oss import _load_runtime_config  # noqa: PLC0415
 
         monkeypatch.setenv("MEM0_OSS_QDRANT_URL", "http://from-env:6333")
         (env.home / "mem0_oss.json").write_text(
-            json.dumps({"qdrant_url": "http://from-file:6333"}), encoding="utf-8"
+            json.dumps({"qdrant_url": "http://from-file:6333", "collection": "c"}),
+            encoding="utf-8",
         )
         cfg = _load_runtime_config()
-        assert cfg["qdrant_url"] == "http://from-file:6333"
+        assert cfg["qdrant_url"] == "http://from-env:6333"  # file did NOT win
+        assert cfg["collection"] == "c"  # non-endpoint key still overridable
+
+    def test_file_qdrant_host_does_not_set_server_mode(self, env):
+        """With no endpoint env var, a ``qdrant_host`` in the file must NOT
+        flip the plugin into server mode — the endpoint stays unset."""
+        from agent_memory_plugins.mem0_oss import (  # noqa: PLC0415
+            _load_runtime_config,
+            _qdrant_server_mode,
+        )
+
+        (env.home / "mem0_oss.json").write_text(
+            json.dumps({"qdrant_host": "qdrant.internal"}), encoding="utf-8"
+        )
+        cfg = _load_runtime_config()
+        assert cfg["qdrant_host"] == ""
+        assert cfg["qdrant_url"] == ""
+        assert _qdrant_server_mode(cfg) is False
+
+    def test_qdrant_key_in_file_raises_error_with_fix_reason(self, env, monkeypatch):
+        """A ``qdrant_*`` key in mem0_oss.json is a hard ERROR on resolution,
+        even when the provider would otherwise resolve READY — and the reason
+        names the exact fix."""
+        monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test-1234")
+        (env.home / "mem0_oss.json").write_text(
+            json.dumps({"qdrant_api_key": "leftover"}), encoding="utf-8"
+        )
+        with pytest.raises(MemoryUnavailable) as excinfo:
+            plugin._resolve_memoized()
+        assert excinfo.value.severity == "error"
+        assert "no longer configures the Qdrant endpoint" in excinfo.value.reason
+        assert "MEM0_OSS_QDRANT_*" in excinfo.value.reason
+        assert "qdrant_api_key" in excinfo.value.reason
+
+    def test_qdrant_key_in_file_writes_error_state_json(
+        self, env, monkeypatch, pinned_llm
+    ):
+        """The rejection surfaces as state.json status=error (visible ERROR,
+        never a silently-ignored key)."""
+        monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test-1234")
+        monkeypatch.setattr(plugin, "_embed_server_healthy", lambda: True)
+        (env.home / "mem0_oss.json").write_text(
+            json.dumps({"qdrant_url": "http://leftover:6333"}), encoding="utf-8"
+        )
+        provider = plugin.Mem0OSSMemoryProvider()
+        assert provider.is_available() is False
+        state = json.loads((env.home / "mem0_oss" / "state.json").read_text())
+        assert state["status"] == "error"
+        assert "no longer configures the Qdrant endpoint" in state["reason"]

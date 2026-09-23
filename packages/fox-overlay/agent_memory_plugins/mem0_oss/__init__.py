@@ -26,7 +26,12 @@ State model — resolution produces exactly one of:
   ERROR (visible)  explicit configuration that cannot work (status "error"
                    + reason naming the exact fix)
 
-Overrides (precedence: computed defaults < env < $HERMES_HOME/mem0_oss.json):
+Overrides (precedence: computed defaults < env < $HERMES_HOME/mem0_oss.json).
+The MEM0_OSS_QDRANT_* endpoint vars are the ONE exception — they are ENV-ONLY
+(#883): mem0_oss.json cannot override them, and a qdrant_* key left in that
+file now produces a loud ERROR (see _reject_qdrant_file_keys).  readyz.py and
+migrate_store.py read the endpoint straight from the env, so a file layer here
+would silently drift from them.
   MEM0_OSS_DISABLED            — "1" disables memory entirely (state 9)
   MEM0_OSS_LLM_PROVIDER        — resolve this provider instead of the main one
   MEM0_OSS_LLM_MODEL           — fact-extraction model id
@@ -45,6 +50,7 @@ Overrides (precedence: computed defaults < env < $HERMES_HOME/mem0_oss.json):
   MEM0_OSS_USER_ID             — memory namespace (default: hermes-user)
   MEM0_OSS_TOP_K               — max results per search (default: 10)
   MEM0_OSS_QDRANT_URL          — Qdrant server URL (e.g. http://127.0.0.1:6333).
+                                 (ENV-ONLY — not overridable via mem0_oss.json.)
                                  When set, mem0 connects to a SHARED Qdrant server
                                  over HTTP instead of the embedded on-disk store.
                                  Required when the Hermes gateway and WebUI run in
@@ -208,6 +214,31 @@ def _read_file_overrides() -> dict:
     except Exception as exc:
         logger.warning("mem0_oss: failed to read config file %s: %s", config_path, exc)
     return {}
+
+
+# The Qdrant endpoint is configured via MEM0_OSS_QDRANT_* env vars ONLY (#883).
+# mem0_oss.json used to be able to override it, but readyz.py and
+# migrate_store.py resolve the endpoint straight from the env with no file
+# layer — a file override would silently disagree with them.  A qdrant_* key in
+# the file is therefore a hard ERROR now, not a silent partial override.
+_QDRANT_FILE_KEYS = ("qdrant_url", "qdrant_host", "qdrant_port", "qdrant_api_key")
+
+
+def _reject_qdrant_file_keys(file_cfg: dict) -> None:
+    """Fail loud when mem0_oss.json still carries a Qdrant endpoint key (#883).
+
+    Raises ``MemoryUnavailable(severity="error")`` naming the exact fix, so the
+    state model surfaces a visible ERROR instead of silently ignoring the key.
+    """
+    stale = [key for key in _QDRANT_FILE_KEYS if key in file_cfg]
+    if stale:
+        raise MemoryUnavailable(
+            "mem0_oss.json no longer configures the Qdrant endpoint — move "
+            "qdrant_url/qdrant_host/qdrant_port/qdrant_api_key to the "
+            "MEM0_OSS_QDRANT_* environment variables "
+            f"(remove from mem0_oss.json: {', '.join(sorted(stale))})",
+            severity="error",
+        )
 
 
 def _env_prefer_dotenv(var: str) -> str:
@@ -428,6 +459,7 @@ def _resolve_memoized() -> ResolvedConfig:
 def _resolve() -> ResolvedConfig:
     """Resolve the fact-extraction provider, or raise ``MemoryUnavailable``."""
     file_cfg = _read_file_overrides()
+    _reject_qdrant_file_keys(file_cfg)
     user_providers, custom_providers = _read_provider_blocks()
 
     # Step 0: explicit override wins (file > env, matching the plugin's
@@ -1250,16 +1282,17 @@ def _load_runtime_config() -> dict:
         "qdrant_port": os.environ.get("MEM0_OSS_QDRANT_PORT", "6333").strip(),
         "qdrant_api_key": os.environ.get("MEM0_OSS_QDRANT_API_KEY", "").strip(),
     }
+    # The Qdrant endpoint (qdrant_url/host/port/api_key) is ENV-ONLY (#883):
+    # readyz.py and migrate_store.py resolve it straight from MEM0_OSS_QDRANT_*
+    # with no file layer, so a mem0_oss.json override here would silently drift
+    # from them.  Those keys are deliberately absent from this loop; a stale one
+    # in the file is rejected loudly by _reject_qdrant_file_keys() on resolution.
     for key in (
         "vector_store_path",
         "history_db_path",
         "collection",
         "user_id",
         "top_k",
-        "qdrant_url",
-        "qdrant_host",
-        "qdrant_port",
-        "qdrant_api_key",
     ):
         if key in file_cfg:
             config[key] = file_cfg[key]

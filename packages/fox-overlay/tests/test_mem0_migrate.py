@@ -634,6 +634,21 @@ def test_boot_server_url_empty_when_nothing_set(monkeypatch):
     assert migrate_store_mod._boot_server_url() == ""
 
 
+def test_boot_server_url_ignores_mem0_oss_json(monkeypatch, tmp_path):
+    """#883 regression guard: the boot migration resolves the endpoint from the
+    ENV only.  A ``qdrant_url`` in $HERMES_HOME/mem0_oss.json must NOT steer it
+    — the file is never read here, so with no env set the URL stays empty."""
+    _clear_server_env(monkeypatch)
+    hermes_home = tmp_path / "hermes"
+    hermes_home.mkdir()
+    (hermes_home / "mem0_oss.json").write_text(
+        json.dumps({"qdrant_url": "http://from-file:6333"}), encoding="utf-8"
+    )
+    monkeypatch.setenv("HERMES_HOME", str(hermes_home))
+
+    assert migrate_store_mod._boot_server_url() == ""
+
+
 # ── run_migration: destination server resolution (issue #872) ─────────────────
 #
 # The manual recovery CLI (``python -m plugins.memory.mem0_oss.migrate_store``,
