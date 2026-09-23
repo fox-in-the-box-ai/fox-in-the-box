@@ -10,8 +10,8 @@ Pull the image you're testing — **don't `docker build` locally** (a local buil
 
 ```bash
 # Pick ONE of the three IMAGE variants below depending on what you're smoking:
-IMAGE=ghcr.io/fox-in-the-box-ai/cloud:stable      # the just-released version (today: v0.7.60; :stable may also carry post-release Option B pin bumps)
-# IMAGE=ghcr.io/fox-in-the-box-ai/cloud:v0.7.60   # explicit pin (use during a multi-version comparison)
+IMAGE=ghcr.io/fox-in-the-box-ai/cloud:stable      # the just-released version (today: v0.7.65; :stable may also carry post-release Option B pin bumps)
+# IMAGE=ghcr.io/fox-in-the-box-ai/cloud:v0.7.65   # explicit pin (use during a multi-version comparison)
 # IMAGE=ghcr.io/fox-in-the-box-ai/cloud:latest    # the candidate built from main, pre-tag
 
 docker pull "$IMAGE"
@@ -29,7 +29,7 @@ sleep 15   # extra time for entrypoint operator-grant + supervisord settle
 
 **The smoke container is at `http://127.0.0.1:8788`. Your real install (port 8787) is unaffected.**
 
-**Currently testing:** v0.7.60 (released 2026-08-18). `:stable` additionally carries post-release Option B pin bumps — the live pins are whatever `packages/fox-overlay/versions.toml` says on `main` (that file is the single source of truth; this doc deliberately stopped naming versions that rot). Use `docker manifest inspect "$IMAGE" | jq -r '.manifests[0].digest'` to capture the digest for the current run; record it in the SMOKE log if a release is on the line.
+**Currently testing:** v0.7.65 (merged 2026-09-23; tag pushed, release artifacts pending verification). `:stable` additionally carries post-release Option B pin bumps — the live pins are whatever `packages/fox-overlay/versions.toml` says on `main` (that file is the single source of truth; this doc deliberately stopped naming versions that rot). Use `docker manifest inspect "$IMAGE" | jq -r '.manifests[0].digest'` to capture the digest for the current run; record it in the SMOKE log if a release is on the line.
 
 ---
 
