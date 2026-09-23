@@ -229,6 +229,12 @@ def _reject_qdrant_file_keys(file_cfg: dict) -> None:
 
     Raises ``MemoryUnavailable(severity="error")`` naming the exact fix, so the
     state model surfaces a visible ERROR instead of silently ignoring the key.
+
+    Runs on the (memoized) resolution path, and mem0_oss.json is not in
+    ``_watched_paths()`` today, so after the operator removes the key the ERROR
+    self-clears on the next resolution the memo TTL allows (up to ~10 min) or on
+    restart — the boot/cold-resolution path is always covered. Making recovery
+    (and live detection) prompt by watching mem0_oss.json is tracked in #893.
     """
     stale = [key for key in _QDRANT_FILE_KEYS if key in file_cfg]
     if stale:
