@@ -146,7 +146,7 @@ server.
 If the automatic boot migration was interrupted (no sentinel written) and you
 need to re-run it by hand, invoke the migration CLI inside the container:
 
-```
+```console
 python -m plugins.memory.mem0_oss.migrate_store
 ```
 
