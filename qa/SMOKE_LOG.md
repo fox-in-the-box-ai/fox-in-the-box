@@ -25,6 +25,26 @@ Skipped sections are OK as long as they're explicitly noted with reason. Empty e
 
 ---
 
+## v0.7.66 — 2026-09-23 (DV — mem0_oss Qdrant endpoint env-only + fail-loud #883, prompt config-error recovery #893, container HEALTHCHECK #884)
+
+HARD GATE per docs/RELEASE_WORKFLOW.md (memory subsystem: #883/#893 change mem0_oss config resolution). Container/overlay-only release — no desktop code. Validated by an independent Phase-4 container QA against a native-arm64 RC image built from main (df29ee3): the #883 fail-loud + #893 recovery were driven LIVE through the real boot resolution path (`python -m plugins.memory.mem0_oss.preflight`). Real agent store/recall with a paid provider key remains a documented-skip (no key; precedent v0.7.60/63/64/65).
+
+- [x] 1. Startup + `/health` — boots to `/health` 200 in ~2–3s (well under the 45s warn / 90s fail gate).
+- [x] 2. `/readyz` schema pin — exactly `{http_server, agent_runtime, vector_store, memory, config_loaded}`, each `ok` a bool; `ready` bool.
+- [x] 3. #884 HEALTHCHECK baked + healthy — `Config.Healthcheck` non-null (`curl -fsS …/health`, 30s/8s/45s/3); container reached `State.Health.Status=healthy` within the start-period and held it.
+- [x] 4. #883 fail-loud (LIVE) — `mem0_oss.json = {"qdrant_url":"http://leftover:6333"}` + real preflight → `state.json status=error` + `/readyz` memory `ok:false` with "mem0_oss.json no longer configures the Qdrant endpoint …", `ready:false`; `vector_store` stays `ok:true` (env-resolved store probe unaffected — no contradiction).
+- [x] 5. #893 prompt recovery (LIVE) — with the ERROR memoized (negative-memo TTL 600s), rewriting `mem0_oss.json` to `{}` re-resolved on the next call (mtime bypasses the TTL): `state.json` error→off, `/readyz` memory `ok:false`→`ok:true`, `ready:true` — no restart, no ~10 min wait.
+- [x] 6. `/readyz` vector_store modes (#865 regression) — disabled-instance guard: qdrant up/down → `vector_store ok:true "not in use (memory disabled)"`, no false failure; server-probe branch: qdrant STOPPED → `ok:false "…unreachable"`, STARTED → `ok:true "reachable"` (tracks the real env endpoint, no stale URL).
+- [x] 7. Migration ladder (#803 regression) — fresh-empty boot wrote sentinel `reason:"empty-source"`, exit 0, gateway/webui up.
+- [x] 8. Overlay unit suite (host) — 489 passed / 7 skipped / 0 failed / 0 errors (both forks on PYTHONPATH).
+- [ ] 9. Real agent store→recall with a paid provider key + real nomic embeddings — documented-skip (no key; precedent v0.7.60/63/64/65). embed-server FATAL locally = x86_64-on-arm64 classic-build artifact (non-defect; per-arch binary correctness verified on the GHCR multi-arch image in the v0.7.65 cycle).
+
+Findings: none blocking. The #883 guard fires before the provider check (fail-loud even on a no-provider instance); #893 recovery/detection is prompt (mtime bypasses the memo TTL).
+
+Action items: real-provider store/recall + rollback smoke at release-time on the published multi-arch image (row 9), as each cycle.
+
+---
+
 ## v0.7.65 — 2026-09-23 (DV — /readyz embed-URL override #869 + migrate bare-host #872 + no-op heal removal #736; RC validated by a 3×QA + 3×SWE aggressive-test swarm)
 
 HARD GATE per docs/RELEASE_WORKFLOW.md (memory subsystem: #869 changes the `/readyz` embed-server probe; #872 changes the mem0_oss migrate CLI). Container/overlay-only release — no desktop code. Validated by a six-agent swarm: three independent QA runs, each in an isolated container against a native-arm64 RC image, plus three adversarial SWE passes. Rows 1–13 ran on the RC image built from the merged fixes; the #885 fix (found by the swarm, fixed in-cycle) was re-confirmed on the final BAKED v0.7.65 image (row 14). Real agent store/recall with a paid provider key remains a documented-skip (no key available; precedent v0.7.60/63/64) — every other memory-hard-gate surface exercised live.

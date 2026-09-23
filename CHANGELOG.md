@@ -9,9 +9,19 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.7.66] — 2026-09-23
+
 ### Added
 
 - Image-level Docker `HEALTHCHECK` on the container image, probing the shallow `/health` endpoint, so orchestrators that key off container health (`docker ps` status, Compose `depends_on: condition: service_healthy`, Swarm) now get a signal. (#884)
+
+### Changed
+
+- Long-term memory's Qdrant endpoint is now configured **only** via the `MEM0_OSS_QDRANT_*` environment variables. `$HERMES_HOME/mem0_oss.json` no longer overrides the endpoint (`qdrant_url`/`qdrant_host`/`qdrant_port`/`qdrant_api_key`); a leftover `qdrant_*` key in that file now produces a loud memory ERROR naming the fix, instead of silently diverging from the endpoint `/readyz` and the boot migration use. (#883) **Migration:** if you configured the Qdrant endpoint via `mem0_oss.json`, move those `qdrant_*` keys to the matching `MEM0_OSS_QDRANT_*` environment variables (e.g. in `/data/config/hermes.env`) before upgrading; otherwise memory boots into a visible ERROR until the key is removed. (Non-endpoint keys — `collection`, `user_id`, `top_k`, embedder settings — are unaffected and still overridable via `mem0_oss.json`.)
+
+### Fixed
+
+- A Qdrant-endpoint misconfiguration left in `mem0_oss.json` is now cleared (and a newly-introduced one detected) on the next resolution after the file is edited, instead of persisting up to the memory resolver's ~10-minute cache window. (#893)
 
 ## [0.7.65] — 2026-09-23
 
