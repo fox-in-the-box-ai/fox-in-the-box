@@ -3,7 +3,7 @@ name: Electron lockfile audit
 # Compensating control (#861). Collapsing the dependabot npm scopes (#856)
 # removed the per-directory scan of packages/electron/package-lock.json — the
 # npm lockfile that pins the transitive tree of the code-signed Windows .exe
-# (build-electron.yml installs it with `npm install`). The root pnpm scope does
+# (build-electron.yml installs it with `npm ci`). The root pnpm scope does
 # not regenerate that npm lock, and lockfile-consistency.yml (#806) only checks
 # lock<->manifest sync, not advisories — so after #856 nothing else scans it for
 # known CVEs. This job scans that ONE lockfile against the OSV database and

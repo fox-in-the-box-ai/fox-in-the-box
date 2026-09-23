@@ -1,6 +1,6 @@
 # Fox in the Box — Security Posture
 
-Last updated: v0.7.64 (2026-09-23)
+Last updated: v0.7.65 (2026-09-23)
 
 ## Threat model
 
@@ -56,7 +56,7 @@ Tailscale is installed from the official Debian stable repository. Go stdlib CVE
 
 ## Dependency override policy
 
-When Dependabot identifies vulnerable transitive npm dependencies that can't be resolved by bumping direct dependencies, the project uses **pnpm overrides** in the root `package.json` to force resolution to patched versions. Overrides use caret ranges (`^X.Y.Z`) to allow patch updates within the same major version while preventing unexpected major-version jumps.
+When Dependabot identifies vulnerable transitive npm dependencies that can't be resolved by bumping direct dependencies, the project uses **pnpm overrides** in the root `package.json` to force resolution to patched versions. Overrides use caret ranges (`^X.Y.Z`) to allow patch updates within the same major version while preventing unexpected major-version jumps. For dependencies pinned via `pnpm.overrides` that Dependabot doesn't recognize, a targeted `ignore` rule in `dependabot.yml` (e.g. js-yaml major-version bumps, #881) suppresses the resulting re-raised PRs without disabling minor/patch security updates.
 
 ## Reporting
 
