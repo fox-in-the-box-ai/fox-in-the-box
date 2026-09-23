@@ -239,8 +239,8 @@ def _check_memory() -> dict:
             # target) so an operator overriding MEM0_OSS_EMBED_HEALTH_URL sees
             # the address actually dialed, not a stale ":8644".  Fall back to
             # the full URL if a malformed override leaves netloc empty.
-            parsed = urllib.parse.urlparse(_embed_health_url())
-            target = parsed.netloc or _embed_health_url()
+            embed_url = _embed_health_url()
+            target = urllib.parse.urlparse(embed_url).netloc or embed_url
             return {"ok": False, "detail": f"embed-server {target} unreachable"}
         # Re-evaluate the Qdrant server reachability at request time (boot
         # ordering: preflight seeds "ready" before supervisord starts qdrant,
