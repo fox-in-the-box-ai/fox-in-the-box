@@ -43,4 +43,9 @@ jobs:
           # Version pinned per the repo's supply-chain habit — bump
           # deliberately, not via silent PSGallery drift.
           Install-Module Pester -RequiredVersion 5.7.1 -Force -Scope CurrentUser -SkipPublisherCheck
+          # Load the pinned version explicitly: a bare Invoke-Pester auto-loads
+          # the HIGHEST Pester on PSModulePath (ubuntu-latest ships one), which
+          # would silently defeat the pin.
+          Import-Module Pester -RequiredVersion 5.7.1 -Force
+          Write-Host "Pester version: $((Get-Module Pester).Version)"
           Invoke-Pester -CI -Path packages/scripts/clean-windows-desktop.Tests.ps1
