@@ -489,6 +489,33 @@ jobs:
           docker logs test-fox
           exit 1
 
+      - name: Image-level HEALTHCHECK reaches healthy (#884)
+        # The image carries a HEALTHCHECK (curls the shallow /health), so
+        # orchestrators get a starting→healthy signal. Assert both that the
+        # config is present and that the running container transitions to
+        # `healthy` — a missing directive leaves .State.Health null forever.
+        run: |
+          set -euo pipefail
+          HC=$(docker inspect -f '{{.Config.Healthcheck}}' test-fox)
+          if [[ -z "$HC" || "$HC" == "<nil>" ]]; then
+            echo "::error::Image carries no HEALTHCHECK on ${{ matrix.platform.short }} — .Config.Healthcheck is empty"
+            exit 1
+          fi
+          echo "HEALTHCHECK present: $HC"
+          for i in $(seq 1 12); do
+            STATUS=$(docker inspect -f '{{.State.Health.Status}}' test-fox 2>/dev/null) || STATUS=""
+            if [[ "$STATUS" == "healthy" ]]; then
+              echo "✅ Container reached healthy on ${{ matrix.platform.short }} (attempt $i)"
+              exit 0
+            fi
+            echo "  Health status on ${{ matrix.platform.short }}: ${STATUS:-<none>}... ($i/12)"
+            sleep 5
+          done
+          echo "::error::Container did not reach healthy within 60s on ${{ matrix.platform.short }} (last status: ${STATUS:-<none>})"
+          docker inspect -f '{{json .State.Health}}' test-fox || true
+          docker logs test-fox
+          exit 1
+
       - name: Embeddings POST (embed-server 768-dim contract)
         # embed-server binds 127.0.0.1:8644 INSIDE the container (the only
         # published port is 8787), so a host-side curl can never connect —
