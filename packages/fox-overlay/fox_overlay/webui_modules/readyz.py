@@ -132,11 +132,23 @@ def _memory_disabled() -> bool:
     return str(state.get("status", "")).strip().lower() == "off"
 
 
+def _embed_health_url() -> str:
+    """The embed-server /health URL the mem0_oss plugin actually probes.
+
+    Read from env only — this module runs inside the webui process and must
+    not import the hermes-agent plugin package.  Mirrors the plugin's own
+    resolution EXACTLY (MEM0_OSS_EMBED_HEALTH_URL override, else the local
+    default) so the readiness snapshot reflects the same endpoint memory
+    dials.  Full-URL contract: the override is a complete URL (https works
+    natively via urlopen); no host+port composition."""
+    return os.environ.get("MEM0_OSS_EMBED_HEALTH_URL", "").strip() or _EMBED_HEALTH_URL
+
+
 def _embed_server_alive() -> bool:
-    """Any HTTP response from :8644 counts as alive (sleep-agnostic, §1.4);
-    only connection refused / timeout is dead."""
+    """Any HTTP response from the embed server counts as alive (sleep-agnostic,
+    §1.4); only connection refused / timeout is dead."""
     try:
-        with urllib.request.urlopen(_EMBED_HEALTH_URL, timeout=2):
+        with urllib.request.urlopen(_embed_health_url(), timeout=2):
             return True
     except urllib.error.HTTPError:
         return True
@@ -223,7 +235,13 @@ def _check_memory() -> dict:
         # but only when the local default embedder is in use.
         embedder = str(state.get("embedder", "") or "").strip()
         if embedder.startswith("local:") and not _embed_server_alive():
-            return {"ok": False, "detail": "embed-server :8644 unreachable"}
+            # Name the RESOLVED endpoint (mirrors _check_vector_store's qdrant
+            # target) so an operator overriding MEM0_OSS_EMBED_HEALTH_URL sees
+            # the address actually dialed, not a stale ":8644".  Fall back to
+            # the full URL if a malformed override leaves netloc empty.
+            embed_url = _embed_health_url()
+            target = urllib.parse.urlparse(embed_url).netloc or embed_url
+            return {"ok": False, "detail": f"embed-server {target} unreachable"}
         # Re-evaluate the Qdrant server reachability at request time (boot
         # ordering: preflight seeds "ready" before supervisord starts qdrant,
         # so state.json alone would contradict vector_store during the window
