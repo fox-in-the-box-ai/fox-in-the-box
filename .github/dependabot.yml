@@ -40,6 +40,20 @@ updates:
         # Its CVE coverage is the OSV scan in electron-lock-audit.yml (#861),
         # the permanent transitive-security control for that lockfile.
         exclude-patterns: ["electron", "electron-builder"]
+    ignore:
+      # js-yaml is deliberately held at 4.x on the root pnpm tree via
+      # pnpm.overrides in package.json (#850, closed won't-fix). Third-party
+      # CJS consumers on this tree (electron-builder, electron-updater,
+      # dmg-builder, @istanbuljs/load-nyc-config) may break with
+      # ERR_REQUIRE_ESM on js-yaml 5.x, and the packaging chain has no PR-CI
+      # coverage, so breakage would only surface at release time. The electron
+      # npm side runs 5.x separately (its own package-lock). Dependabot kept
+      # re-raising the 5.x root bump (#863, then #878) because it does not
+      # honor pnpm.overrides; ignore the major so it stops. Minor/patch 4.x
+      # security bumps are still allowed. Revert if the CJS consumers confirm
+      # dual-CJS+ESM support and the split is retired.
+      - dependency-name: "js-yaml"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: pip
     directory: /packages/fox-overlay
