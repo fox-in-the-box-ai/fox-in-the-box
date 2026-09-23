@@ -119,3 +119,49 @@ jobs:
 
           print("No HIGH/CRITICAL advisories (CVSS >= 7.0) in the electron lockfile.")
           PY
+
+  # Weekly cron failures are silent — on a scheduled run there is no PR check
+  # to go red, so a broken osv scan or a real HIGH/CRITICAL find just sits in
+  # the Actions tab (#877). Same pattern as playwright.yml's cron_health /
+  # build-container's main_push_health (#752): open or re-fire one rolling
+  # ci-health issue when the scheduled audit fails. PRs already surface the
+  # red check, so this is schedule-only.
+  cron_health:
+    name: cron failure handler
+    needs: [audit]
+    if: always() && github.event_name == 'schedule' && (contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Open or re-fire the rolling ci-health issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          source .github/scripts/tripwire-common.sh
+          title="[cron] Electron lockfile OSV audit failed (rolling)"
+          body=$(cat <<BODY_EOF
+          ## The weekly electron-lockfile OSV audit failed or was cancelled
+
+          Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+          On a scheduled run there is no PR check to go red, so this issue is the
+          only signal. Two causes:
+            - A genuine scanner error (osv DB fetch failure, action rot, runner
+              blip) — the scan wrote no results.
+            - A real HIGH/CRITICAL advisory (CVSS >= 7.0) against
+              packages/electron/package-lock.json with no PR touching it.
+
+          ## Resolution
+          - Open the run, read the "Gate on HIGH/CRITICAL advisories" step.
+          - Real advisory, in-range fix: regenerate the lock with
+            \`(cd packages/electron && npm install --package-lock-only)\`, then build.
+          - Real advisory, no in-range fix: bump the offending direct dependency
+            in packages/electron/package.json, then regenerate.
+          - Transient scanner error: \`gh run rerun <id> --failed\`.
+          - Close once a scheduled run is green.
+          BODY_EOF
+          )
+          tripwire_fire "$title" "$body" "ci-health,P2"
