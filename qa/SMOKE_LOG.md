@@ -25,6 +25,39 @@ Skipped sections are OK as long as they're explicitly noted with reason. Empty e
 
 ---
 
+## v0.7.65 — 2026-09-23 (DV — /readyz embed-URL override #869 + migrate bare-host #872 + no-op heal removal #736; RC validated by a 3×QA + 3×SWE aggressive-test swarm)
+
+HARD GATE per docs/RELEASE_WORKFLOW.md (memory subsystem: #869 changes the `/readyz` embed-server probe; #872 changes the mem0_oss migrate CLI). Container/overlay-only release — no desktop code. Validated by a six-agent swarm: three independent QA runs, each in an isolated container against a native-arm64 RC image, plus three adversarial SWE passes. Rows 1–13 ran on the RC image built from the merged fixes; the #885 fix (found by the swarm, fixed in-cycle) was re-confirmed on the final BAKED v0.7.65 image (row 14). Real agent store/recall with a paid provider key remains a documented-skip (no key available; precedent v0.7.60/63/64) — every other memory-hard-gate surface exercised live.
+
+- [x] 1. Overlay unit suite — 483 passed / 7 skipped / 0 failed (fork on PYTHONPATH; +8 new #885 regression tests, RED-verified against the pre-fix resolver).
+- [x] 2. Container build (native arm64) — `docker build` exit 0; boots to `/health` 200 in ~6–9s (well under the 45s warn / 90s fail startup gate).
+- [x] 3. `/readyz` schema pin — exactly `{http_server, agent_runtime, vector_store, memory, config_loaded}`, each `ok` a bool; `ready` = strict AND. `/health` `status:ok` (Docker HEALTHCHECK targets /health).
+- [x] 4. `/readyz` server-UP (state ready, qdrant running) — `vector_store {ok:true,"qdrant server 127.0.0.1:6333 reachable"}`, `memory ok:true`, `ready:true`; real dial.
+- [x] 5. `/readyz` server-DOWN (#865 repro, critical) — stop qdrant → `vector_store ok:false` AND `memory ok:false`, the two EQUAL, `ready:false`; restart → both ok:true within ~1s. Per-request re-probe, no caching. No vector_store/memory contradiction in any state.
+- [x] 6. `/readyz` memory-disabled-first (#865) — state off + baked `MEM0_OSS_QDRANT_URL` still set + qdrant stopped → `vector_store {ok:true,"qdrant not in use (memory disabled)"}` (disabled branch wins; pre-#865 false-negative gone).
+- [x] 7. `/readyz` embed-dead divergence — qdrant up + local embedder + dead embed-server → `vector_store ok:true` (qdrant) while `memory ok:false` (embed unreachable); vector_store reflects ONLY Qdrant.
+- [x] 8. #869 embed-URL override — probe HONORS `MEM0_OSS_EMBED_HEALTH_URL` and names the resolved endpoint: default→:8644, dead-override→names the override host:port unreachable, live-stub override→memory ready. Follows the override, not the hardcoded :8644.
+- [x] 9. #803 migration ladder — fresh-empty (sentinel empty-source), seeded upgrade (4/4 verbatim: ids+payloads byte-identical, vectors cosine-lossless), idempotent restart (no dupes), fail-loud dead-target (exit 1, NO sentinel, embedded intact, gateway+webui stay up / chat not bricked).
+- [x] 10. #872 manual migrate CLI bare-host — `python -m plugins.memory.mem0_oss.migrate_store` with only `MEM0_OSS_QDRANT_HOST`/`_PORT` (no `--server-url`) targets the configured host (not the 127.0.0.1:6333 default — the exact #872 bug); precedence `--server-url` > URL > HOST/PORT > default confirmed.
+- [x] 11. Opt-out — empty `MEM0_OSS_QDRANT_URL=` in hermes.env → embedded on-disk store (migrate skips, not server mode), embedded readable.
+- [x] 12. #736 removal — no-op ssh/rsync entrypoint self-heal removed; container boots clean without it (git-verified dead-on-arrival; the tools ship baked since v0.7.61).
+- [x] 13. Multi-arch embed-server binary — GHCR image inspected per-arch by exact digest: arm64 image → aarch64 `llama-server` (interp /lib/ld-linux-aarch64.so.1), amd64 image → x86-64 (interp /lib64/…). Correct per-arch; the historical x86-on-arm64 artifact is closed (long-open row from v0.7.63/64).
+- [x] 14. #885 fail-loud fix (found by the swarm, fixed in-cycle) — malformed `MEM0_OSS_QDRANT_URL` port/IPv6 no longer 500s /readyz. Confirmed on the BAKED v0.7.65 image: `GET /readyz` → HTTP 200 (was 500), `vector_store` falls back to the reachable co-located server, `ready:false` carried by the memory check. Unit RED/GREEN + live docker-cp 500→200 also verified.
+- [ ] 15. End-to-end agent store→recall with a real provider key + real nomic embeddings ← documented-skip (no provider key; precedent v0.7.60/63/64). The embed path's binary arch is validated on the multi-arch image (row 13); real recall to be confirmed at release-time on the published image.
+
+Findings:
+
+- The env-resolution config-drift class (#865/#869/#872) is CONFIRMED-CLOSED by the adversarial audit (SWE-3). One real defect was found by the swarm (#885, /readyz 500 on a malformed URL) and fixed in this RC before tag.
+- Non-blocking follow-ups filed: #883 (mem0_oss.json qdrant-override drifts from /readyz + migration — same class, JSON layer; not default-reachable; predates this release), #884 (product container ships no Docker HEALTHCHECK — long-standing; /health + /readyz endpoints work).
+- embed-server is FATAL locally (x86_64-on-arm64 classic-build artifact) — a KNOWN non-defect that enabled the row-7 embed-dead test; real per-arch binary correctness confirmed in row 13.
+
+Action items:
+
+- Real-provider store/recall + rollback smoke at release-time on the published multi-arch image (row 15).
+- #883 needs a founder A/B decision (teach readyz+migrate to read mem0_oss.json vs drop the JSON qdrant override).
+
+---
+
 ## v0.7.64 — 2026-09-23 (DV — /readyz vector_store reports real mem0 Qdrant server health, #865)
 
 HARD GATE per docs/RELEASE_WORKFLOW.md (touches the `/readyz` memory/vector-store readiness component). Container/overlay-only correctness fix: `/readyz`'s `vector_store` check no longer false-healthies when the bundled mem0 Qdrant server is down in the v0.7.63 default server mode — it now probes the resolved `MEM0_OSS_QDRANT_URL`/`_HOST` endpoint (the same one the `memory` check dials) and reports "disabled" first when memory is off, so `vector_store` and `memory` can no longer contradict on Qdrant reachability. No desktop code. Reported externally (samvallad33). Verified by independent Phase-4 QA building the branch image and curling real `/readyz` JSON against a live Qdrant in each mode.
