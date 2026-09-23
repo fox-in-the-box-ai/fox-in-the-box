@@ -494,6 +494,10 @@ jobs:
         # orchestrators get a starting→healthy signal. Assert both that the
         # config is present and that the running container transitions to
         # `healthy` — a missing directive leaves .State.Health null forever.
+        # MUST run after the "Wait for /health" step + the startup regression
+        # gate: by then the daemon's first probe (at the 30s interval) has
+        # fired, so the 60s poll below is not a flake even though it is shorter
+        # than the interval. Do not move this earlier.
         run: |
           set -euo pipefail
           HC=$(docker inspect -f '{{.Config.Healthcheck}}' test-fox)
