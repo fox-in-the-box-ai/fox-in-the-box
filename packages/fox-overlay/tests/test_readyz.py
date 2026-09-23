@@ -873,10 +873,21 @@ class TestQdrantResolverDriftGuard:
         assert parsed.hostname == "127.0.0.1"
         assert parsed.port == 6333
 
-    def test_check_vector_store_no_500_on_malformed_url(self, monkeypatch):
+    @pytest.mark.parametrize(
+        "bad_url",
+        [
+            pytest.param("http://host:notaport", id="non_numeric_port"),
+            pytest.param("http://host:99999999", id="port_out_of_range"),
+            pytest.param("http://host:-1", id="negative_port"),
+            pytest.param("http://[::1", id="truncated_ipv6"),
+        ],
+    )
+    def test_check_vector_store_no_500_on_malformed_url(self, bad_url, monkeypatch):
         """#885: _check_vector_store must return a structured ok:false when the
         server URL is malformed and memory is active — never propagate a
-        ValueError to the request boundary (which surfaced as HTTP 500)."""
+        ValueError to the request boundary (which surfaced as HTTP 500).  Covers
+        both raise sites: bad ports (at parsed.port) and truncated IPv6 (at
+        urlparse itself), plus the downstream re-parse in _check_vector_store."""
         readyz = _load_readyz()
         for var in (
             "MEM0_OSS_QDRANT_HOST",
@@ -884,7 +895,7 @@ class TestQdrantResolverDriftGuard:
             "MEM0_OSS_QDRANT_API_KEY",
         ):
             monkeypatch.delenv(var, raising=False)
-        monkeypatch.setenv("MEM0_OSS_QDRANT_URL", "http://host:notaport")
+        monkeypatch.setenv("MEM0_OSS_QDRANT_URL", bad_url)
         # Memory active (not opted out), server unreachable — keep it hermetic.
         monkeypatch.setattr(readyz, "_memory_disabled", lambda: False)
         monkeypatch.setattr(readyz, "_memory_qdrant_reachable", lambda: False)

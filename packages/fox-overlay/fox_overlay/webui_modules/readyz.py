@@ -189,9 +189,14 @@ def _memory_qdrant_readyz_url() -> str | None:
             # A malformed URL (out-of-range/non-numeric port, unbracketed IPv6)
             # makes urlparse / parsed.port raise.  Mirror the bad-port env
             # fallback above so the probe URL stays well-formed and /readyz
-            # fails loud via the reachability check (vector_store ok:false)
-            # instead of a 500 traceback (#885).  The bad value is a plugin-side
-            # config error the plugin surfaces via state.json.
+            # returns a structured result instead of a 500 traceback (#885).
+            # Fail-loud on the bad config is carried by the MEMORY check, not
+            # this one: the plugin's _resolve_qdrant_target raises on the same
+            # value -> state.json status=error -> _check_memory ok:false ->
+            # aggregate ready:false.  vector_store is only a best-effort probe
+            # of this fallback target, which on a default instance IS the live
+            # co-located server (127.0.0.1:6333) and so may still read
+            # reachable -- don't rely on vector_store to flag the typo.
             host, port, scheme = "127.0.0.1", port_default, "http"
     else:
         host = host_env
