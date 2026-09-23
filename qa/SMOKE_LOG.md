@@ -25,6 +25,30 @@ Skipped sections are OK as long as they're explicitly noted with reason. Empty e
 
 ---
 
+## v0.7.64 — 2026-09-23 (DV — /readyz vector_store reports real mem0 Qdrant server health, #865)
+
+HARD GATE per docs/RELEASE_WORKFLOW.md (touches the `/readyz` memory/vector-store readiness component). Container/overlay-only correctness fix: `/readyz`'s `vector_store` check no longer false-healthies when the bundled mem0 Qdrant server is down in the v0.7.63 default server mode — it now probes the resolved `MEM0_OSS_QDRANT_URL`/`_HOST` endpoint (the same one the `memory` check dials) and reports "disabled" first when memory is off, so `vector_store` and `memory` can no longer contradict on Qdrant reachability. No desktop code. Reported externally (samvallad33). Verified by independent Phase-4 QA building the branch image and curling real `/readyz` JSON against a live Qdrant in each mode.
+
+- [x] 1. Unit suite: `packages/fox-overlay` pytest — 461 passed / 7 skipped / 0 failed (fork on PYTHONPATH; canonical invocation). 14 new/revised readyz tests verified RED against the pre-fix code and GREEN after (non-vacuous).
+- [x] 2. Production container build (native arm64): `docker build` → exit 0; baked readyz.py confirmed to contain the disabled-first + server-probe branches.
+- [x] 3. Live server-UP (v0.7.63 default): `vector_store {ok:true, "qdrant server 127.0.0.1:6333 reachable"}`, `memory ok:true`, `ready:true` — real dial to live :6333.
+- [x] 4. Live server-DOWN (the #865 repro — critical): `supervisorctl stop qdrant` → `vector_store {ok:false,"…unreachable"}` AND `memory {ok:false}` AND the two EQUAL AND `ready:false`; `state.json` stayed `ready` so it is the request-time re-probe flipping both (the pre-#865 lie eliminated). Recovery: `start qdrant` → both back to ok:true, ready:true (re-probed, no caching).
+- [x] 5. Live memory-disabled (reviewer-flagged, live-only): `-e MEM0_OSS_DISABLED=1` with the baked `MEM0_OSS_QDRANT_URL` still set → `vector_store {ok:true,"qdrant not in use (memory disabled)"}` (disabled branch wins, no dial), `memory` off/ok, `ready:true`. Proven the same process reports "reachable" when memory is on, so it demonstrably resolves the URL yet takes the disabled branch when off.
+- [x] 6. Live embed-dead divergence (guards against a naive `vector_store=memory.ok`): dead :8644 + Qdrant up + local embedder → `vector_store ok:true` (Qdrant reachable) while `memory ok:false` ("embed-server :8644 unreachable"), `ready:false` — vector_store reflects ONLY Qdrant.
+- [x] 7. Schema pin: every mode returns exactly `{http_server, agent_runtime, vector_store, memory, config_loaded}` with bool `ok`; `GET /health` returns `status:ok` (Docker HEALTHCHECK depends on /health, not /readyz — unaffected).
+- [ ] 8. Confirm the `embed-server` x86_64 arch artifact is absent on the release multi-arch buildx image ← tracked under #803 (a cached classic-build layer locally, NOT a #865 defect; Qdrant runs fine); release-time check on the published image.
+
+Findings:
+
+- `embed-server` came up FATAL locally (`qemu-x86_64: Could not open '/lib64/ld-linux-x86-64.so.2'`) — the #803 classic-build arch artifact from a cached layer, not a #865 concern (the fix is about Qdrant, not the embedder). It enabled the bonus live embed-dead divergence test (row 6).
+- Behavior change (intended): `/readyz` `ready` now goes false when the mem0 Qdrant server is down on the default path (was false-healthy). An external monitor keying on `/readyz` will now correctly see red during a Qdrant outage.
+
+Action items:
+
+- Complete row 8 on the published multi-arch image (embed-server arch, under #803).
+
+---
+
 ## v0.7.63 — 2026-09-22 (DV — mem0_oss default → bundled Qdrant server + one-shot boot migration, #803)
 
 HARD GATE per docs/RELEASE_WORKFLOW.md. Container/overlay behavior release: mem0_oss's default memory backend flips from the embedded on-disk store to the bundled in-container Qdrant server (127.0.0.1:6333), ending the gateway↔WebUI embedded-file-lock contention ("Qdrant lock still held after 10 attempts"). A one-shot `[program:mem0-migrate]` copies existing embedded memories to the server on first server-mode boot (sentinel-guarded, idempotent by stable point id, embedded store kept for rollback). No desktop-code change; ships a new container image + v0.7.63. Verification: independent Phase-4 QA built the container from the release branch and drove the migration at both the real-`qdrant-client` (1.19.0 + Qdrant v1.19.1) integration level and the live in-container supervisord level.
