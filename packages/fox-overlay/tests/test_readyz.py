@@ -357,8 +357,12 @@ class TestVectorStoreCheck:
         assert result["ok"] is True
         assert fake.requests, "server mode must dial the resolved target"
         req = fake.requests[0]
-        assert req.full_url.startswith("https://qdrant.example.com")
-        assert req.full_url.endswith("/readyz")
+        # Parse the URL rather than substring-matching it (a startswith host
+        # check would also accept https://qdrant.example.com.evil.com).
+        parsed = urllib.parse.urlparse(req.full_url)
+        assert parsed.scheme == "https"
+        assert parsed.hostname == "qdrant.example.com"
+        assert parsed.path == "/readyz"
         # api-key header rides along (urllib capitalizes to "Api-key").
         assert req.get_header("Api-key") == "secret"
 
