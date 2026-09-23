@@ -217,6 +217,24 @@ class TestGetReadiness:
         }
         assert set(result["checks"].keys()) == expected_keys
 
+    def test_every_check_is_dict_with_bool_ok(self):
+        readyz = _load_readyz()
+        with (
+            mock.patch.object(readyz, "_check_http_server", return_value={"ok": True}),
+            mock.patch.object(
+                readyz, "_check_agent_runtime", return_value={"ok": True}
+            ),
+            mock.patch.object(readyz, "_check_vector_store", return_value={"ok": True}),
+            mock.patch.object(
+                readyz, "_check_config_loaded", return_value={"ok": True}
+            ),
+            mock.patch.object(readyz, "_check_memory", return_value={"ok": True}),
+        ):
+            result = readyz.get_readiness()
+        for name, check in result["checks"].items():
+            assert isinstance(check, dict), name
+            assert isinstance(check["ok"], bool), name
+
 
 # ── Individual check tests ─────────────────────────────────────────────
 
@@ -248,36 +266,105 @@ class TestAgentRuntimeCheck:
         assert "standalone" in result.get("detail", "")
 
 
+def _clear_qdrant_env(monkeypatch):
+    """Drop every Qdrant server-mode var so a test controls the mode
+    outright regardless of the ambient environment."""
+    for var in (
+        "MEM0_OSS_QDRANT_URL",
+        "MEM0_OSS_QDRANT_HOST",
+        "MEM0_OSS_QDRANT_PORT",
+        "MEM0_OSS_QDRANT_API_KEY",
+        "QDRANT_URL",
+    ):
+        monkeypatch.delenv(var, raising=False)
+
+
 class TestVectorStoreCheck:
-    def test_reachable(self):
-        readyz = _load_readyz()
-        mock_resp = mock.MagicMock()
-        mock_resp.status = 200
-        mock_resp.__enter__ = mock.Mock(return_value=mock_resp)
-        mock_resp.__exit__ = mock.Mock(return_value=False)
-        with mock.patch("urllib.request.urlopen", return_value=mock_resp):
-            result = readyz._check_vector_store()
-        assert result["ok"] is True
+    """vector_store reflects ONLY Qdrant reachability and probes the SAME
+    server-mode endpoint ``_check_memory`` dials (#865): server mode probes
+    the resolved ``/readyz``; embedded / opt-out mode never dials.  The old
+    ``QDRANT_URL`` / ``/data/qdrant`` escape hatch is gone."""
 
-    def test_unreachable_with_qdrant_configured(self):
+    def test_server_mode_unreachable_qdrant_fails(self, monkeypatch):
+        # Primary #865 repro: server configured, server down → fail loud.
+        import urllib.error
+        import urllib.request
+
         readyz = _load_readyz()
-        with (
-            mock.patch("urllib.request.urlopen", side_effect=OSError("refused")),
-            mock.patch.dict("os.environ", {"QDRANT_URL": "http://qdrant:6333"}),
-        ):
-            result = readyz._check_vector_store()
+        _clear_qdrant_env(monkeypatch)
+        monkeypatch.setenv("MEM0_OSS_QDRANT_URL", "http://127.0.0.1:6333")
+        fake = _FakeUrlopen(raises=urllib.error.URLError("refused"))
+        monkeypatch.setattr(urllib.request, "urlopen", fake)
+
+        result = readyz._check_vector_store()
         assert result["ok"] is False
+        assert "unreachable" in result["detail"]
+        # Probed the server-mode /readyz, not the legacy /healthz.
+        assert fake.calls and fake.calls[0].endswith("/readyz")
 
-    def test_unreachable_standalone(self):
+    def test_server_mode_reachable_ok(self, monkeypatch):
+        import urllib.request
+
         readyz = _load_readyz()
-        with (
-            mock.patch("urllib.request.urlopen", side_effect=OSError("refused")),
-            mock.patch.dict("os.environ", {}, clear=True),
-            mock.patch("os.path.exists", return_value=False),
-        ):
-            result = readyz._check_vector_store()
+        _clear_qdrant_env(monkeypatch)
+        monkeypatch.setenv("MEM0_OSS_QDRANT_URL", "http://127.0.0.1:6333")
+        fake = _FakeUrlopen()
+        monkeypatch.setattr(urllib.request, "urlopen", fake)
+
+        result = readyz._check_vector_store()
         assert result["ok"] is True
-        assert "standalone" in result.get("detail", "")
+        assert fake.calls and fake.calls[0].endswith("/readyz")
+
+    def test_embedded_mode_ok_without_probe(self, monkeypatch):
+        import urllib.request
+
+        readyz = _load_readyz()
+        _clear_qdrant_env(monkeypatch)  # no server vars → embedded store
+        fake = _FakeUrlopen()
+        monkeypatch.setattr(urllib.request, "urlopen", fake)
+
+        result = readyz._check_vector_store()
+        assert result["ok"] is True
+        assert fake.calls == []  # embedded mode never dials
+
+    def test_remote_host_unreachable_not_false_healthy(self, monkeypatch):
+        # Was false-healthy before #865: a remote _HOST with no local
+        # /data/qdrant and no QDRANT_URL used to report ok:true.
+        import urllib.error
+        import urllib.request
+
+        readyz = _load_readyz()
+        _clear_qdrant_env(monkeypatch)
+        monkeypatch.setenv("MEM0_OSS_QDRANT_HOST", "qdrant.remote")
+        fake = _FakeUrlopen(raises=urllib.error.URLError("no route to host"))
+        monkeypatch.setattr(urllib.request, "urlopen", fake)
+
+        result = readyz._check_vector_store()
+        assert result["ok"] is False
+        assert fake.calls and fake.calls[0].endswith("/readyz")
+
+    def test_https_api_key_probes_correct_target(self, monkeypatch):
+        import urllib.request
+
+        readyz = _load_readyz()
+        _clear_qdrant_env(monkeypatch)
+        monkeypatch.setenv("MEM0_OSS_QDRANT_URL", "https://qdrant.example.com")
+        monkeypatch.setenv("MEM0_OSS_QDRANT_API_KEY", "secret")
+        fake = _FakeUrlopen()
+        monkeypatch.setattr(urllib.request, "urlopen", fake)
+
+        result = readyz._check_vector_store()
+        assert result["ok"] is True
+        assert fake.requests, "server mode must dial the resolved target"
+        req = fake.requests[0]
+        # Parse the URL rather than substring-matching it (a startswith host
+        # check would also accept https://qdrant.example.com.evil.com).
+        parsed = urllib.parse.urlparse(req.full_url)
+        assert parsed.scheme == "https"
+        assert parsed.hostname == "qdrant.example.com"
+        assert parsed.path == "/readyz"
+        # api-key header rides along (urllib capitalizes to "Api-key").
+        assert req.get_header("Api-key") == "secret"
 
 
 class TestConfigLoadedCheck:
@@ -421,9 +508,11 @@ class _FakeUrlopen:
     def __init__(self, *, raises=None):
         self._raises = raises
         self.calls: list[str] = []
+        self.requests: list = []
 
     def __call__(self, req, timeout=None):
         self.calls.append(getattr(req, "full_url", req))
+        self.requests.append(req)
         if self._raises is not None:
             raise self._raises
         return _FakeResponse()
@@ -481,6 +570,193 @@ class TestMemoryQdrantReachability:
         assert fake.calls == []  # embedded mode never probes
         result = readyz._check_memory()
         assert result["ok"] is True
+
+
+# ── vector_store ↔ memory consistency (full get_readiness, #865) ────────
+
+
+class TestVectorStoreMemoryConsistency:
+    """#865 regression: driven through ``get_readiness()``, ``vector_store``
+    and ``memory`` must agree on Qdrant server reachability (both probe the
+    same resolved ``/readyz``) — while still diverging legitimately when
+    memory fails for a non-Qdrant reason (dead embed-server) or is off."""
+
+    def _seed_ready(self, tmp_path, monkeypatch):
+        state_path = tmp_path / "state.json"
+        state_path.write_text(
+            json.dumps(
+                {
+                    "status": "ready",
+                    "reason": "",
+                    "llm": "openrouter",
+                    "embedder": "local:nomic-embed-text-v1.5",
+                }
+            ),
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("MEM0_OSS_STATE_PATH", str(state_path))
+
+    def _seed_state(self, tmp_path, monkeypatch, payload):
+        state_path = tmp_path / "state.json"
+        state_path.write_text(json.dumps(payload), encoding="utf-8")
+        monkeypatch.setenv("MEM0_OSS_STATE_PATH", str(state_path))
+
+    def test_server_down_both_agree(self, tmp_path, monkeypatch):
+        # The regression: with a server configured and down, both the
+        # vector_store and memory checks must fail — not disagree.
+        import urllib.error
+        import urllib.request
+
+        readyz = _load_readyz()
+        self._seed_ready(tmp_path, monkeypatch)
+        _clear_qdrant_env(monkeypatch)
+        monkeypatch.setenv("MEM0_OSS_QDRANT_URL", "http://127.0.0.1:6333")
+        monkeypatch.setattr(readyz, "_check_agent_runtime", lambda: {"ok": True})
+        monkeypatch.setattr(readyz, "_embed_server_alive", lambda: True)
+        fake = _FakeUrlopen(raises=urllib.error.URLError("refused"))
+        monkeypatch.setattr(urllib.request, "urlopen", fake)
+
+        checks = readyz.get_readiness()["checks"]
+        assert checks["vector_store"]["ok"] is False
+        assert checks["memory"]["ok"] is False
+        assert checks["vector_store"]["ok"] == checks["memory"]["ok"]
+        assert readyz.get_readiness()["ready"] is False
+
+    def test_server_up_both_ok(self, tmp_path, monkeypatch):
+        import urllib.request
+
+        readyz = _load_readyz()
+        self._seed_ready(tmp_path, monkeypatch)
+        _clear_qdrant_env(monkeypatch)
+        monkeypatch.setenv("MEM0_OSS_QDRANT_URL", "http://127.0.0.1:6333")
+        monkeypatch.setattr(readyz, "_check_agent_runtime", lambda: {"ok": True})
+        monkeypatch.setattr(readyz, "_embed_server_alive", lambda: True)
+        fake = _FakeUrlopen()
+        monkeypatch.setattr(urllib.request, "urlopen", fake)
+
+        result = readyz.get_readiness()
+        checks = result["checks"]
+        assert checks["vector_store"]["ok"] is True
+        assert checks["memory"]["ok"] is True
+        assert checks["vector_store"]["ok"] == checks["memory"]["ok"]
+        assert result["ready"] is True
+
+    def test_embedded_both_ok_no_dial(self, tmp_path, monkeypatch):
+        import urllib.request
+
+        readyz = _load_readyz()
+        self._seed_ready(tmp_path, monkeypatch)
+        _clear_qdrant_env(monkeypatch)  # embedded store — nothing to dial
+        monkeypatch.setattr(readyz, "_check_agent_runtime", lambda: {"ok": True})
+        monkeypatch.setattr(readyz, "_embed_server_alive", lambda: True)
+        fake = _FakeUrlopen()
+        monkeypatch.setattr(urllib.request, "urlopen", fake)
+
+        result = readyz.get_readiness()
+        checks = result["checks"]
+        assert checks["vector_store"]["ok"] is True
+        assert checks["memory"]["ok"] is True
+        assert fake.calls == []
+        assert result["ready"] is True
+
+    def test_memory_disabled_vector_store_ok(self, tmp_path, monkeypatch):
+        # Real disabled-instance config: MEM0_OSS_QDRANT_URL stays baked in at
+        # the supervisord baseline (never cleared on disable) AND state.json
+        # reads "off".  vector_store must report disabled off the same signal
+        # as memory — never dial the still-configured server (#865).
+        import urllib.request
+
+        readyz = _load_readyz()
+        self._seed_state(
+            tmp_path,
+            monkeypatch,
+            {"status": "off", "reason": "disabled (MEM0_OSS_DISABLED=1)"},
+        )
+        _clear_qdrant_env(monkeypatch)
+        monkeypatch.setenv("MEM0_OSS_QDRANT_URL", "http://127.0.0.1:6333")
+        monkeypatch.setattr(readyz, "_check_agent_runtime", lambda: {"ok": True})
+        fake = _FakeUrlopen()
+        monkeypatch.setattr(urllib.request, "urlopen", fake)
+
+        result = readyz.get_readiness()
+        checks = result["checks"]
+        assert checks["memory"]["ok"] is True
+        assert checks["vector_store"]["ok"] is True
+        # Disabled reported off the same state.json signal as memory, not a probe.
+        assert "disabled" in checks["vector_store"]["detail"]
+        assert checks["vector_store"]["ok"] == checks["memory"]["ok"]
+        assert fake.calls == []  # disabled → nothing to dial despite the URL
+        assert result["ready"] is True
+
+    def test_embed_dead_keeps_vector_store_true(self, tmp_path, monkeypatch):
+        # Guards against a naive ``vector_store = memory.ok`` fix: the store
+        # is up, memory fails only because the embed-server is dead.
+        import urllib.request
+
+        readyz = _load_readyz()
+        self._seed_ready(tmp_path, monkeypatch)
+        _clear_qdrant_env(monkeypatch)
+        monkeypatch.setenv("MEM0_OSS_QDRANT_URL", "http://127.0.0.1:6333")
+        monkeypatch.setattr(readyz, "_check_agent_runtime", lambda: {"ok": True})
+        monkeypatch.setattr(readyz, "_embed_server_alive", lambda: False)
+        fake = _FakeUrlopen()  # qdrant reachable
+        monkeypatch.setattr(urllib.request, "urlopen", fake)
+
+        result = readyz.get_readiness()
+        checks = result["checks"]
+        assert checks["memory"]["ok"] is False
+        assert "embed-server" in checks["memory"]["detail"]
+        assert checks["vector_store"]["ok"] is True
+        assert result["ready"] is False
+
+    @pytest.mark.parametrize(
+        "env",
+        [
+            pytest.param(
+                {"MEM0_OSS_QDRANT_URL": "http://127.0.0.1:6333"}, id="keyless_url"
+            ),
+            pytest.param(
+                {
+                    "MEM0_OSS_QDRANT_URL": "http://qdrant.internal:6333",
+                    "MEM0_OSS_QDRANT_API_KEY": "secret",
+                },
+                id="url_key_http",
+            ),
+            pytest.param(
+                {
+                    "MEM0_OSS_QDRANT_URL": "https://qdrant.example.com",
+                    "MEM0_OSS_QDRANT_API_KEY": "secret",
+                },
+                id="url_key_https",
+            ),
+            pytest.param(
+                {
+                    "MEM0_OSS_QDRANT_HOST": "qdrant.local",
+                    "MEM0_OSS_QDRANT_PORT": "6399",
+                },
+                id="host_port",
+            ),
+        ],
+    )
+    def test_never_false_healthy_across_server_configs(
+        self, env, tmp_path, monkeypatch
+    ):
+        import urllib.error
+        import urllib.request
+
+        readyz = _load_readyz()
+        self._seed_ready(tmp_path, monkeypatch)
+        _clear_qdrant_env(monkeypatch)
+        for key, value in env.items():
+            monkeypatch.setenv(key, value)
+        monkeypatch.setattr(readyz, "_check_agent_runtime", lambda: {"ok": True})
+        monkeypatch.setattr(readyz, "_embed_server_alive", lambda: True)
+        fake = _FakeUrlopen(raises=urllib.error.URLError("refused"))
+        monkeypatch.setattr(urllib.request, "urlopen", fake)
+
+        result = readyz.get_readiness()
+        assert result["checks"]["vector_store"]["ok"] is False
+        assert result["ready"] is False
 
 
 # ── Cross-boundary drift guard (readyz resolver vs plugin resolver) ─────

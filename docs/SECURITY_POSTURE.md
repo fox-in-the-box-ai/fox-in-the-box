@@ -1,6 +1,6 @@
 # Fox in the Box — Security Posture
 
-Last updated: v0.7.60 + post-release pins (2026-08-18)
+Last updated: v0.7.64 (2026-09-23)
 
 ## Threat model
 
@@ -10,7 +10,7 @@ The container runs on the user's infrastructure (local Docker, cloud VM, or flee
 
 ### Long-term memory subsystem (default-on since v0.7.60)
 
-Conversation-derived facts are stored **locally** under the instance data volume: self-hosted mem0 (mem0ai 2.0.10) with an embedded Qdrant store. Embeddings are computed **on-device** by a llama.cpp embed-server (nomic-embed-text-v1.5 GGUF) bound to `127.0.0.1:8644` — never exposed outside the container. The only egress the feature adds is fact-extraction calls to the chat provider the user already configured. mem0's PostHog telemetry is force-disabled (`MEM0_TELEMETRY=False` at every process boundary — the posthog package is present but inert; verified zero egress in the v0.7.60 release smoke). Memory state is fail-loud (`READY`/`OFF`/`ERROR` in Settings and `/readyz`) — no silent degradation. The image also bakes `openssh-client` and `rsync` (v0.7.60) for agent remote-host workflows; both are standard Debian packages covered by Trivy scanning.
+Conversation-derived facts are stored **locally** under the instance data volume: self-hosted mem0 (mem0ai 2.0.10) with the bundled Qdrant server (default since v0.7.63; embedded on-disk store available as opt-out). Embeddings are computed **on-device** by a llama.cpp embed-server (nomic-embed-text-v1.5 GGUF) bound to `127.0.0.1:8644` — never exposed outside the container. The only egress the feature adds is fact-extraction calls to the chat provider the user already configured. mem0's PostHog telemetry is force-disabled (`MEM0_TELEMETRY=False` at every process boundary — the posthog package is present but inert; verified zero egress in the v0.7.60 release smoke). Memory state is fail-loud (`READY`/`OFF`/`ERROR` in Settings and `/readyz`) — no silent degradation. The image also bakes `openssh-client` and `rsync` (v0.7.60) for agent remote-host workflows; both are standard Debian packages covered by Trivy scanning.
 
 ### Cloud provider credentials
 
@@ -26,7 +26,7 @@ On AWS VMs, the instance metadata service (IMDS) makes the machine's default ins
 
 ### Current state
 
-**Open Dependabot alerts: 0** (as of 2026-08-18 — js-yaml 4.3.1 and protobufjs 7.6.5 cleared the last npm alerts). The long-tracked **GHSA-537c-gmf6-5ccf accepted risk is CLOSED**: upstream hermes-agent previously hard-pinned `cryptography` below the 48.0.1 fix; since the v0.52.113 / v2026.8.16.2 pin bump, `requirements.lock` carries `cryptography==50.0.0`.
+**Open Dependabot alerts: 0** (as of 2026-09-23 — all advisories in fixed state; js-yaml 4.3.1 and protobufjs 7.6.5 cleared the last npm alerts). The long-tracked **GHSA-537c-gmf6-5ccf accepted risk is CLOSED**: upstream hermes-agent previously hard-pinned `cryptography` below the 48.0.1 fix; since the v0.52.113 / v2026.8.16.2 pin bump, `requirements.lock` carries `cryptography==50.0.0`.
 
 `packages/integration/requirements.lock` is itself a supply-chain control: 96 exact pins for every Python package in the container, consumed as a pip **constraints** file (`-c`) at build time so transitive resolution cannot drift silently between builds; the amd64 smoke job compares the image freeze against the lock (warning-only today — hard-gate + arm64 coverage tracked in #795).
 
@@ -42,7 +42,7 @@ These are long-standing CVEs in Debian system packages (glibc, tar, perl, iptabl
 - Container isolation + TLS termination mitigate the remaining vectors
 
 **Debian system packages with no fix available:** (the base layer applies
-`apt-get upgrade -y` at build time, so every fix Debian *has* shipped enters
+`apt-get upgrade -y` at build time, so every fix Debian _has_ shipped enters
 the image on the next build — this class is only the remainder with no fix
 published)
 The container base image (`python:3.11-slim`, Debian trixie) includes system packages at their latest Debian patch level. When CVEs are reported against these packages before Debian releases a fix, the alerts appear and remain open until Debian ships the patch. These auto-close on the next container rebuild after the Debian fix lands.

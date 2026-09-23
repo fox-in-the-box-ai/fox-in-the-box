@@ -3,11 +3,12 @@
 Fox in the Box ships with long-term memory enabled by default on fresh
 installs (v0.7.60+). Facts from your conversations are extracted with the
 chat provider you already use and stored **locally** — a self-hosted
-[mem0](https://github.com/mem0ai/mem0) store with an embedded Qdrant vector
-database under the instance data volume. Embeddings are computed entirely
-on-device by a bundled local model (`nomic-embed-text-v1.5` served by
-llama.cpp on `127.0.0.1:8644`), so no extra API key is needed and memory
-content never leaves the machine for embedding.
+[mem0](https://github.com/mem0ai/mem0) store backed by the bundled Qdrant
+vector database (v0.7.63+: the in-container Qdrant **server** by default; see
+[Qdrant server mode](#qdrant-server-mode-default) below). Embeddings are
+computed entirely on-device by a bundled local model (`nomic-embed-text-v1.5`
+served by llama.cpp on `127.0.0.1:8644`), so no extra API key is needed and
+memory content never leaves the machine for embedding.
 
 Plugin-level reference (env vars, file layout, tools):
 `packages/fox-overlay/agent_memory_plugins/mem0_oss/README.md`.
@@ -82,33 +83,63 @@ pool). Changes made only through a shell `export` self-heal within 10
 minutes or on restart. Custom providers use the `custom:<name>` credential
 convention, and the kimi/opencode/kilo pool ids are bridged automatically.
 
-## Qdrant server mode (opt-in)
+## Qdrant server mode (default)
 
-By default memory uses an **embedded** Qdrant that lives on disk under the
+Historically memory used an **embedded** Qdrant that lived on disk under the
 instance data volume. That store keeps an exclusive file lock, so only one
-process can open it. When two processes need memory at once — most commonly
+process can open it. When two processes needed memory at once — most commonly
 the Hermes gateway and the WebUI running in the same container — the second
-one hits intermittent `Qdrant lock still held` failures.
+one hit intermittent `Qdrant lock still held` failures.
 
-Server mode fixes this by pointing memory at a **shared Qdrant server** over
-HTTP instead of the embedded file store. Set one of the following (env var,
-or the same key in `$HERMES_HOME/mem0_oss.json`, which takes precedence):
+Since **v0.7.63**, memory instead runs against the **bundled Qdrant server**
+over HTTP (autostarted in-container at `127.0.0.1:6333`), so both processes
+share one store with no file lock. The supervisord baseline sets
+`MEM0_OSS_QDRANT_URL="http://127.0.0.1:6333"` for the gateway, the WebUI, and
+the migration job as a single shared surface — the gateway and WebUI can never
+diverge onto different backends.
 
-| Variable                  | Purpose                                                                    | Default   |
-| ------------------------- | -------------------------------------------------------------------------- | --------- |
-| `MEM0_OSS_QDRANT_URL`     | Full Qdrant server URL (e.g. `http://127.0.0.1:6333`). Enables server mode | _(unset)_ |
-| `MEM0_OSS_QDRANT_HOST`    | Qdrant hostname (alternative to URL)                                       | _(unset)_ |
-| `MEM0_OSS_QDRANT_PORT`    | Qdrant port, used with `MEM0_OSS_QDRANT_HOST`                              | `6333`    |
-| `MEM0_OSS_QDRANT_API_KEY` | API key for an authenticated Qdrant server (optional)                      | _(unset)_ |
+Operators monitoring readiness should alert on the aggregate `ready` boolean
+from `/readyz` (per the instance contract). In the default Qdrant server mode
+both the `vector_store` and `memory` fields reflect the Qdrant server's
+reachability.
 
-Set `MEM0_OSS_QDRANT_URL` **or** the `HOST`/`PORT` pair — not both. When none
-of these is set, memory stays on the embedded on-disk store (unchanged).
+| Variable                  | Purpose                                                                | Default                 |
+| ------------------------- | ---------------------------------------------------------------------- | ----------------------- |
+| `MEM0_OSS_QDRANT_URL`     | Full Qdrant server URL. Empty string forces the embedded on-disk store | `http://127.0.0.1:6333` |
+| `MEM0_OSS_QDRANT_HOST`    | Qdrant hostname (alternative to URL)                                   | _(unset)_               |
+| `MEM0_OSS_QDRANT_PORT`    | Qdrant port, used with `MEM0_OSS_QDRANT_HOST`                          | `6333`                  |
+| `MEM0_OSS_QDRANT_API_KEY` | API key for an authenticated Qdrant server (optional)                  | _(unset)_               |
 
-> **Server mode is opt-in, and switching starts you with an empty store.**
-> Existing embedded memories do **not** auto-migrate to a Qdrant server —
-> after you enable server mode, memory begins fresh in the server's
-> collection. Automatic migration ships with the default-flip in #803; until
-> then, treat the switch as a clean start.
+Set `MEM0_OSS_QDRANT_URL` **or** the `HOST`/`PORT` pair — not both.
+
+### One-time migration on upgrade
+
+Upgrading a live install to v0.7.63 does not strand your existing memories.
+On the first boot after upgrade, a one-shot job (`[program:mem0-migrate]`,
+started before the gateway and WebUI) copies every memory from
+the embedded store into the server — ids, vectors, and payloads verbatim,
+never a re-embed — then writes a sentinel
+(`$HERMES_HOME/mem0_oss/.migrated-to-server`) so later boots are no-ops. The
+job waits for the server's `/readyz`, verifies the copied count landed, and
+only then records the sentinel; a partial or interrupted run writes no
+sentinel and simply retries on the next boot. **The embedded store is left in
+place untouched**, so a rollback to a pre-v0.7.63 image still finds its data.
+
+### Opting back to the embedded store
+
+Set `MEM0_OSS_QDRANT_URL=` (empty) in `/data/config/hermes.env`. Because
+every memory process wraps `run-with-env.sh` (which sources `hermes.env`
+after the supervisord baseline), the empty value overrides the default for
+the gateway, the WebUI, and the migration job alike, and memory returns to
+the embedded on-disk store.
+
+Rollback (reading your old embedded data) is supported, but a round-trip
+toggle is not: once the migration sentinel exists, opting back to embedded,
+writing **new** embedded memories, then opting back into the server will
+**not** migrate those new embedded memories — the sentinel is present, so the
+migration never re-runs. To force a re-migration, delete
+`$HERMES_HOME/mem0_oss/.migrated-to-server` before switching back to the
+server.
 
 ## models.dev catalog troubleshooting
 

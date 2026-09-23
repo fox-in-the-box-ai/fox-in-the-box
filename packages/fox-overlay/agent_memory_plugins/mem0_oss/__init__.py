@@ -15,7 +15,9 @@ Architecture (design §1/§a — default-on, fail-loud):
                         reached through mem0's OpenAI adapter with an
                         explicit base_url.  Memory content never leaves the
                         machine for embedding.
-  Vector store        : embedded Qdrant (local path, no server), 768 dims.
+  Vector store        : bundled Qdrant server by default (in-container, HTTP
+                        127.0.0.1:6333); embedded on-disk Qdrant as opt-out
+                        fallback (see MEM0_OSS_QDRANT_* below). 768 dims.
 
 State model — resolution produces exactly one of:
   READY            memory active (state.json status "ready")

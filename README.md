@@ -77,16 +77,16 @@ A practical tour of what's in the box. Most of this is wired up by the bundled [
 - Embeddings computed entirely on-device by a bundled local model (nomic-embed-text-v1.5 via llama.cpp) — no extra API key, works with any provider; facts are extracted via your configured chat provider
 - Memory state visible in **Settings** and on `/readyz` — active, off with a reason, or error. Fail-loud: memory is never a silent no-op.
 - Existing installs opt in with one line (`memory: provider: mem0_oss`) — see [docs/MEMORY.md](docs/MEMORY.md)
-- Optional **Qdrant server mode** for setups where more than one process shares memory (e.g. gateway + WebUI in one container), avoiding the embedded store's file-lock contention. Opt in with any of these env vars (or the same keys in `mem0_oss.json`):
+- Memory runs against the **bundled Qdrant server** by default, so the gateway and WebUI can both use it at once without the embedded store's file-lock contention. Existing memories migrate automatically, once, on the first boot after upgrade (the embedded store is kept for rollback). To stay on the embedded on-disk store instead, set `MEM0_OSS_QDRANT_URL=` (empty) in `hermes.env`. You can also point memory at an external Qdrant with these env vars (or the same keys in `mem0_oss.json`):
 
-  | Variable                  | Purpose                                                               |
-  | ------------------------- | --------------------------------------------------------------------- |
-  | `MEM0_OSS_QDRANT_URL`     | Qdrant server URL (e.g. `http://127.0.0.1:6333`); enables server mode |
-  | `MEM0_OSS_QDRANT_HOST`    | Qdrant hostname (alternative to URL)                                  |
-  | `MEM0_OSS_QDRANT_PORT`    | Qdrant port for `MEM0_OSS_QDRANT_HOST` (default `6333`)               |
-  | `MEM0_OSS_QDRANT_API_KEY` | API key for an authenticated Qdrant server (optional)                 |
+  | Variable                  | Purpose                                                            |
+  | ------------------------- | ------------------------------------------------------------------ |
+  | `MEM0_OSS_QDRANT_URL`     | Qdrant server URL (e.g. `http://127.0.0.1:6333`); empty = embedded |
+  | `MEM0_OSS_QDRANT_HOST`    | Qdrant hostname (alternative to URL)                               |
+  | `MEM0_OSS_QDRANT_PORT`    | Qdrant port for `MEM0_OSS_QDRANT_HOST` (default `6333`)            |
+  | `MEM0_OSS_QDRANT_API_KEY` | API key for an authenticated Qdrant server (optional)              |
 
-  **Server mode is opt-in and does not migrate your existing memories** — switching starts with an empty store until the #803 default-flip ships migration. See [docs/MEMORY.md](docs/MEMORY.md#qdrant-server-mode-opt-in).
+  See [docs/MEMORY.md](docs/MEMORY.md#qdrant-server-mode-default).
 
 - mem0's telemetry is disabled (`MEM0_TELEMETRY=False`)
 - Read, edit, and prune entries from the Memory panel
@@ -321,6 +321,8 @@ What we're working on next. No promises on dates — this is a small team — bu
 
 **Recently shipped**
 
+- **Memory on the bundled Qdrant server** — memory now defaults to the in-container Qdrant server, ending gateway/WebUI lock contention and migrating existing memories automatically on upgrade; `/readyz` reports real Qdrant health (v0.7.63–v0.7.64)
+- **Electron 44.4.3 + security remediation** — desktop framework bump plus a js-yaml HIGH advisory fix (v0.7.62)
 - **Long-term memory on by default** — fresh installs get persistent memory out of the box: local nomic-embed-text-v1.5 embedder (llama.cpp), self-hosted mem0 + embedded Qdrant, memory state in Settings and `/readyz` (v0.7.60)
 - **Fox branding, Bedrock credentials card, ssh + rsync in the image** — canonical app icons and favicons, AWS Bedrock credentials in Settings (v0.7.60); the openssh-client/rsync image bake merged just after the v0.7.60 tag — container users have it via `:stable`, and it ships tagged with the next release
 - **Upstream bumps** — container-only Option B pin advances ship continuously; the live pinned pair is in [`packages/fox-overlay/versions.toml`](packages/fox-overlay/versions.toml)

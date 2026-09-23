@@ -21,7 +21,13 @@ recipes), see `docs/MEMORY.md` in the Fox in the Box repository.
   `127.0.0.1:8644` and reached through mem0's OpenAI adapter with an
   explicit base URL. Memory content never leaves the machine for embedding,
   and the vector-store dimensions stay stable for the life of the install.
-- **Vector store = embedded Qdrant** (local path, no server), 768 dims.
+- **Vector store = bundled Qdrant server by default** (since v0.7.63). Memory
+  runs against the in-container Qdrant server over HTTP at
+  `127.0.0.1:6333`, so the gateway and WebUI share one store with no file
+  lock. The embedded on-disk Qdrant remains available as an opt-out (set
+  `MEM0_OSS_QDRANT_URL=` empty). Either way the collection is 768 dims. See
+  `docs/MEMORY.md` "Qdrant server mode (default)" for the migration and
+  rollback details.
 - **Pinned LLM adapter.** mem0ai 2.0.10's OpenAI adapter prefers
   `OPENROUTER_API_KEY` from the environment over its config, which could
   silently reroute fact extraction. The plugin registers a pinned subclass
@@ -80,6 +86,10 @@ Precedence: **computed defaults < environment variables <
 | `MEM0_OSS_EMBEDDER_MODEL`    | `nomic-embed-text-v1.5`            | Embedder model id                                                                      |
 | `MEM0_OSS_EMBEDDER_BASE_URL` | `http://127.0.0.1:8644/v1`         | Embedder endpoint override                                                             |
 | `MEM0_OSS_EMBEDDER_DIMS`     | 768                                | Embedding dimensions (flows to embedder AND vector store)                              |
+| `MEM0_OSS_QDRANT_URL`        | `http://127.0.0.1:6333`            | Full Qdrant server URL (default). Empty string forces the embedded on-disk store       |
+| `MEM0_OSS_QDRANT_HOST`       | _(unset)_                          | Qdrant hostname (alternative to URL)                                                   |
+| `MEM0_OSS_QDRANT_PORT`       | `6333`                             | Qdrant port, used with `MEM0_OSS_QDRANT_HOST`                                          |
+| `MEM0_OSS_QDRANT_API_KEY`    | _(unset)_                          | API key for an authenticated Qdrant server (optional)                                  |
 | `MEM0_OSS_COLLECTION`        | `hermes`                           | Qdrant collection name                                                                 |
 | `MEM0_OSS_USER_ID`           | `hermes-user`                      | Memory namespace                                                                       |
 | `MEM0_OSS_TOP_K`             | `10`                               | Default search result count                                                            |
@@ -121,9 +131,14 @@ via `on_memory_write`. When memory is not READY, the tools are not offered.
 
 ## Concurrent access (WebUI + gateway)
 
-The plugin uses embedded Qdrant which normally allows only one process at a
-time. To avoid conflicts when both the WebUI and the gateway run on the same
-host, the plugin creates a fresh `Memory` instance per operation and releases
-the Qdrant lock immediately after each call. If a brief overlap occurs the
-operation is skipped gracefully (logged at DEBUG, not counted as a failure)
-rather than raising an error.
+By default (since v0.7.63) the plugin talks to the bundled Qdrant **server**
+over HTTP, so the WebUI and the gateway share one store with no file lock —
+concurrent access is no longer a special case. The supervisord baseline
+points both processes at `MEM0_OSS_QDRANT_URL=http://127.0.0.1:6333`, so they
+can never diverge onto different backends.
+
+If you opt back to the embedded on-disk store (`MEM0_OSS_QDRANT_URL=` empty),
+the single-process file lock returns. In that mode the plugin creates a fresh
+`Memory` instance per operation and releases the lock immediately after each
+call; a brief overlap is skipped gracefully (logged at DEBUG, not counted as
+a failure) rather than raising an error.
