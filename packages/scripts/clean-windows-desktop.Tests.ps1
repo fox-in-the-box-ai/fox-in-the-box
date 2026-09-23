@@ -30,129 +30,139 @@
 #>
 
 # ── Derivation helpers ────────────────────────────────────────────────────
+# Defined inside a script-root BeforeAll, NOT as bare top-level functions. In
+# Pester v5 the file is executed twice — once for Discovery, once for Run — in
+# separate scopes. Bare script-root functions are defined during Discovery but
+# are not in scope during Run, so the Describe's BeforeAll and It blocks (which
+# execute in the Run phase) fail with CommandNotFoundException. A script-root
+# BeforeAll runs in the Run phase before every child container's setup, so these
+# helpers are visible to the whole file. The Describe below stores its derived
+# values in $script:-scoped variables for the same cross-block visibility reason.
 
-function Get-SanitizedFileName {
-  <#
-    Replicates electron-updater's sanitizeFileName rule: strip the characters
-    that are illegal in a Windows path segment (< > : " / \ | ? *) and keep
-    everything else — notably '@', which is why the npm scope '@fox-in-the-box'
-    survives into the updater cache dir name.
+BeforeAll {
+  function Get-SanitizedFileName {
+    <#
+      Replicates electron-updater's sanitizeFileName rule: strip the characters
+      that are illegal in a Windows path segment (< > : " / \ | ? *) and keep
+      everything else — notably '@', which is why the npm scope '@fox-in-the-box'
+      survives into the updater cache dir name.
 
-    KNOWN LIMITATION: this mirrors the upstream rule as of electron-updater 6.x.
-    A major electron-updater bump could change the sanitization and silently
-    drift this derivation — revisit if the updater cache dir name ever moves.
-  #>
-  param([Parameter(Mandatory = $true)] [string] $Name)
-  return ($Name -replace '[<>:"/\\|?*]', '')
-}
-
-function Get-ElectronPathConfig {
-  <#
-    Reads the four config values that determine the Windows install layout.
-    Fails loud (throw) on any missing key — a vacuous pass here would defeat
-    the whole point of the guard.
-  #>
-  param([Parameter(Mandatory = $true)] [string] $ElectronDir)
-
-  $pkgPath = Join-Path $ElectronDir 'package.json'
-  $ymlPath = Join-Path $ElectronDir 'electron-builder.yml'
-
-  if (-not (Test-Path -LiteralPath $pkgPath)) { throw "package.json not found at $pkgPath" }
-  if (-not (Test-Path -LiteralPath $ymlPath)) { throw "electron-builder.yml not found at $ymlPath" }
-
-  $pkg = Get-Content -LiteralPath $pkgPath -Raw | ConvertFrom-Json
-  if ([string]::IsNullOrWhiteSpace($pkg.name))        { throw "package.json is missing 'name'" }
-  if ([string]::IsNullOrWhiteSpace($pkg.productName)) { throw "package.json is missing 'productName'" }
-
-  # Targeted regex, not a full YAML parser (none is available by default).
-  # Top-level executableName only: the indented `linux:` executableName is a
-  # different key, so anchor at column 0 with no leading whitespace.
-  $yml = Get-Content -LiteralPath $ymlPath -Raw
-  $execMatch = [regex]::Match($yml, '(?m)^executableName:[ \t]*(\S+)[ \t]*$')
-  if (-not $execMatch.Success) { throw "electron-builder.yml is missing a top-level 'executableName'" }
-
-  $perMachineMatch = [regex]::Match($yml, '(?m)^[ \t]*perMachine:[ \t]*(true|false)[ \t]*$')
-  if (-not $perMachineMatch.Success) { throw "electron-builder.yml is missing 'nsis.perMachine'" }
-
-  return [pscustomobject]@{
-    Name           = $pkg.name
-    ProductName    = $pkg.productName
-    ExecutableName = $execMatch.Groups[1].Value
-    PerMachine     = [System.Convert]::ToBoolean($perMachineMatch.Groups[1].Value)
-  }
-}
-
-function Get-DirArrayEntries {
-  <#
-    Extracts the `Join-Path $env:<ROOT> '<leaf>'` entries of a named array from
-    the cleanup script WITHOUT executing it, via the AST. Returns objects with
-    Root / Leaf / Key ("<ROOT>|<leaf>"). Throws if the array is renamed,
-    removed, no longer an @(...) literal, or empty — any of which means the
-    uninstall layout has desynced from the installed one.
-  #>
-  param(
-    [Parameter(Mandatory = $true)] [string] $ScriptPath,
-    [Parameter(Mandatory = $true)] [string] $VariableName
-  )
-
-  $tokens = $null
-  $errors = $null
-  $ast = [System.Management.Automation.Language.Parser]::ParseFile($ScriptPath, [ref]$tokens, [ref]$errors)
-  if ($errors.Count -gt 0) {
-    throw "clean-windows-desktop.ps1 failed to parse: $($errors[0].Message)"
+      KNOWN LIMITATION: this mirrors the upstream rule as of electron-updater 6.x.
+      A major electron-updater bump could change the sanitization and silently
+      drift this derivation — revisit if the updater cache dir name ever moves.
+    #>
+    param([Parameter(Mandatory = $true)] [string] $Name)
+    return ($Name -replace '[<>:"/\\|?*]', '')
   }
 
-  $assignment = $ast.Find({
-      param($node)
-      $node -is [System.Management.Automation.Language.AssignmentStatementAst] -and
-      $node.Left -is [System.Management.Automation.Language.VariableExpressionAst] -and
-      $node.Left.VariablePath.UserPath -eq $VariableName
-    }, $true)
-  if (-not $assignment) {
-    throw "array `$$VariableName not found in $ScriptPath — array renamed or removed (uninstall layout desynced)"
-  }
+  function Get-ElectronPathConfig {
+    <#
+      Reads the four config values that determine the Windows install layout.
+      Fails loud (throw) on any missing key — a vacuous pass here would defeat
+      the whole point of the guard.
+    #>
+    param([Parameter(Mandatory = $true)] [string] $ElectronDir)
 
-  $arrayExpr = $assignment.Right.Find({
-      param($node)
-      $node -is [System.Management.Automation.Language.ArrayExpressionAst]
-    }, $true)
-  if (-not $arrayExpr) {
-    throw "`$$VariableName is no longer an @(...) array literal in $ScriptPath"
-  }
+    $pkgPath = Join-Path $ElectronDir 'package.json'
+    $ymlPath = Join-Path $ElectronDir 'electron-builder.yml'
 
-  $joinCalls = $arrayExpr.FindAll({
-      param($node)
-      $node -is [System.Management.Automation.Language.CommandAst] -and
-      $node.CommandElements.Count -gt 0 -and
-      $node.CommandElements[0].Value -eq 'Join-Path'
-    }, $true)
-  if ($joinCalls.Count -eq 0) {
-    throw "`$$VariableName contains no Join-Path entries in $ScriptPath"
-  }
+    if (-not (Test-Path -LiteralPath $pkgPath)) { throw "package.json not found at $pkgPath" }
+    if (-not (Test-Path -LiteralPath $ymlPath)) { throw "electron-builder.yml not found at $ymlPath" }
 
-  $entries = foreach ($call in $joinCalls) {
-    $pathArgs = $call.CommandElements[1..($call.CommandElements.Count - 1)]
-    $rootVar = $pathArgs | Where-Object {
-      $_ -is [System.Management.Automation.Language.VariableExpressionAst]
-    } | Select-Object -First 1
-    $leaf = $pathArgs | Where-Object {
-      $_ -is [System.Management.Automation.Language.StringConstantExpressionAst]
-    } | Select-Object -First 1
+    $pkg = Get-Content -LiteralPath $pkgPath -Raw | ConvertFrom-Json
+    if ([string]::IsNullOrWhiteSpace($pkg.name))        { throw "package.json is missing 'name'" }
+    if ([string]::IsNullOrWhiteSpace($pkg.productName)) { throw "package.json is missing 'productName'" }
 
-    if (-not $rootVar -or -not $leaf) {
-      throw "a Join-Path entry in `$$VariableName is missing its `$env: root or string leaf"
-    }
+    # Targeted regex, not a full YAML parser (none is available by default).
+    # Top-level executableName only: the indented `linux:` executableName is a
+    # different key, so anchor at column 0 with no leading whitespace.
+    $yml = Get-Content -LiteralPath $ymlPath -Raw
+    $execMatch = [regex]::Match($yml, '(?m)^executableName:[ \t]*(\S+)[ \t]*$')
+    if (-not $execMatch.Success) { throw "electron-builder.yml is missing a top-level 'executableName'" }
 
-    # $env:APPDATA -> VariablePath.UserPath == 'env:APPDATA' -> root 'APPDATA'.
-    $root = $rootVar.VariablePath.UserPath.Split(':')[-1]
-    [pscustomobject]@{
-      Root = $root
-      Leaf = $leaf.Value
-      Key  = "$root|$($leaf.Value)"
+    $perMachineMatch = [regex]::Match($yml, '(?m)^[ \t]*perMachine:[ \t]*(true|false)[ \t]*$')
+    if (-not $perMachineMatch.Success) { throw "electron-builder.yml is missing 'nsis.perMachine'" }
+
+    return [pscustomobject]@{
+      Name           = $pkg.name
+      ProductName    = $pkg.productName
+      ExecutableName = $execMatch.Groups[1].Value
+      PerMachine     = [System.Convert]::ToBoolean($perMachineMatch.Groups[1].Value)
     }
   }
 
-  return @($entries)
+  function Get-DirArrayEntries {
+    <#
+      Extracts the `Join-Path $env:<ROOT> '<leaf>'` entries of a named array from
+      the cleanup script WITHOUT executing it, via the AST. Returns objects with
+      Root / Leaf / Key ("<ROOT>|<leaf>"). Throws if the array is renamed,
+      removed, no longer an @(...) literal, or empty — any of which means the
+      uninstall layout has desynced from the installed one.
+    #>
+    param(
+      [Parameter(Mandatory = $true)] [string] $ScriptPath,
+      [Parameter(Mandatory = $true)] [string] $VariableName
+    )
+
+    $tokens = $null
+    $errors = $null
+    $ast = [System.Management.Automation.Language.Parser]::ParseFile($ScriptPath, [ref]$tokens, [ref]$errors)
+    if ($errors.Count -gt 0) {
+      throw "clean-windows-desktop.ps1 failed to parse: $($errors[0].Message)"
+    }
+
+    $assignment = $ast.Find({
+        param($node)
+        $node -is [System.Management.Automation.Language.AssignmentStatementAst] -and
+        $node.Left -is [System.Management.Automation.Language.VariableExpressionAst] -and
+        $node.Left.VariablePath.UserPath -eq $VariableName
+      }, $true)
+    if (-not $assignment) {
+      throw "array `$$VariableName not found in $ScriptPath — array renamed or removed (uninstall layout desynced)"
+    }
+
+    $arrayExpr = $assignment.Right.Find({
+        param($node)
+        $node -is [System.Management.Automation.Language.ArrayExpressionAst]
+      }, $true)
+    if (-not $arrayExpr) {
+      throw "`$$VariableName is no longer an @(...) array literal in $ScriptPath"
+    }
+
+    $joinCalls = $arrayExpr.FindAll({
+        param($node)
+        $node -is [System.Management.Automation.Language.CommandAst] -and
+        $node.CommandElements.Count -gt 0 -and
+        $node.CommandElements[0].Value -eq 'Join-Path'
+      }, $true)
+    if ($joinCalls.Count -eq 0) {
+      throw "`$$VariableName contains no Join-Path entries in $ScriptPath"
+    }
+
+    $entries = foreach ($call in $joinCalls) {
+      $pathArgs = $call.CommandElements[1..($call.CommandElements.Count - 1)]
+      $rootVar = $pathArgs | Where-Object {
+        $_ -is [System.Management.Automation.Language.VariableExpressionAst]
+      } | Select-Object -First 1
+      $leaf = $pathArgs | Where-Object {
+        $_ -is [System.Management.Automation.Language.StringConstantExpressionAst]
+      } | Select-Object -First 1
+
+      if (-not $rootVar -or -not $leaf) {
+        throw "a Join-Path entry in `$$VariableName is missing its `$env: root or string leaf"
+      }
+
+      # $env:APPDATA -> VariablePath.UserPath == 'env:APPDATA' -> root 'APPDATA'.
+      $root = $rootVar.VariablePath.UserPath.Split(':')[-1]
+      [pscustomobject]@{
+        Root = $root
+        Leaf = $leaf.Value
+        Key  = "$root|$($leaf.Value)"
+      }
+    }
+
+    return @($entries)
+  }
 }
 
 # ── Assertions ────────────────────────────────────────────────────────────
