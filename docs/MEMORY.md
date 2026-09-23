@@ -112,6 +112,14 @@ reachability.
 
 Set `MEM0_OSS_QDRANT_URL` **or** the `HOST`/`PORT` pair — not both.
 
+These four variables configure the Qdrant endpoint through the **environment
+only**. Unlike the other memory settings, they cannot be overridden in
+`$HERMES_HOME/mem0_oss.json`: `/readyz` and the boot migration read the
+endpoint straight from the environment, so a JSON override would silently
+disagree with them. A `qdrant_*` key left in `mem0_oss.json` now produces a
+loud ERROR in `state.json` (status `error`, reason naming the fix) rather than
+being applied — move it to the matching env var.
+
 ### One-time migration on upgrade
 
 Upgrading a live install to v0.7.63 does not strand your existing memories.

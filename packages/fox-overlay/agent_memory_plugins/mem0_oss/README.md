@@ -75,6 +75,14 @@ To disable: remove the `memory:` key, set `memory: provider: ""`, or export
 Precedence: **computed defaults < environment variables <
 `$HERMES_HOME/mem0_oss.json`** (the JSON file overrides individual keys).
 
+**Exception — the Qdrant endpoint is ENV-ONLY.** `MEM0_OSS_QDRANT_URL`,
+`MEM0_OSS_QDRANT_HOST`, `MEM0_OSS_QDRANT_PORT`, and `MEM0_OSS_QDRANT_API_KEY`
+cannot be set through `mem0_oss.json` (#883). The `/readyz` probe and the boot
+migration read the endpoint straight from the environment, so a JSON override
+would silently disagree with them. A `qdrant_*` key left in `mem0_oss.json` now
+produces a **loud ERROR** in `state.json` (status `error`, with a reason naming
+the fix) instead of being applied — move it to the matching env var.
+
 | Env var                      | Default                            | Description                                                                                                                                    |
 | ---------------------------- | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
 | `MEM0_OSS_DISABLED`          | _(unset)_                          | `1` disables memory entirely (visible OFF)                                                                                                     |
@@ -100,8 +108,10 @@ Precedence: **computed defaults < environment variables <
 `$HERMES_HOME/mem0_oss.json` accepts the same keys in snake_case without
 the `MEM0_OSS_` prefix (`llm_provider`, `llm_model`, `api_key`, `base_url`,
 `embedder_provider`, `embedder_model`, `embedder_base_url`,
-`embedder_dims`, `collection`, `user_id`, `top_k`, …). If that file exists
-with embedder keys, it silently shadows the env vars — edit the file.
+`embedder_dims`, `collection`, `user_id`, `top_k`, …) — but **not** the
+`qdrant_*` endpoint keys, which are env-only (see the exception above). If that
+file exists with embedder keys, it silently shadows the env vars — edit the
+file.
 
 Credential changes (key rotation in `~/.hermes/.env`, `hermes auth add`)
 take effect without a restart: the resolver watches the mtimes of
