@@ -998,3 +998,51 @@ class TestQdrantFileKeysEnvOnly:
         state = json.loads((env.home / "mem0_oss" / "state.json").read_text())
         assert state["status"] == "error"
         assert "no longer configures the Qdrant endpoint" in state["reason"]
+
+    def test_removing_qdrant_key_clears_error_promptly(self, env, monkeypatch):
+        """#893: mem0_oss.json is watched, so removing a stale qdrant_* key
+        re-resolves on the NEXT call (bypassing the ~10 min negative-memo TTL)
+        instead of returning the cached ERROR."""
+        monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test-1234")
+        monkeypatch.setattr(plugin, "_embed_server_healthy", lambda: True)
+        json_path = env.home / "mem0_oss.json"
+        json_path.write_text(
+            json.dumps({"qdrant_api_key": "leftover"}), encoding="utf-8"
+        )
+
+        # Latch the negative memo: ERROR raised, then served from cache.
+        with pytest.raises(MemoryUnavailable):
+            plugin._resolve_memoized()
+        with pytest.raises(MemoryUnavailable):
+            plugin._resolve_memoized()
+
+        # Operator removes the offending key; force a distinct mtime so the
+        # watched-stamp differs even within one filesystem tick.
+        json_path.write_text(json.dumps({}), encoding="utf-8")
+        os.utime(json_path, ns=(1_000_000_000, 999_999_999_000_000_000))
+
+        # Stamp changed → memo bypassed → re-resolves; the ERROR is gone
+        # without waiting the TTL.
+        plugin._resolve_memoized()  # must NOT raise
+
+    def test_adding_qdrant_key_detected_on_live_process(self, env, monkeypatch):
+        """#893: adding a qdrant_* key to mem0_oss.json on an already-resolved
+        process is detected on the next call (watched mtime), not deferred to a
+        restart."""
+        monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test-1234")
+        monkeypatch.setattr(plugin, "_embed_server_healthy", lambda: True)
+        json_path = env.home / "mem0_oss.json"
+        json_path.write_text(json.dumps({}), encoding="utf-8")
+
+        plugin._resolve_memoized()  # READY, positive memo latched
+
+        # Operator adds a forbidden endpoint key; force a distinct mtime.
+        json_path.write_text(
+            json.dumps({"qdrant_url": "http://sneaky:6333"}), encoding="utf-8"
+        )
+        os.utime(json_path, ns=(1_000_000_001, 999_999_999_000_000_000))
+
+        with pytest.raises(MemoryUnavailable) as excinfo:
+            plugin._resolve_memoized()
+        assert excinfo.value.severity == "error"
+        assert "no longer configures the Qdrant endpoint" in excinfo.value.reason
