@@ -841,6 +841,58 @@ class TestQdrantResolverDriftGuard:
         assert parsed.port == p_port
         assert parsed.scheme == p_scheme
 
+    @pytest.mark.parametrize(
+        "bad_url",
+        [
+            pytest.param("http://host:notaport", id="non_numeric_port"),
+            pytest.param("http://host:99999999", id="port_out_of_range"),
+            pytest.param("http://host:-1", id="negative_port"),
+            pytest.param("http://[::1", id="truncated_ipv6"),
+        ],
+    )
+    def test_malformed_url_falls_back_instead_of_raising(self, bad_url, monkeypatch):
+        """#885: a malformed MEM0_OSS_QDRANT_URL (bad port / unbracketed IPv6)
+        must not raise out of the resolver — it falls back to a well-formed
+        probe URL so /readyz fails loud via the reachability check, not a 500."""
+        readyz = _load_readyz()
+        for var in (
+            "MEM0_OSS_QDRANT_URL",
+            "MEM0_OSS_QDRANT_HOST",
+            "MEM0_OSS_QDRANT_PORT",
+            "MEM0_OSS_QDRANT_API_KEY",
+        ):
+            monkeypatch.delenv(var, raising=False)
+        monkeypatch.setenv("MEM0_OSS_QDRANT_URL", bad_url)
+
+        # Must not raise (the pre-#885 bug raised ValueError here).
+        url = readyz._memory_qdrant_readyz_url()
+        # Falls back to the co-located default, and the result is itself a
+        # well-formed, re-parseable probe URL.
+        assert url == "http://127.0.0.1:6333/readyz"
+        parsed = urllib.parse.urlparse(url)
+        assert parsed.hostname == "127.0.0.1"
+        assert parsed.port == 6333
+
+    def test_check_vector_store_no_500_on_malformed_url(self, monkeypatch):
+        """#885: _check_vector_store must return a structured ok:false when the
+        server URL is malformed and memory is active — never propagate a
+        ValueError to the request boundary (which surfaced as HTTP 500)."""
+        readyz = _load_readyz()
+        for var in (
+            "MEM0_OSS_QDRANT_HOST",
+            "MEM0_OSS_QDRANT_PORT",
+            "MEM0_OSS_QDRANT_API_KEY",
+        ):
+            monkeypatch.delenv(var, raising=False)
+        monkeypatch.setenv("MEM0_OSS_QDRANT_URL", "http://host:notaport")
+        # Memory active (not opted out), server unreachable — keep it hermetic.
+        monkeypatch.setattr(readyz, "_memory_disabled", lambda: False)
+        monkeypatch.setattr(readyz, "_memory_qdrant_reachable", lambda: False)
+
+        result = readyz._check_vector_store()
+        assert result["ok"] is False
+        assert "unreachable" in result["detail"]
+
 
 # ── Embed-probe health URL resolution (MEM0_OSS_EMBED_HEALTH_URL, #869) ──
 
