@@ -1,0 +1,46 @@
+# Pester path-derivation smoke for the Windows cleanup script (#762).
+#
+# The lint half (#759/#760) proves clean-windows-desktop.ps1 parses and passes
+# PSScriptAnalyzer, but it cannot catch a *semantic* desync: renaming
+# productName / executableName / the npm package name, or flipping
+# electron-builder's nsis.perMachine, silently moves the installed Windows
+# layout while the uninstall script keeps deleting the old directories — the
+# exact class of miss that shipped in #754 (modern userData dir) and #758
+# (modern install dir). This job re-derives the modern userData / updater-cache
+# / NSIS-install directory names from packages/electron config and asserts the
+# script's $dataDirs / $updaterDirs / $installDirs arrays still contain them.
+# The script's arrays are read via the PowerShell AST — never executed (loading
+# it runs rd /s /q, docker rm -f, Stop-Process).
+#
+# NOT a required branch-protection context (path-filtered; would sit "Expected"
+# forever under strict mode on unrelated PRs) — a red run on a PR it does run
+# on is a MERGE BLOCKER by team policy, same as any red check.
+name: Pester Path Smoke
+
+on:
+  pull_request:
+    paths:
+      - 'packages/scripts/**'
+      - 'packages/electron/package.json'
+      - 'packages/electron/electron-builder.yml'
+      - '.github/workflows/pester-path-smoke.yml'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  pester-path-smoke:
+    name: Pester
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Run Pester path-derivation smoke
+        shell: pwsh
+        run: |
+          # Version pinned per the repo's supply-chain habit — bump
+          # deliberately, not via silent PSGallery drift.
+          Install-Module Pester -RequiredVersion 5.7.1 -Force -Scope CurrentUser -SkipPublisherCheck
+          Invoke-Pester -CI -Path packages/scripts/clean-windows-desktop.Tests.ps1
