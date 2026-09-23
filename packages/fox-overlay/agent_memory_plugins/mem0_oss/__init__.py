@@ -230,11 +230,11 @@ def _reject_qdrant_file_keys(file_cfg: dict) -> None:
     Raises ``MemoryUnavailable(severity="error")`` naming the exact fix, so the
     state model surfaces a visible ERROR instead of silently ignoring the key.
 
-    Runs on the (memoized) resolution path, and mem0_oss.json is not in
-    ``_watched_paths()`` today, so after the operator removes the key the ERROR
-    self-clears on the next resolution the memo TTL allows (up to ~10 min) or on
-    restart — the boot/cold-resolution path is always covered. Making recovery
-    (and live detection) prompt by watching mem0_oss.json is tracked in #893.
+    Runs on the (memoized) resolution path. mem0_oss.json is in
+    ``_watched_paths()`` (#893), so an mtime change re-resolves promptly:
+    removing the offending key clears this ERROR on the next resolution
+    (bypassing the negative-memo TTL), and adding one to a READY process is
+    detected the same way.
     """
     stale = [key for key in _QDRANT_FILE_KEYS if key in file_cfg]
     if stale:
@@ -401,6 +401,17 @@ def _watched_paths() -> List[str]:
         if global_auth:
             # Pool reads fall back to the global-root auth.json in profile mode.
             paths.append(str(global_auth))
+    except Exception:
+        pass
+    try:
+        # The plugin's own override file. Watching it so an out-of-process
+        # hand-edit re-resolves promptly: removing a stale qdrant_* key clears
+        # the #883 ERROR on the next call, and adding one is detected. This
+        # re-runs provider resolution + the #883 guard (the embedder is already
+        # re-read per call); collection/user_id/top_k/paths stay cached in
+        # _runtime_cfg until restart. Same path as
+        # _read_file_overrides / save_config. (#893)
+        paths.append(str(get_hermes_home() / "mem0_oss.json"))
     except Exception:
         pass
     return paths
