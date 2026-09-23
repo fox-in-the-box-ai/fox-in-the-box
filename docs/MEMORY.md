@@ -141,6 +141,21 @@ migration never re-runs. To force a re-migration, delete
 `$HERMES_HOME/mem0_oss/.migrated-to-server` before switching back to the
 server.
 
+### Manual recovery migration
+
+If the automatic boot migration was interrupted (no sentinel written) and you
+need to re-run it by hand, invoke the migration CLI inside the container:
+
+```console
+python -m plugins.memory.mem0_oss.migrate_store
+```
+
+It resolves the target Qdrant server the same way the boot job does: an
+explicit `--server-url` wins, then `MEM0_OSS_QDRANT_URL`, then the bare-host
+pair `MEM0_OSS_QDRANT_HOST`/`MEM0_OSS_QDRANT_PORT`, and finally the
+`127.0.0.1:6333` default. Running it in bare-host mode without `--server-url`
+targets the configured host rather than silently defaulting to localhost.
+
 ## models.dev catalog troubleshooting
 
 The flagship providers (OpenRouter, Anthropic, direct OpenAI, openai-mode
@@ -197,6 +212,12 @@ A **sleeping** embed-server is healthy: the unit unloads the model after
 120 s idle (`--sleep-idle-seconds`) and wakes on the next request. Memory's
 health probe treats any HTTP response as alive; only a dead port
 (connection refused / timeout) is an error.
+
+If you point the embedder at a custom `local:` endpoint (via
+`MEM0_OSS_EMBEDDER_BASE_URL`), also set `MEM0_OSS_EMBED_HEALTH_URL` to that
+server's health endpoint (default `http://127.0.0.1:8644/health`) so
+`/readyz`'s embed-server probe dials the same place. Otherwise `/readyz`
+reports the embed-server unreachable while memory itself is fine.
 
 **RAM profile:** ~95 MB loaded at boot until the idle unload, then ~50 MB
 resident; ~150–300 MB transient while embedding. This applies even when

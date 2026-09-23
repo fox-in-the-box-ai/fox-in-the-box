@@ -75,26 +75,27 @@ To disable: remove the `memory:` key, set `memory: provider: ""`, or export
 Precedence: **computed defaults < environment variables <
 `$HERMES_HOME/mem0_oss.json`** (the JSON file overrides individual keys).
 
-| Env var                      | Default                            | Description                                                                            |
-| ---------------------------- | ---------------------------------- | -------------------------------------------------------------------------------------- |
-| `MEM0_OSS_DISABLED`          | _(unset)_                          | `1` disables memory entirely (visible OFF)                                             |
-| `MEM0_OSS_LLM_PROVIDER`      | main chat provider                 | Resolve this provider for fact extraction instead of the main one                      |
-| `MEM0_OSS_LLM_MODEL`         | provider default                   | Fact-extraction model id                                                               |
-| `MEM0_OSS_API_KEY`           | resolved like chat                 | Dedicated key for memory LLM calls                                                     |
-| `MEM0_OSS_BASE_URL`          | resolved like chat                 | Dedicated endpoint for memory LLM calls (`MEM0_OSS_OPENAI_BASE_URL` is a legacy alias) |
-| `MEM0_OSS_EMBEDDER_PROVIDER` | local                              | `openai` (any OpenAI-compatible endpoint) or `aws_bedrock`                             |
-| `MEM0_OSS_EMBEDDER_MODEL`    | `nomic-embed-text-v1.5`            | Embedder model id                                                                      |
-| `MEM0_OSS_EMBEDDER_BASE_URL` | `http://127.0.0.1:8644/v1`         | Embedder endpoint override                                                             |
-| `MEM0_OSS_EMBEDDER_DIMS`     | 768                                | Embedding dimensions (flows to embedder AND vector store)                              |
-| `MEM0_OSS_QDRANT_URL`        | `http://127.0.0.1:6333`            | Full Qdrant server URL (default). Empty string forces the embedded on-disk store       |
-| `MEM0_OSS_QDRANT_HOST`       | _(unset)_                          | Qdrant hostname (alternative to URL)                                                   |
-| `MEM0_OSS_QDRANT_PORT`       | `6333`                             | Qdrant port, used with `MEM0_OSS_QDRANT_HOST`                                          |
-| `MEM0_OSS_QDRANT_API_KEY`    | _(unset)_                          | API key for an authenticated Qdrant server (optional)                                  |
-| `MEM0_OSS_COLLECTION`        | `hermes`                           | Qdrant collection name                                                                 |
-| `MEM0_OSS_USER_ID`           | `hermes-user`                      | Memory namespace                                                                       |
-| `MEM0_OSS_TOP_K`             | `10`                               | Default search result count                                                            |
-| `MEM0_OSS_VECTOR_STORE_PATH` | `$HERMES_HOME/mem0_oss/qdrant`     | On-disk Qdrant path                                                                    |
-| `MEM0_OSS_HISTORY_DB_PATH`   | `$HERMES_HOME/mem0_oss/history.db` | SQLite history path                                                                    |
+| Env var                      | Default                            | Description                                                                                                                                    |
+| ---------------------------- | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `MEM0_OSS_DISABLED`          | _(unset)_                          | `1` disables memory entirely (visible OFF)                                                                                                     |
+| `MEM0_OSS_LLM_PROVIDER`      | main chat provider                 | Resolve this provider for fact extraction instead of the main one                                                                              |
+| `MEM0_OSS_LLM_MODEL`         | provider default                   | Fact-extraction model id                                                                                                                       |
+| `MEM0_OSS_API_KEY`           | resolved like chat                 | Dedicated key for memory LLM calls                                                                                                             |
+| `MEM0_OSS_BASE_URL`          | resolved like chat                 | Dedicated endpoint for memory LLM calls (`MEM0_OSS_OPENAI_BASE_URL` is a legacy alias)                                                         |
+| `MEM0_OSS_EMBEDDER_PROVIDER` | local                              | `openai` (any OpenAI-compatible endpoint) or `aws_bedrock`                                                                                     |
+| `MEM0_OSS_EMBEDDER_MODEL`    | `nomic-embed-text-v1.5`            | Embedder model id                                                                                                                              |
+| `MEM0_OSS_EMBEDDER_BASE_URL` | `http://127.0.0.1:8644/v1`         | Embedder endpoint override                                                                                                                     |
+| `MEM0_OSS_EMBED_HEALTH_URL`  | `http://127.0.0.1:8644/health`     | Health endpoint `/readyz`'s embed-server probe dials; set to match a custom `local:` embedder (keep in sync with `MEM0_OSS_EMBEDDER_BASE_URL`) |
+| `MEM0_OSS_EMBEDDER_DIMS`     | 768                                | Embedding dimensions (flows to embedder AND vector store)                                                                                      |
+| `MEM0_OSS_QDRANT_URL`        | `http://127.0.0.1:6333`            | Full Qdrant server URL (default). Empty string forces the embedded on-disk store                                                               |
+| `MEM0_OSS_QDRANT_HOST`       | _(unset)_                          | Qdrant hostname (alternative to URL)                                                                                                           |
+| `MEM0_OSS_QDRANT_PORT`       | `6333`                             | Qdrant port, used with `MEM0_OSS_QDRANT_HOST`                                                                                                  |
+| `MEM0_OSS_QDRANT_API_KEY`    | _(unset)_                          | API key for an authenticated Qdrant server (optional)                                                                                          |
+| `MEM0_OSS_COLLECTION`        | `hermes`                           | Qdrant collection name                                                                                                                         |
+| `MEM0_OSS_USER_ID`           | `hermes-user`                      | Memory namespace                                                                                                                               |
+| `MEM0_OSS_TOP_K`             | `10`                               | Default search result count                                                                                                                    |
+| `MEM0_OSS_VECTOR_STORE_PATH` | `$HERMES_HOME/mem0_oss/qdrant`     | On-disk Qdrant path                                                                                                                            |
+| `MEM0_OSS_HISTORY_DB_PATH`   | `$HERMES_HOME/mem0_oss/history.db` | SQLite history path                                                                                                                            |
 
 `$HERMES_HOME/mem0_oss.json` accepts the same keys in snake_case without
 the `MEM0_OSS_` prefix (`llm_provider`, `llm_model`, `api_key`, `base_url`,
