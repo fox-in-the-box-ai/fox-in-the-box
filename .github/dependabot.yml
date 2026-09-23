@@ -33,6 +33,12 @@ updates:
         # installers) and surfaces only at release time. These excludes
         # must stay on the workspace-wide scope so the electron manifest
         # is still held here now that the per-directory scope is gone.
+        #
+        # By design (#861), packages/electron/package-lock.json has NO
+        # dependabot version-update coverage: the electron excludes above hold
+        # its manifest, and the per-directory npm scope was removed in #856.
+        # Its CVE coverage is the OSV scan in electron-lock-audit.yml (#861),
+        # the permanent transitive-security control for that lockfile.
         exclude-patterns: ["electron", "electron-builder"]
 
   - package-ecosystem: pip

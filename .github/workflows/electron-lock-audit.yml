@@ -10,6 +10,17 @@ name: Electron lockfile audit
 # fails on HIGH/CRITICAL (CVSS >= 7.0), matching the Trivy/CodeQL fail-on-high
 # posture. #850 keeps the js-yaml split intact, so it does not close this gap.
 #
+# PERMANENT control (#861), not interim. packages/electron/package-lock.json has
+# NO dependabot version-update coverage by design (the #856 dedup kept the
+# electron manifest held on the workspace-wide npm scope, and #850's split does
+# not restore per-lockfile advisory scanning) — this OSV scan is that lockfile's
+# standing CVE coverage. Response protocol when it fires:
+#   - In-range fix available: bump the transitive pin by regenerating the lock
+#     with `(cd packages/electron && npm install --package-lock-only)`, then run
+#     a build to confirm the tree still resolves.
+#   - No in-range fix: bump the offending direct dependency in
+#     packages/electron/package.json (the direct-dep bump path), then regenerate.
+#
 # NOTE: keep this OFF branch protection's required-check list while it carries a
 # paths filter. A path-filtered required check never reports on a PR that misses
 # the filter and hangs that PR forever (see lockfile-consistency.yml's rationale

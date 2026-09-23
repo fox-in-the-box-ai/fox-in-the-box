@@ -23,6 +23,7 @@ On AWS VMs, the instance metadata service (IMDS) makes the machine's default ins
 - **Dependabot** — monitors npm (Electron workspace), pip (fox-overlay), and GitHub Actions for vulnerable dependencies. Weekly schedule, grouped PRs.
 - **Trivy** — scans the container image on every PR and release via GitHub code scanning (SARIF upload). Covers OS packages, language packages, and binary dependencies.
 - **CodeQL** — static analysis for JavaScript/TypeScript and Python on every PR.
+- **OSV-Scanner** (`electron-lock-audit.yml`) — the permanent CVE coverage for `packages/electron/package-lock.json`, which has no Dependabot version-update coverage by design (#861): the electron manifest is held on the workspace-wide npm scope, so nothing else scans that lockfile's transitive tree for advisories. This relies on the `lockfiles` consistency gate (#806) keeping the lock in sync with its manifest, so the scanned tree is the tree that ships.
 
 ### Current state
 
