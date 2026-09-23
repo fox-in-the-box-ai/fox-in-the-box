@@ -98,6 +98,11 @@ share one store with no file lock. The supervisord baseline sets
 the migration job as a single shared surface — the gateway and WebUI can never
 diverge onto different backends.
 
+Operators monitoring readiness should alert on the aggregate `ready` boolean
+from `/readyz` (per the instance contract). In the default Qdrant server mode
+both the `vector_store` and `memory` fields reflect the Qdrant server's
+reachability.
+
 | Variable                  | Purpose                                                                | Default                 |
 | ------------------------- | ---------------------------------------------------------------------- | ----------------------- |
 | `MEM0_OSS_QDRANT_URL`     | Full Qdrant server URL. Empty string forces the embedded on-disk store | `http://127.0.0.1:6333` |

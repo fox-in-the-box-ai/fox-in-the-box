@@ -11,6 +11,14 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [0.7.64] — 2026-09-23
+
+### Fixed
+
+- `/readyz`'s `vector_store` check now reports the real health of the bundled Qdrant server in memory server mode (was incorrectly reporting healthy when the server was down, because it keyed off the stale `QDRANT_URL` / `/data/qdrant` embedded path instead of the memory server endpoint). It now probes the same resolved `MEM0_OSS_QDRANT_URL` / `_HOST` endpoint the `memory` check uses, so the two fields can no longer disagree.
+
+---
+
 ## [0.7.63] — 2026-09-22
 
 ### Changed

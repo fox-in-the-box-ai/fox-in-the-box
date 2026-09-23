@@ -23,7 +23,6 @@ import urllib.request
 logger = logging.getLogger(__name__)
 
 _GATEWAY_PROGRAM = "hermes-gateway"
-_QDRANT_HEALTH_URL = "http://127.0.0.1:6333/healthz"
 _SUPERVISOR_CONF = os.environ.get(
     "SUPERVISORD_CONF", "/etc/supervisor/supervisord.conf"
 )
@@ -63,15 +62,27 @@ def _check_agent_runtime() -> dict:
 
 
 def _check_vector_store() -> dict:
-    try:
-        with urllib.request.urlopen(_QDRANT_HEALTH_URL, timeout=2) as resp:
-            if resp.status == 200:
-                return {"ok": True, "detail": "qdrant :6333 reachable"}
-    except (urllib.error.URLError, OSError, ValueError):
-        pass
-    if not os.environ.get("QDRANT_URL") and not os.path.exists("/data/qdrant"):
-        return {"ok": True, "detail": "qdrant not configured (standalone)"}
-    return {"ok": False, "detail": "qdrant :6333 unreachable"}
+    """Vector store (Qdrant) reachability — INSTANCE_CONTRACT §4.2.
+
+    Resolves and probes the SAME endpoint ``_check_memory`` dials (the #803
+    helpers) so the two checks can never contradict on Qdrant reachability.
+    This check reflects ONLY Qdrant reachability: it stays ``ok: true`` when
+    the embed-server or memory state is unhealthy but the store itself is up
+    (those are ``_check_memory``'s concern, not this one).  Re-probed each
+    request, like memory — no caching."""
+    url = _memory_qdrant_readyz_url()
+    if url is not None:
+        # Server mode (MEM0_OSS_QDRANT_URL / _HOST set — the v0.7.63 default).
+        parsed = urllib.parse.urlparse(url)
+        target = f"{parsed.hostname}:{parsed.port}"
+        if _memory_qdrant_reachable():
+            return {"ok": True, "detail": f"qdrant server {target} reachable"}
+        return {"ok": False, "detail": f"qdrant server {target} unreachable"}
+    # No server to dial: either memory is off, or the embedded on-disk store
+    # is in use.  Neither is a reachability failure — never probe here.
+    if _memory_disabled():
+        return {"ok": True, "detail": "qdrant not in use (memory disabled)"}
+    return {"ok": True, "detail": "qdrant embedded (on-disk store)"}
 
 
 def _check_config_loaded() -> dict:
@@ -94,6 +105,23 @@ def _memory_state_path() -> str:
         return override
     hermes_home = os.environ.get("HERMES_HOME", "/data/data/hermes")
     return os.path.join(hermes_home, "mem0_oss", "state.json")
+
+
+def _memory_disabled() -> bool:
+    """True iff the mem0_oss plugin reports status ``off`` (memory opted out).
+
+    Tolerant read, mirroring ``_check_memory``: a missing, unreadable, or
+    non-dict state is treated as NOT disabled, so the embedded on-disk store
+    is assumed present rather than claiming memory is off."""
+    path = _memory_state_path()
+    try:
+        with open(path, encoding="utf-8") as fh:
+            state = json.load(fh)
+    except (OSError, ValueError):
+        return False
+    if not isinstance(state, dict):
+        return False
+    return str(state.get("status", "")).strip().lower() == "off"
 
 
 def _embed_server_alive() -> bool:
