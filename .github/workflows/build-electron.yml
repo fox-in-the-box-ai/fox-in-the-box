@@ -101,7 +101,15 @@ jobs:
         run: |
           if [[ "${{ runner.os }}" == "Windows" ]]; then
             cd packages/electron
-            npm install
+            # npm ci (not npm install): install strictly from the committed
+            # package-lock.json so the tree baked into the code-signed .exe is
+            # exactly what osv-scanner audits (electron-lock-audit.yml, #861).
+            # npm install can regenerate/drift the lock at build time; npm ci
+            # never mutates it and hard-fails on lock<->manifest drift (the
+            # lockfiles gate, #806, keeps them in sync). Same flat node_modules
+            # layout as npm install — no makensis/MAX_PATH regression (#42 was
+            # about pnpm's nested store, not npm). (#876)
+            npm ci
           else
             pnpm install --frozen-lockfile
           fi
