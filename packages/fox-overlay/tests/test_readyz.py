@@ -840,3 +840,129 @@ class TestQdrantResolverDriftGuard:
         assert parsed.hostname == p_host
         assert parsed.port == p_port
         assert parsed.scheme == p_scheme
+
+
+# ── Embed-probe health URL resolution (MEM0_OSS_EMBED_HEALTH_URL, #869) ──
+
+
+class TestEmbedHealthUrlResolution:
+    """#869: the embed-server probe must dial the resolved health URL — the
+    ``MEM0_OSS_EMBED_HEALTH_URL`` override when set, else the default — not a
+    hardcoded ``127.0.0.1:8644``.  These exercise the REAL ``_embed_health_url``
+    / ``_embed_server_alive`` with a fake ``urlopen`` that captures the dialed
+    URL, so they would catch a probe that ignores the override."""
+
+    def _write_ready_local_state(self, tmp_path, monkeypatch):
+        state_path = tmp_path / "state.json"
+        state_path.write_text(
+            json.dumps(
+                {
+                    "status": "ready",
+                    "reason": "",
+                    "llm": "openrouter",
+                    "embedder": "local:nomic-embed-text-v1.5",
+                }
+            ),
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("MEM0_OSS_STATE_PATH", str(state_path))
+
+    def test_embed_health_url_honors_env_override(self, monkeypatch):
+        readyz = _load_readyz()
+        monkeypatch.setenv(
+            "MEM0_OSS_EMBED_HEALTH_URL", "http://embedder.internal:9000/health"
+        )
+        assert readyz._embed_health_url() == "http://embedder.internal:9000/health"
+
+    def test_embed_health_url_defaults_when_unset(self, monkeypatch):
+        readyz = _load_readyz()
+        monkeypatch.delenv("MEM0_OSS_EMBED_HEALTH_URL", raising=False)
+        assert readyz._embed_health_url() == readyz._EMBED_HEALTH_URL
+        assert readyz._embed_health_url() == "http://127.0.0.1:8644/health"
+
+    def test_embed_probe_dials_override_not_8644(self, monkeypatch):
+        # Primary #869 repro: with the override set, the real probe must dial
+        # the override host — not the hardcoded co-located default.
+        import urllib.request
+
+        readyz = _load_readyz()
+        monkeypatch.setenv(
+            "MEM0_OSS_EMBED_HEALTH_URL", "http://embedder.internal:9000/health"
+        )
+        fake = _FakeUrlopen()
+        monkeypatch.setattr(urllib.request, "urlopen", fake)
+
+        assert readyz._embed_server_alive() is True
+        assert fake.calls, "embed probe must dial the resolved health URL"
+        parsed = urllib.parse.urlparse(fake.calls[0])
+        assert parsed.hostname == "embedder.internal"
+        assert parsed.port == 9000
+        assert "127.0.0.1:8644" not in fake.calls[0]
+
+    def test_embed_probe_default_dials_8644(self, monkeypatch):
+        # No override → default install behavior unchanged.
+        import urllib.request
+
+        readyz = _load_readyz()
+        monkeypatch.delenv("MEM0_OSS_EMBED_HEALTH_URL", raising=False)
+        fake = _FakeUrlopen()
+        monkeypatch.setattr(urllib.request, "urlopen", fake)
+
+        assert readyz._embed_server_alive() is True
+        assert fake.calls
+        parsed = urllib.parse.urlparse(fake.calls[0])
+        assert parsed.hostname == "127.0.0.1"
+        assert parsed.port == 8644
+
+    def test_check_memory_embed_dead_names_resolved_target(self, tmp_path, monkeypatch):
+        # Guards the detail-string fix: a dead embed-server names the RESOLVED
+        # endpoint, not a hardcoded ":8644".  Embedded Qdrant (no server env)
+        # is trivially reachable, so the only dial is the embed probe.
+        import urllib.error
+        import urllib.request
+
+        readyz = _load_readyz()
+        self._write_ready_local_state(tmp_path, monkeypatch)
+        _clear_qdrant_env(monkeypatch)
+        monkeypatch.setenv(
+            "MEM0_OSS_EMBED_HEALTH_URL", "http://embedder.internal:9000/health"
+        )
+        monkeypatch.setattr(readyz, "_check_agent_runtime", lambda: {"ok": True})
+        fake = _FakeUrlopen(raises=urllib.error.URLError("refused"))
+        monkeypatch.setattr(urllib.request, "urlopen", fake)
+
+        checks = readyz.get_readiness()["checks"]
+        assert checks["memory"]["ok"] is False
+        detail = checks["memory"]["detail"]
+        assert "embedder.internal:9000" in detail
+        assert ":8644" not in detail
+
+    def test_non_local_embedder_never_dials(self, tmp_path, monkeypatch):
+        # Behavior preserved: a remote embedder skips the probe entirely, even
+        # with an override configured — nothing is dialed.
+        import urllib.request
+
+        readyz = _load_readyz()
+        state_path = tmp_path / "state.json"
+        state_path.write_text(
+            json.dumps(
+                {
+                    "status": "ready",
+                    "reason": "",
+                    "llm": "openrouter",
+                    "embedder": "openai:text-embedding-3-small",
+                }
+            ),
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("MEM0_OSS_STATE_PATH", str(state_path))
+        _clear_qdrant_env(monkeypatch)
+        monkeypatch.setenv(
+            "MEM0_OSS_EMBED_HEALTH_URL", "http://embedder.internal:9000/health"
+        )
+        fake = _FakeUrlopen()
+        monkeypatch.setattr(urllib.request, "urlopen", fake)
+
+        result = readyz._check_memory()
+        assert result["ok"] is True
+        assert fake.calls == []  # remote embedder never probes the embed server

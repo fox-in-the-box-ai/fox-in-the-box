@@ -9,6 +9,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Fixed
+
+- `/readyz`'s embed-server check now honors `MEM0_OSS_EMBED_HEALTH_URL` instead of always probing the hardcoded `http://127.0.0.1:8644/health`. When an operator overrides the embedder endpoint (with a `local:` embedder), `/readyz` previously reported the embed-server unreachable while memory was fine; it now probes the same endpoint the memory plugin dials and names the resolved endpoint in the detail string.
+
 ---
 
 ## [0.7.64] — 2026-09-23
