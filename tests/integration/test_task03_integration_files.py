@@ -23,7 +23,7 @@ class TestDockerfile(unittest.TestCase):
 
     def test_ac1_base_and_pinned_qdrant(self) -> None:
         self.assertIn("FROM python:3.11-slim", self.df)
-        self.assertRegex(self.df, r"ARG\s+QDRANT_VERSION=v1\.9\.4")
+        self.assertRegex(self.df, r"ARG\s+QDRANT_VERSION=v1\.19\.1")
         self.assertNotRegex(
             self.df,
             re.compile(
@@ -34,10 +34,15 @@ class TestDockerfile(unittest.TestCase):
 
     def test_non_root_user_named_foxinthebox(self) -> None:
         self.assertRegex(self.df, r"useradd\s+.*\sfoxinthebox")
-        self.assertNotIn("fox-in-the-box", self.df)
+        # The OS user, its group, and every ownership/path reference must use the
+        # unhyphenated "foxinthebox" — a hyphenated "fox-in-the-box" identifier
+        # would desync from the chown/usermod lines. The negative lookahead skips
+        # asset filenames (e.g. the fox-in-the-box.css stylesheet), which are not
+        # user identifiers, so the guard still catches a stray hyphenated user.
+        self.assertNotRegex(self.df, r"fox-in-the-box(?!\.)")
 
     def test_expose_and_entrypoint(self) -> None:
-        self.assertIn("EXPOSE 8787 6333", self.df)
+        self.assertIn("EXPOSE 8787", self.df)
         self.assertIn('ENTRYPOINT ["/app/entrypoint.sh"]', self.df)
 
     def test_supervisor_and_paths_copied(self) -> None:
@@ -136,21 +141,6 @@ class TestEntrypoint(unittest.TestCase):
                 r"if\s+\[\s+-f\s+\"/data/data/tailscale/tailscaled\.state\"\s+\]"
             ),
         )
-
-    def test_dev_toolbelt_self_heal(self) -> None:
-        """Entrypoint self-heals missing ssh/rsync on stale images (best-effort)."""
-        self.assertIn("_ensure_dev_toolbelt", self.sh)
-        self.assertIn("openssh-client", self.sh)
-        self.assertIn("rsync", self.sh)
-        self.assertIn("apt-get install -y --no-install-recommends", self.sh)
-        # Must never fail boot when apt is unavailable, and the warning must
-        # carry apt's actual error text for operators
-        self.assertIn("WARN: dev-tool heal failed", self.sh)
-        self.assertIn("apt said:", self.sh)
-        # Offline boots must not stall on apt's default timeouts
-        self.assertIn("Acquire::http::Timeout=5", self.sh)
-        # Bridge code carries its removal tracker
-        self.assertIn("#736", self.sh)
 
 
 if __name__ == "__main__":

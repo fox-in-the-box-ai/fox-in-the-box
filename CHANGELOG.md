@@ -9,6 +9,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Removed
+
+- The no-op ssh/rsync self-heal from the container entrypoint. It was bridge code for images built before `openssh-client` and `rsync` were baked into the image; both tools have shipped baked since v0.7.61, so every image carrying the heal also carries the tools and the heal never had a live purpose. (#736)
+
 ### Fixed
 
 - `/readyz`'s embed-server check now honors `MEM0_OSS_EMBED_HEALTH_URL` instead of always probing the hardcoded `http://127.0.0.1:8644/health`. When an operator overrides the embedder endpoint (with a `local:` embedder), `/readyz` previously reported the embed-server unreachable while memory was fine; it now probes the same endpoint the memory plugin dials and names the resolved endpoint in the detail string.
