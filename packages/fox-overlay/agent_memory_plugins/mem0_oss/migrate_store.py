@@ -358,18 +358,20 @@ def run_migration(
     and real connections; everything else is injectable.
 
     Defaults resolve from the plugin's environment: the embedded path from
-    ``MEM0_OSS_VECTOR_STORE_PATH`` / ``$HERMES_HOME``, the server from
-    ``MEM0_OSS_QDRANT_URL`` (else ``127.0.0.1:6333``), the collection from
-    ``MEM0_OSS_COLLECTION``, and the dims from ``MEM0_OSS_EMBEDDER_DIMS``.
+    ``MEM0_OSS_VECTOR_STORE_PATH`` / ``$HERMES_HOME``, the server via
+    :func:`_boot_server_url` (``MEM0_OSS_QDRANT_URL``, else a bare
+    ``MEM0_OSS_QDRANT_HOST`` (+ ``_PORT``), else ``127.0.0.1:6333``), the
+    collection from ``MEM0_OSS_COLLECTION``, and the dims from
+    ``MEM0_OSS_EMBEDDER_DIMS``.
     """
     from qdrant_client import QdrantClient  # lazy: prod-only dep
 
     source_path = source_path or _default_source_path()
-    server_url = (
-        server_url
-        or os.environ.get("MEM0_OSS_QDRANT_URL", "").strip()
-        or DEFAULT_SERVER_URL
-    )
+    # Honor the full plugin precedence — explicit arg, else URL, else a bare
+    # HOST(+PORT) via _boot_server_url, else the local default — so the manual
+    # recovery CLI targets the same server the plugin does instead of always
+    # falling through to 127.0.0.1:6333 (issue #872).
+    server_url = server_url or _boot_server_url() or DEFAULT_SERVER_URL
     collection = collection or os.environ.get("MEM0_OSS_COLLECTION", DEFAULT_COLLECTION)
     if expected_dims is None:
         expected_dims = int(os.environ.get("MEM0_OSS_EMBEDDER_DIMS", DEFAULT_DIMS))

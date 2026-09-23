@@ -12,6 +12,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Fixed
 
 - `/readyz`'s embed-server check now honors `MEM0_OSS_EMBED_HEALTH_URL` instead of always probing the hardcoded `http://127.0.0.1:8644/health`. When an operator overrides the embedder endpoint (with a `local:` embedder), `/readyz` previously reported the embed-server unreachable while memory was fine; it now probes the same endpoint the memory plugin dials and names the resolved endpoint in the detail string.
+- The `mem0_oss` migration CLI (`python -m plugins.memory.mem0_oss.migrate_store`) now honors a bare-host Qdrant configuration (`MEM0_OSS_QDRANT_HOST`/`_PORT`) when run manually without `--server-url`. It previously resolved only `MEM0_OSS_QDRANT_URL` and otherwise defaulted to `127.0.0.1:6333`, so a manual recovery migration in bare-host mode could target the wrong endpoint; it now uses the same resolution as the automatic boot-time migration.
 
 ---
 

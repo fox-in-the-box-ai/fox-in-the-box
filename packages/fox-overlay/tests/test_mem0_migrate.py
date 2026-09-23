@@ -16,6 +16,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import sys
+import types
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -39,6 +40,7 @@ _spec.loader.exec_module(migrate_store_mod)
 migrate_store = migrate_store_mod.migrate_store
 MigrationError = migrate_store_mod.MigrationError
 run_boot_migration = migrate_store_mod.run_boot_migration
+run_migration = migrate_store_mod.run_migration
 
 
 # ── Fakes: a working in-memory stand-in for the qdrant-client surface ────────
@@ -630,3 +632,120 @@ def test_boot_server_url_empty_when_nothing_set(monkeypatch):
 
     # Neither URL nor HOST → embedded mode, nothing to migrate to.
     assert migrate_store_mod._boot_server_url() == ""
+
+
+# ── run_migration: destination server resolution (issue #872) ─────────────────
+#
+# The manual recovery CLI (``python -m plugins.memory.mem0_oss.migrate_store``,
+# no --boot, no --server-url) must target the SAME Qdrant the plugin talks to.
+# run_migration resolves the destination through the full precedence chain —
+# explicit arg → MEM0_OSS_QDRANT_URL → bare MEM0_OSS_QDRANT_HOST(+_PORT) →
+# DEFAULT_SERVER_URL — reusing _boot_server_url so a bare-host config is honored
+# instead of always falling through to 127.0.0.1:6333.  These drive the real
+# run_migration with a recording fake QdrantClient injected as the qdrant_client
+# module (no network, no dependency), asserting the URL the dest client is
+# constructed with.
+
+
+class _RecordingClient(FakeQdrant):
+    """A stateful FakeQdrant that also records its construction kwargs, standing
+    in for ``qdrant_client.QdrantClient``.  The path-based source seeds itself so
+    the migration proceeds far enough to construct the url-based dest client."""
+
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__()
+        self.init_kwargs = kwargs
+        if "path" in kwargs:  # embedded source — give it something to migrate
+            self.seed("hermes", 768, _make_records(2))
+
+    def close(self) -> None:  # run_migration closes both clients in a finally
+        pass
+
+
+@pytest.fixture
+def migrate_env(monkeypatch, tmp_path):
+    """Clean env for run_migration plus a recording qdrant_client fake.  Returns
+    the list every constructed client is appended to (source first, url-based
+    dest second)."""
+    for name in (
+        "MEM0_OSS_QDRANT_URL",
+        "MEM0_OSS_QDRANT_HOST",
+        "MEM0_OSS_QDRANT_PORT",
+        "MEM0_OSS_QDRANT_API_KEY",
+        "MEM0_OSS_COLLECTION",
+        "MEM0_OSS_EMBEDDER_DIMS",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+    # A real dir so run_migration's source-existence check passes.
+    store_dir = tmp_path / "store"
+    store_dir.mkdir()
+    monkeypatch.setenv("MEM0_OSS_VECTOR_STORE_PATH", str(store_dir))
+
+    clients: List[_RecordingClient] = []
+
+    class _Factory(_RecordingClient):
+        def __init__(self, **kwargs: Any) -> None:
+            super().__init__(**kwargs)
+            clients.append(self)
+
+    fake_module = types.ModuleType("qdrant_client")
+    fake_module.QdrantClient = _Factory
+    fake_module.models = FakeModels
+    monkeypatch.setitem(sys.modules, "qdrant_client", fake_module)
+    return clients
+
+
+def _dest_client(clients: List[_RecordingClient]) -> _RecordingClient:
+    """The url-based destination client (the source is the path-based one)."""
+    dests = [c for c in clients if "url" in c.init_kwargs]
+    assert len(dests) == 1
+    return dests[0]
+
+
+def test_run_migration_bare_host_targets_configured_host(migrate_env, monkeypatch):
+    # Primary #872 repro: bare HOST(+PORT), no URL → dest must target the
+    # configured host, NOT the 127.0.0.1:6333 default.  FAILS pre-fix.
+    monkeypatch.setenv("MEM0_OSS_QDRANT_HOST", "qdrant.internal")
+    monkeypatch.setenv("MEM0_OSS_QDRANT_PORT", "6400")
+
+    run_migration()
+
+    dest = _dest_client(migrate_env)
+    assert dest.init_kwargs["url"] == "http://qdrant.internal:6400"
+    assert "127.0.0.1" not in dest.init_kwargs["url"]
+
+
+def test_run_migration_explicit_arg_wins_over_env(migrate_env, monkeypatch):
+    # An explicit server_url arg beats every env source.  PASSES pre-fix
+    # (guards the arg path against regression).
+    monkeypatch.setenv("MEM0_OSS_QDRANT_HOST", "qdrant.internal")
+    monkeypatch.setenv("MEM0_OSS_QDRANT_URL", "http://env-url:6333")
+
+    run_migration(server_url="http://explicit:6333")
+
+    dest = _dest_client(migrate_env)
+    assert dest.init_kwargs["url"] == "http://explicit:6333"
+
+
+def test_run_migration_unset_falls_back_to_default(migrate_env):
+    # Neither URL nor HOST set → the historical 127.0.0.1:6333 default.
+    # PASSES pre-fix (guards the no-config behavior against regression).
+    run_migration()
+
+    dest = _dest_client(migrate_env)
+    assert dest.init_kwargs["url"] == migrate_store_mod.DEFAULT_SERVER_URL
+
+
+def test_run_migration_authed_bare_host_uses_https_and_key(migrate_env, monkeypatch):
+    # Bare HOST + api key → https scheme (mirroring the op-path client) and the
+    # key carried through to the dest client.  FAILS pre-fix (host ignored →
+    # http://127.0.0.1:6333).
+    monkeypatch.setenv("MEM0_OSS_QDRANT_HOST", "secure.host")
+    monkeypatch.setenv("MEM0_OSS_QDRANT_API_KEY", "test-key")
+
+    run_migration()
+
+    dest = _dest_client(migrate_env)
+    assert dest.init_kwargs["url"] == "https://secure.host:6333"
+    assert dest.init_kwargs["api_key"] == "test-key"
