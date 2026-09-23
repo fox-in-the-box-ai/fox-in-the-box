@@ -406,9 +406,10 @@ def _watched_paths() -> List[str]:
     try:
         # The plugin's own override file. Watching it so an out-of-process
         # hand-edit re-resolves promptly: removing a stale qdrant_* key clears
-        # the #883 ERROR without waiting the negative-memo TTL, and any override
-        # key edit hot-reloads (matching .env, which already carries the same
-        # MEM0_OSS_* overrides in the watch set). Same path as
+        # the #883 ERROR on the next call, and adding one is detected. This
+        # re-runs provider resolution + the #883 guard (the embedder is already
+        # re-read per call); collection/user_id/top_k/paths stay cached in
+        # _runtime_cfg until restart. Same path as
         # _read_file_overrides / save_config. (#893)
         paths.append(str(get_hermes_home() / "mem0_oss.json"))
     except Exception:
