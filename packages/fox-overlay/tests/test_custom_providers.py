@@ -483,6 +483,55 @@ class TestTestProvider:
         mod = _load_module()
         self._assert_blocked_never_fetches(mod, "http://0.0.0.0/v1")
 
+    def _assert_blocked_via_dns(self, mod, ip, family):
+        """Patch getaddrinfo to resolve to `ip` and assert the guard blocks it
+        without opening a socket. Locks the ipv4_mapped-unwrap branch and the
+        is_global backstop deterministically (independent of literal-IP
+        classification, which varies across Python versions)."""
+        # The guard reads only sockaddr[0]; shape differs by family.
+        sockaddr = (ip, 0, 0, 0) if family == mod.socket.AF_INET6 else (ip, 0)
+        with mock.patch.object(
+            mod.socket,
+            "getaddrinfo",
+            return_value=[(family, mod.socket.SOCK_STREAM, 6, "", sockaddr)],
+        ):
+
+            def _boom(*a, **kw):
+                raise AssertionError("opener must not be called for a blocked target")
+
+            with mock.patch.object(mod._PROBE_OPENER, "open", side_effect=_boom):
+                result = mod.test_provider({"base_url": "http://probe.example.com/v1"})
+        assert result["ok"] is False
+        assert result["error"] == mod._NONPUBLIC_MSG
+
+    def test_rejects_ipv6_ula(self):
+        mod = _load_module()
+        self._assert_blocked_via_dns(mod, "fd00::1", mod.socket.AF_INET6)
+
+    def test_rejects_ipv6_link_local(self):
+        mod = _load_module()
+        self._assert_blocked_via_dns(mod, "fe80::1", mod.socket.AF_INET6)
+
+    def test_rejects_ipv4_mapped_private(self):
+        mod = _load_module()
+        self._assert_blocked_via_dns(mod, "::ffff:10.0.0.5", mod.socket.AF_INET6)
+
+    def test_rejects_ipv4_mapped_metadata(self):
+        mod = _load_module()
+        self._assert_blocked_via_dns(mod, "::ffff:169.254.169.254", mod.socket.AF_INET6)
+
+    def test_rejects_multicast_v4(self):
+        mod = _load_module()
+        self._assert_blocked_via_dns(mod, "224.0.0.1", mod.socket.AF_INET)
+
+    def test_rejects_multicast_v6(self):
+        mod = _load_module()
+        self._assert_blocked_via_dns(mod, "ff02::1", mod.socket.AF_INET6)
+
+    def test_rejects_reserved(self):
+        mod = _load_module()
+        self._assert_blocked_via_dns(mod, "240.0.0.1", mod.socket.AF_INET)
+
     def test_rejects_rebind_hostname(self):
         """A public-looking hostname that resolves to a private address is
         rejected (DNS-rebind style)."""

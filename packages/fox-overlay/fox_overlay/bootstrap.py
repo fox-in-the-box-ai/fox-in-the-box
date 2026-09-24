@@ -92,7 +92,11 @@ def install() -> None:
             # A non-ImportError at import time (e.g. an operator config typo that
             # raises ValueError while a module builds its registry) must degrade
             # Fox routes, not brick WebUI boot (§19.4 #2). Full traceback so the
-            # failure is loud (§19.4 #3), not silently swallowed.
+            # failure is loud (§19.4 #3), not silently swallowed. By design this
+            # degrades ALL Fox overlay routes on a single bad module-scope value
+            # (e.g. MODEL_SIZE_PHI4MINI): KNOWN_MODELS builds at import, so one
+            # module raising takes the package import with it — acceptable per
+            # additive/removable (the WebUI core is upstream and keeps serving).
             _log.exception(
                 "[fox-overlay] webui_modules import raised a non-ImportError "
                 "(operator config error or module bug); Fox routes degraded, WebUI core continues"
