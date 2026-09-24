@@ -193,12 +193,14 @@ jobs:
   # fire for workflow-published releases (see sbom.yml header).
   sbom:
     name: Attach SBOM
-    needs: [release]
+    needs: [release, wait-for-container]
     uses: ./.github/workflows/sbom.yml
     permissions:
       contents: write
+      packages: read
     with:
       tag: ${{ github.ref_name }}
+      image_digest: ${{ needs.wait-for-container.outputs.digest }}
 
   release:
     name: Create GitHub Release

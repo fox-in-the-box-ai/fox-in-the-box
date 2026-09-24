@@ -14,6 +14,10 @@ on:
         description: "Tag whose release gets the SBOM asset"
         required: true
         type: string
+      image_digest:
+        description: "Index digest (sha256:...) of the released multi-arch image; the SBOM is generated against this exact object"
+        required: false
+        type: string
   workflow_dispatch:
     inputs:
       tag:
@@ -23,6 +27,7 @@ on:
 
 permissions:
   contents: write
+  packages: read
 
 jobs:
   sbom:
@@ -38,23 +43,62 @@ jobs:
           # release. Fail loud instead.
           gh release view "${{ inputs.tag }}" --repo "${{ github.repository }}" >/dev/null
 
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Log in to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
-          # SBOM must describe the released tree, not default-branch HEAD.
-          ref: ${{ inputs.tag || github.ref }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve released image digest (fail loud if absent)
+        id: img
+        env:
+          IMAGE: ghcr.io/${{ github.repository_owner }}/cloud
+          TAG: ${{ inputs.tag || github.ref_name }}
+          PASSED_DIGEST: ${{ inputs.image_digest }}
+        run: |
+          set -euo pipefail
+          if [[ -n "$PASSED_DIGEST" ]]; then
+            DIGEST="$PASSED_DIGEST"                       # release path: exact bytes from wait-for-container
+          else
+            # Backfill / manual path: resolve the index digest from the tag.
+            DIGEST=$(docker buildx imagetools inspect "${IMAGE}:${TAG}" \
+              --format '{{json .Manifest}}' | jq -r '.digest')
+          fi
+          if [[ -z "$DIGEST" || "$DIGEST" == "null" ]]; then
+            echo "::error::No published image for ${IMAGE}:${TAG} — refusing to emit a non-image SBOM (#898)."
+            exit 1
+          fi
+          echo "ref=${IMAGE}@${DIGEST}" >> "$GITHUB_OUTPUT"
+
       - uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
         with:
-          path: .
+          # Scan the shipped multi-arch image by immutable index digest, not
+          # the source tree (#898). syft resolves the index to the runner's
+          # platform (linux/amd64); this asset therefore reflects the amd64
+          # image. OS + Python layers are arch-identical; only the bundled
+          # binaries differ by arch. Per-arch SBOMs tracked as a follow-up.
+          image: ${{ steps.img.outputs.ref }}
           format: cyclonedx-json
           output-file: sbom.cdx.json
-          # Suppress sbom-action's built-in release-asset upload. On a tag ref
-          # it attaches its own `fox-in-the-box-sbom.cyclonedx.json`, which
-          # duplicated the deliberate `sbom.cdx.json` attach below — every
-          # release since v0.7.61 carried the SBOM twice (#830). The softprops
-          # step is the canonical, engineered path: it targets the right tag on
-          # the workflow_call / manual-release / workflow_dispatch-backfill
-          # triggers via `tag_name`, which this default upload does not.
+          # Suppress sbom-action's built-in release-asset upload, which would
+          # attach its own `fox-in-the-box-sbom.cyclonedx.json` alongside the
+          # deliberate `sbom.cdx.json` below — every release since v0.7.61
+          # carried the SBOM twice (#830). The softprops step is the canonical
+          # attach path, targeting the right tag on the workflow_call /
+          # manual-release / workflow_dispatch-backfill triggers via `tag_name`.
           upload-release-assets: false
+
+      - name: Assert the SBOM describes the image, not the source tree (#898)
+        run: |
+          set -euo pipefail
+          jq -e '.metadata.component.type == "container"' sbom.cdx.json >/dev/null \
+            || { echo "::error::SBOM metadata.component.type is not 'container' — it is describing the source tree (regression of #898)."; exit 1; }
+          for eco in "pkg:deb" "pkg:pypi"; do
+            n=$(jq --arg e "$eco" '[.components[]?.purl // "" | select(startswith($e))] | length' sbom.cdx.json)
+            [[ "$n" -gt 0 ]] || { echo "::error::SBOM contains 0 ${eco} components — not an image SBOM (regression of #898)."; exit 1; }
+          done
+          echo "SBOM describes the image: container component + deb + pypi present."
       - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           files: sbom.cdx.json
