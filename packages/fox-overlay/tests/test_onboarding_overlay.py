@@ -240,3 +240,68 @@ def test_write_env_key_writes_file(fresh_dispatch_and_module, tmp_path, monkeypa
     m._ENV_PATH = tmp_path / "test.env"
     m._write_env_key("FOO", "bar")
     assert m._ENV_PATH.read_text().strip() == "FOO=bar"
+
+
+# ── #899: env-injection rejection + 0600 mode ─────────────────────────────
+
+
+@pytest.mark.parametrize(
+    "bad_value", ["sk-a\nB=2", "sk-a\rB=2", "sk-a\x00B=2", "sk-a\tB=2"]
+)
+def test_write_env_key_rejects_control_chars_in_value(
+    fresh_dispatch_and_module, tmp_path, bad_value
+):
+    """#899: a control char in the value would inject extra env lines."""
+    _d, m = fresh_dispatch_and_module
+    m._ENV_PATH = tmp_path / "test.env"
+    with pytest.raises(ValueError):
+        m._write_env_key("OPENROUTER_API_KEY", bad_value)
+    assert not m._ENV_PATH.exists()  # nothing written
+
+
+def test_openrouter_rejects_newline_injection(fresh_dispatch_and_module, tmp_path):
+    """#899 repro: sk-…\\nFOX_EVIL=1 is rejected and writes zero extra lines."""
+    _d, m = fresh_dispatch_and_module
+    m._ENV_PATH = tmp_path / "hermes.env"
+    result = m.handle_setup_openrouter(
+        _FakeHandler(), {"key": "sk-" + "a" * 20 + "\nFOX_EVIL_INJECTED=1\nMORE=2"}
+    )
+    assert result["ok"] is False
+    assert "FOX_EVIL_INJECTED" not in result["error"]  # error must not echo the key
+    assert not m._ENV_PATH.exists()
+
+
+def test_openrouter_valid_key_writes_single_line(fresh_dispatch_and_module, tmp_path):
+    """Regression: a clean key still saves exactly one line."""
+    _d, m = fresh_dispatch_and_module
+    m._ENV_PATH = tmp_path / "hermes.env"
+    key = "sk-" + "a" * 20
+    result = m.handle_setup_openrouter(_FakeHandler(), {"key": key})
+    assert result["ok"] is True
+    assert m._ENV_PATH.read_text().strip() == f"OPENROUTER_API_KEY={key}"
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX mode bits only")
+def test_write_env_key_sets_0600(fresh_dispatch_and_module, tmp_path):
+    """#899: the provider-secret file is written owner-only."""
+    import stat
+
+    _d, m = fresh_dispatch_and_module
+    m._ENV_PATH = tmp_path / "hermes.env"
+    m._write_env_key("OPENROUTER_API_KEY", "sk-value")
+    assert stat.S_IMODE(m._ENV_PATH.stat().st_mode) == 0o600
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX mode bits only")
+def test_write_env_key_self_heals_0644_to_0600(fresh_dispatch_and_module, tmp_path):
+    """#899: a pre-existing world-readable file is normalized on next write."""
+    import stat
+
+    _d, m = fresh_dispatch_and_module
+    m._ENV_PATH = tmp_path / "hermes.env"
+    m._ENV_PATH.write_text("FOX_HOSTNAME=fox-clever\n", encoding="utf-8")
+    m._ENV_PATH.chmod(0o644)
+    m._write_env_key("OPENROUTER_API_KEY", "sk-value")
+    assert stat.S_IMODE(m._ENV_PATH.stat().st_mode) == 0o600
+    # existing key preserved
+    assert "FOX_HOSTNAME=fox-clever" in m._ENV_PATH.read_text()

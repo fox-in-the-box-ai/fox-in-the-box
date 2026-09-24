@@ -129,7 +129,17 @@ def _write_env_key(key: str, value: str) -> None:
 
     Creates the file and parent directory if they do not exist.
     Preserves existing lines. Updates in-place if key already present.
+
+    Enforces the "one key, one physical line" invariant structurally: a
+    control character in ``value`` (newline/CR/tab/NUL/DEL) would inject
+    extra env lines, so it is rejected loudly (#899). The file holds a
+    provider secret, so it is written owner-only (0600).
     """
+    if any(ord(ch) < 0x20 or ord(ch) == 0x7F for ch in value):
+        raise ValueError("env value contains control characters")
+    if not key or any(ord(ch) < 0x20 or ord(ch) == 0x7F or ch == "=" for ch in key):
+        raise ValueError(f"invalid env key: {key!r}")
+
     _ENV_PATH.parent.mkdir(parents=True, exist_ok=True)
 
     lines: list[str] = []
@@ -152,6 +162,9 @@ def _write_env_key(key: str, value: str) -> None:
         lines.append(f"{key}={value}")
 
     _ENV_PATH.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    # Owner-only: the file holds a provider secret. Applied unconditionally so
+    # a pre-existing 0644 file (shipped before #899) self-heals on next write.
+    os.chmod(_ENV_PATH, 0o600)
 
 
 # ── Setup route handlers ─────────────────────────────────────────────────────
@@ -199,9 +212,16 @@ def handle_setup_openrouter(handler, body: dict) -> dict:
         return {"ok": False, "error": "Key must start with sk-."}
     if len(key) > 512:
         return {"ok": False, "error": "Key is too long."}
+    # str.strip() only removes leading/trailing whitespace; an embedded newline
+    # or other control char survives and would inject extra env lines (#899).
+    if any(ord(ch) < 0x20 or ord(ch) == 0x7F for ch in key):
+        return {"ok": False, "error": "Key contains invalid characters."}
 
     try:
         _write_env_key("OPENROUTER_API_KEY", key)
+    except ValueError:
+        # Backstop: the writer's own control-char guard fired. Never 500 here.
+        return {"ok": False, "error": "Key contains invalid characters."}
     except OSError as exc:
         logger.error("Failed to write env file: %s", exc)
         return {"ok": False, "error": "Failed to save key."}

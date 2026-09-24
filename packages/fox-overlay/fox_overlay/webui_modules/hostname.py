@@ -220,7 +220,10 @@ def apply_hostname(hostname: str) -> dict[str, Any]:
 
     try:
         _write_env_key(_FOX_HOSTNAME_KEY, sanitized)
-    except OSError as exc:
+    except (OSError, ValueError) as exc:
+        # ValueError cannot fire today (sanitize_hostname collapses control
+        # chars), but a future sanitizer regression should surface as this
+        # error, not an uncaught 500 (#899 defense-in-depth).
         logger.error("Failed to write FOX_HOSTNAME to hermes.env: %s", exc)
         return {"ok": False, "error": "Failed to persist hostname."}
 
