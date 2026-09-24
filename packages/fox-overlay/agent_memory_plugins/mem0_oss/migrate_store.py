@@ -345,6 +345,66 @@ def _default_source_path() -> str:
     return str(Path(hermes_home) / "mem0_oss" / "qdrant")
 
 
+def _read_file_overrides() -> dict:
+    """Read ``$HERMES_HOME/mem0_oss.json`` — the highest-precedence config
+    source (the settings surface persists ``collection`` / ``embedder_dims``
+    there, never to the env).
+
+    Mirrors ``__init__``'s file-override read but is restated stdlib-only and
+    local so this boot CLI stays decoupled from the heavy plugin package (see
+    the module docstring's decoupling note) and the fake-based tests keep
+    running without the hermes-agent runtime.  A malformed or unreadable file
+    must not crash the boot job, so it degrades to env/defaults with a warning."""
+    hermes_home = os.environ.get("HERMES_HOME", "/data/data/hermes")
+    config_path = Path(hermes_home) / "mem0_oss.json"
+    try:
+        if config_path.exists():
+            data = json.loads(config_path.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                return {k: v for k, v in data.items() if v is not None and v != ""}
+    except (OSError, ValueError) as exc:  # unreadable / malformed JSON
+        logger.warning(
+            "mem0_oss.migrate: failed to read %s (%s) — falling back to env/defaults",
+            config_path,
+            exc,
+        )
+    return {}
+
+
+def _resolve_collection_and_dims() -> Tuple[str, int]:
+    """Resolve ``collection`` and ``expected_dims`` with precedence
+    **file (mem0_oss.json) > env > default**, matching the plugin's own
+    resolution for these two keys.
+
+    The Qdrant endpoint stays ENV-ONLY (#883) — the file's ``qdrant_*`` keys
+    are never read here, only ``collection`` and ``embedder_dims``.
+
+    A non-numeric ``embedder_dims`` (from the file or ``MEM0_OSS_EMBEDDER_DIMS``)
+    raises :class:`MigrationError` so the boot path fails loud (exit 1, no
+    sentinel, retry next boot) instead of throwing an uncaught ``ValueError``
+    (issues #915, #912)."""
+    file_cfg = _read_file_overrides()
+    collection = (
+        str(file_cfg.get("collection") or "").strip()
+        or os.environ.get("MEM0_OSS_COLLECTION", "").strip()
+        or DEFAULT_COLLECTION
+    )
+    dims_raw = str(
+        file_cfg.get("embedder_dims")
+        or os.environ.get("MEM0_OSS_EMBEDDER_DIMS", "")
+        or ""
+    ).strip()
+    if not dims_raw:
+        return collection, DEFAULT_DIMS
+    try:
+        return collection, int(dims_raw)
+    except ValueError as exc:
+        raise MigrationError(
+            f"invalid embedder_dims {dims_raw!r} (from mem0_oss.json / "
+            "MEM0_OSS_EMBEDDER_DIMS) — must be an integer"
+        ) from exc
+
+
 def run_migration(
     *,
     source_path: Optional[str] = None,
@@ -360,9 +420,12 @@ def run_migration(
     Defaults resolve from the plugin's environment: the embedded path from
     ``MEM0_OSS_VECTOR_STORE_PATH`` / ``$HERMES_HOME``, the server via
     :func:`_boot_server_url` (``MEM0_OSS_QDRANT_URL``, else a bare
-    ``MEM0_OSS_QDRANT_HOST`` (+ ``_PORT``), else ``127.0.0.1:6333``), the
-    collection from ``MEM0_OSS_COLLECTION``, and the dims from
-    ``MEM0_OSS_EMBEDDER_DIMS``.
+    ``MEM0_OSS_QDRANT_HOST`` (+ ``_PORT``), else ``127.0.0.1:6333``).  The
+    ``collection`` and ``expected_dims`` resolve file > env > default via
+    :func:`_resolve_collection_and_dims` (``$HERMES_HOME/mem0_oss.json`` >
+    ``MEM0_OSS_COLLECTION`` / ``MEM0_OSS_EMBEDDER_DIMS`` > module default),
+    matching the plugin; an explicit arg still wins.  The endpoint stays
+    env-only (#883).
     """
     from qdrant_client import QdrantClient  # lazy: prod-only dep
 
@@ -372,9 +435,14 @@ def run_migration(
     # recovery CLI targets the same server the plugin does instead of always
     # falling through to 127.0.0.1:6333 (issue #872).
     server_url = server_url or _boot_server_url() or DEFAULT_SERVER_URL
-    collection = collection or os.environ.get("MEM0_OSS_COLLECTION", DEFAULT_COLLECTION)
-    if expected_dims is None:
-        expected_dims = int(os.environ.get("MEM0_OSS_EMBEDDER_DIMS", DEFAULT_DIMS))
+    # Collection/dims resolve file > env > default (endpoint stays env-only,
+    # #883); an explicit CLI arg still wins over both.  A bad dims value raises
+    # MigrationError, surfaced by main() as exit 1 (#915, #912).
+    if collection is None or expected_dims is None:
+        resolved_collection, resolved_dims = _resolve_collection_and_dims()
+        collection = collection or resolved_collection
+        if expected_dims is None:
+            expected_dims = resolved_dims
     api_key = api_key or os.environ.get("MEM0_OSS_QDRANT_API_KEY", "").strip() or None
 
     if not Path(source_path).exists():
@@ -616,6 +684,16 @@ def run_boot_migration() -> int:
         )
         return 0
 
+    # Resolve collection/dims (file > env > default) up front: the sentinel
+    # check below matches on collection, and a non-numeric dims must fail loud
+    # here (exit 1, NO sentinel, retry next boot) rather than throw uncaught
+    # (issues #915, #912).  The endpoint stays env-only (#883).
+    try:
+        collection, expected_dims = _resolve_collection_and_dims()
+    except MigrationError as exc:
+        logger.error("mem0_oss.migrate: boot migration FAILED — %s", exc)
+        return 1
+
     # 3. Already migrated → the sentinel is the single source of truth.
     sentinel = _sentinel_path()
     if sentinel.exists():
@@ -634,9 +712,6 @@ def run_boot_migration() -> int:
             _READYZ_ATTEMPTS,
         )
         return 1
-
-    collection = os.environ.get("MEM0_OSS_COLLECTION", DEFAULT_COLLECTION)
-    expected_dims = int(os.environ.get("MEM0_OSS_EMBEDDER_DIMS", DEFAULT_DIMS))
 
     # 5a. No embedded store on disk at all → verified empty; record the sentinel
     #     so we never re-check, and exit success.

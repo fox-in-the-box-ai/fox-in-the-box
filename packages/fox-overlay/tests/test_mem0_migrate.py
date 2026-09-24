@@ -324,6 +324,12 @@ def _sentinel_file(hermes_home: Path) -> Path:
     return hermes_home / "hermes" / "mem0_oss" / ".migrated-to-server"
 
 
+def _write_mem0_oss_json(hermes_home: Path, cfg: Dict[str, Any]) -> None:
+    """Write $HERMES_HOME/mem0_oss.json, the highest-precedence config source."""
+    hermes_home.mkdir(parents=True, exist_ok=True)
+    (hermes_home / "mem0_oss.json").write_text(json.dumps(cfg), encoding="utf-8")
+
+
 def _install_clients(monkeypatch, source: "FakeQdrant", dest: "FakeQdrant"):
     monkeypatch.setattr(
         migrate_store_mod, "_open_boot_clients", lambda *a, **k: (source, dest)
@@ -461,6 +467,81 @@ def test_boot_empty_source_sentinel_records_resolved_collection(boot_env, monkey
     payload = json.loads(_sentinel_file(boot_env).read_text())
     assert payload["reason"] == "empty-source"
     assert payload["collection"] == "tA"  # was "hermes" pre-fix
+
+
+def test_boot_reads_collection_from_mem0_oss_json(boot_env, monkeypatch):
+    """#915 Symptom A: the collection lives ONLY in mem0_oss.json, env unset.
+    Pre-fix the boot job resolved the "hermes" default, found it absent, wrote a
+    false empty-source sentinel and stranded the store."""
+    _write_mem0_oss_json(boot_env / "hermes", {"collection": "mywork"})
+    source = FakeQdrant()
+    source.seed("mywork", 768, _make_records(5))
+    dest = FakeQdrant()
+    _install_clients(monkeypatch, source, dest)
+
+    assert run_boot_migration() == 0
+    assert dest.point_count("mywork") == 5
+    payload = json.loads(_sentinel_file(boot_env).read_text())
+    assert payload["reason"] == "migrated"
+    assert payload["collection"] == "mywork"
+
+
+def test_boot_reads_embedder_dims_from_mem0_oss_json(boot_env, monkeypatch):
+    """#915 Symptom B: embedder_dims lives ONLY in mem0_oss.json, env unset.
+    Pre-fix the job kept 768 and aborted with a dims mismatch every boot."""
+    _write_mem0_oss_json(boot_env / "hermes", {"embedder_dims": 1536})
+    source = FakeQdrant()
+    source.seed("hermes", 1536, _make_records(3, dims=1536))
+    dest = FakeQdrant()
+    _install_clients(monkeypatch, source, dest)
+
+    assert run_boot_migration() == 0
+    payload = json.loads(_sentinel_file(boot_env).read_text())
+    assert payload["dims"] == 1536
+
+
+def test_boot_file_collection_overrides_env(boot_env, monkeypatch):
+    """#915 precedence: file > env for collection."""
+    monkeypatch.setenv("MEM0_OSS_COLLECTION", "envcol")
+    _write_mem0_oss_json(boot_env / "hermes", {"collection": "filecol"})
+    source = FakeQdrant()
+    source.seed("filecol", 768, _make_records(4))
+    dest = FakeQdrant()
+    _install_clients(monkeypatch, source, dest)
+
+    assert run_boot_migration() == 0
+    assert dest.point_count("filecol") == 4
+    assert "envcol" not in dest._collections  # env value never targeted
+    payload = json.loads(_sentinel_file(boot_env).read_text())
+    assert payload["collection"] == "filecol"
+
+
+def test_boot_invalid_file_dims_fails_loud_no_sentinel(boot_env, monkeypatch):
+    """#912: a non-numeric embedder_dims in mem0_oss.json raises MigrationError
+    inside the fail-loud boundary → exit 1, NO sentinel, retry next boot."""
+    _write_mem0_oss_json(boot_env / "hermes", {"embedder_dims": "abc"})
+    monkeypatch.setattr(
+        migrate_store_mod,
+        "_open_boot_clients",
+        lambda *a, **k: pytest.fail("must not open clients on a bad dims config"),
+    )
+
+    assert run_boot_migration() == 1
+    assert not _sentinel_file(boot_env).exists()
+
+
+def test_boot_invalid_env_dims_fails_loud_no_sentinel(boot_env, monkeypatch):
+    """#912: a non-numeric MEM0_OSS_EMBEDDER_DIMS exits 1 with NO sentinel —
+    pre-fix a bare int() threw an uncaught ValueError."""
+    monkeypatch.setenv("MEM0_OSS_EMBEDDER_DIMS", "not-a-number")
+    monkeypatch.setattr(
+        migrate_store_mod,
+        "_open_boot_clients",
+        lambda *a, **k: pytest.fail("must not open clients on a bad dims config"),
+    )
+
+    assert run_boot_migration() == 1
+    assert not _sentinel_file(boot_env).exists()
 
 
 def test_boot_partial_run_no_sentinel_then_idempotent_rerun(boot_env, monkeypatch):
@@ -723,6 +804,9 @@ def migrate_env(monkeypatch, tmp_path):
         "MEM0_OSS_QDRANT_API_KEY",
         "MEM0_OSS_COLLECTION",
         "MEM0_OSS_EMBEDDER_DIMS",
+        # Cleared so an ambient mem0_oss.json under a stray HERMES_HOME can't
+        # steer the file>env>default resolver (file tests set it explicitly).
+        "HERMES_HOME",
     ):
         monkeypatch.delenv(name, raising=False)
 
@@ -784,6 +868,64 @@ def test_run_migration_unset_falls_back_to_default(migrate_env):
 
     dest = _dest_client(migrate_env)
     assert dest.init_kwargs["url"] == migrate_store_mod.DEFAULT_SERVER_URL
+
+
+def test_run_migration_reads_collection_from_mem0_oss_json(
+    migrate_env, monkeypatch, tmp_path
+):
+    # #915 CLI parity: a mem0_oss.json collection is honored over the env default.
+    # The recording source seeds only "hermes", so routing to "mywork" surfaces
+    # as a "not found" MigrationError — proving the file was read (pre-fix,
+    # env-only resolution stayed on "hermes" and migrated cleanly, no error).
+    monkeypatch.setenv("HERMES_HOME", str(tmp_path))
+    (tmp_path / "mem0_oss.json").write_text(
+        json.dumps({"collection": "mywork"}), encoding="utf-8"
+    )
+
+    with pytest.raises(MigrationError) as excinfo:
+        run_migration()
+    assert "mywork" in str(excinfo.value)
+
+
+def test_run_migration_reads_embedder_dims_from_mem0_oss_json(
+    migrate_env, monkeypatch, tmp_path
+):
+    # #915 CLI parity: file embedder_dims (512) routes through; the source holds
+    # 768, so the dims guard fires — proving the file dims applied (pre-fix the
+    # file was ignored and 768 == 768 migrated cleanly).
+    monkeypatch.setenv("HERMES_HOME", str(tmp_path))
+    (tmp_path / "mem0_oss.json").write_text(
+        json.dumps({"embedder_dims": 512}), encoding="utf-8"
+    )
+
+    with pytest.raises(MigrationError) as excinfo:
+        run_migration()
+    assert "512" in str(excinfo.value)
+    assert "768" in str(excinfo.value)
+
+
+def test_run_migration_invalid_file_dims_raises_migration_error(
+    migrate_env, monkeypatch, tmp_path
+):
+    # #912 CLI: non-numeric file dims → MigrationError, not an uncaught ValueError.
+    monkeypatch.setenv("HERMES_HOME", str(tmp_path))
+    (tmp_path / "mem0_oss.json").write_text(
+        json.dumps({"embedder_dims": "abc"}), encoding="utf-8"
+    )
+
+    with pytest.raises(MigrationError):
+        run_migration()
+
+
+def test_run_migration_invalid_env_dims_raises_migration_error(
+    migrate_env, monkeypatch
+):
+    # #912 CLI: non-numeric MEM0_OSS_EMBEDDER_DIMS → MigrationError, replacing the
+    # pre-fix uncaught ValueError from a bare int().
+    monkeypatch.setenv("MEM0_OSS_EMBEDDER_DIMS", "not-a-number")
+
+    with pytest.raises(MigrationError):
+        run_migration()
 
 
 def test_run_migration_authed_bare_host_uses_https_and_key(migrate_env, monkeypatch):
