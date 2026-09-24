@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import json
-import subprocess
 import sys
 import types
 import urllib.parse
+import xmlrpc.client
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
@@ -291,52 +291,190 @@ class TestAgentRuntimeCheck:
         assert "unknown" in result.get("detail", "")
 
 
+class _FakeSupervisorProxy:
+    """Hand-rolled stand-in for the supervisord XML-RPC ServerProxy (not a mock
+    framework).  ``.supervisor.getProcessInfo`` returns the seeded process-info
+    dict, or raises the seeded error to exercise the fail-closed None path."""
+
+    def __init__(self, *, info=None, raises=None):
+        self._info = info
+        self._raises = raises
+        self.supervisor = self
+
+    def getProcessInfo(self, name):
+        if self._raises is not None:
+            raise self._raises
+        return self._info
+
+
 class TestSupervisorStatusProbe:
-    """``_supervisorctl_status`` returns None ONLY for the 'unknown' cases —
-    timeout, OSError, and the gateway program absent from the output — so the
-    caller can fail closed on each (#904).  It never encodes 'standalone'."""
+    """The gateway status is read over the supervisord unix-socket XML-RPC API,
+    not a per-request supervisorctl subprocess (#914).  It returns None ONLY
+    for the 'unknown' cases (socket gone, RPC fault/OSError) so the caller can
+    fail closed (#904); genuine standalone is a separate socket-absent signal."""
 
-    def test_timeout_is_unknown(self, monkeypatch):
+    def _seed_socket(self, tmp_path, monkeypatch):
+        sock = tmp_path / "supervisor.sock"
+        sock.write_bytes(b"")  # existence is all _supervisorctl_available checks
+        monkeypatch.setenv("SUPERVISORD_SOCK", str(sock))
+        return sock
+
+    def test_no_fork_subprocess(self):
+        # The probe must no longer shell out; subprocess is gone from the module.
         readyz = _load_readyz()
+        assert not hasattr(readyz, "subprocess")
 
-        def _timeout(*args, **kwargs):
-            raise subprocess.TimeoutExpired(cmd="supervisorctl", timeout=5.0)
+    def test_socket_absent_is_standalone(self, tmp_path, monkeypatch):
+        readyz = _load_readyz()
+        monkeypatch.setenv("SUPERVISORD_SOCK", str(tmp_path / "absent.sock"))
+        assert readyz._supervisorctl_available() is False
+        result = readyz._check_agent_runtime()
+        assert result["ok"] is True
+        assert "standalone" in result["detail"]
 
-        monkeypatch.setattr(readyz.subprocess, "run", _timeout)
+    def test_sock_path_read_from_conf(self, tmp_path, monkeypatch):
+        readyz = _load_readyz()
+        conf = tmp_path / "supervisord.conf"
+        conf.write_text(
+            "[unix_http_server]\nfile=/run/fitb/supervisor.sock\nchmod=0770\n",
+            encoding="utf-8",
+        )
+        monkeypatch.delenv("SUPERVISORD_SOCK", raising=False)
+        monkeypatch.setattr(readyz, "_SUPERVISOR_CONF", str(conf))
+        assert readyz._supervisor_sock() == "/run/fitb/supervisor.sock"
+
+    def test_sock_override_wins(self, tmp_path, monkeypatch):
+        readyz = _load_readyz()
+        monkeypatch.setenv("SUPERVISORD_SOCK", "/run/foxinthebox/supervisor.sock")
+        assert readyz._supervisor_sock() == "/run/foxinthebox/supervisor.sock"
+
+    def test_running_statename_parsed(self, tmp_path, monkeypatch):
+        readyz = _load_readyz()
+        self._seed_socket(tmp_path, monkeypatch)
+        monkeypatch.setattr(
+            readyz.xmlrpc.client,
+            "ServerProxy",
+            lambda *a, **k: _FakeSupervisorProxy(info={"statename": "RUNNING"}),
+        )
+        assert readyz._supervisorctl_available() is True
+        assert readyz._supervisorctl_status("hermes-gateway") == "RUNNING"
+
+    def test_stopped_statename_parsed(self, tmp_path, monkeypatch):
+        readyz = _load_readyz()
+        self._seed_socket(tmp_path, monkeypatch)
+        monkeypatch.setattr(
+            readyz.xmlrpc.client,
+            "ServerProxy",
+            lambda *a, **k: _FakeSupervisorProxy(info={"statename": "STOPPED"}),
+        )
+        # Present + verifiably STOPPED → fail closed (not standalone, #904).
+        result = readyz._check_agent_runtime()
+        assert result["ok"] is False
+        assert "STOPPED" in result["detail"]
+
+    def test_rpc_fault_is_unknown(self, tmp_path, monkeypatch):
+        readyz = _load_readyz()
+        self._seed_socket(tmp_path, monkeypatch)
+        monkeypatch.setattr(
+            readyz.xmlrpc.client,
+            "ServerProxy",
+            lambda *a, **k: _FakeSupervisorProxy(
+                raises=xmlrpc.client.Fault(10, "BAD_NAME")
+            ),
+        )
         assert readyz._supervisorctl_status("hermes-gateway") is None
+        result = readyz._check_agent_runtime()
+        assert result["ok"] is False
+        assert "unknown" in result["detail"]
 
-    def test_oserror_is_unknown(self, monkeypatch):
+    def test_rpc_oserror_is_unknown(self, tmp_path, monkeypatch):
         readyz = _load_readyz()
+        self._seed_socket(tmp_path, monkeypatch)
 
-        def _oserror(*args, **kwargs):
+        def _boom(*args, **kwargs):
             raise OSError("connection refused")
 
-        monkeypatch.setattr(readyz.subprocess, "run", _oserror)
+        monkeypatch.setattr(readyz.xmlrpc.client, "ServerProxy", _boom)
         assert readyz._supervisorctl_status("hermes-gateway") is None
 
-    def test_program_absent_from_output_is_unknown(self, monkeypatch):
-        # The loop fall-through: supervisorctl answered, but hermes-gateway is
-        # not in the output.  Folded into the same fail-closed None (#904).
-        readyz = _load_readyz()
-        monkeypatch.setattr(
-            readyz.subprocess,
-            "run",
-            lambda *a, **k: SimpleNamespace(
-                stdout="other-prog RUNNING pid 1, uptime 0:10\n", returncode=0
-            ),
-        )
-        assert readyz._supervisorctl_status("hermes-gateway") is None
 
-    def test_running_line_parsed(self, monkeypatch):
+class _FakeClock:
+    """Injected monotonic clock — no wall-clock in cache tests (#914)."""
+
+    def __init__(self, start: float = 1000.0):
+        self.now = start
+
+    def monotonic(self) -> float:
+        return self.now
+
+    def advance(self, dt: float) -> None:
+        self.now += dt
+
+
+class TestReadinessCache:
+    """get_readiness() serves a single-flight, TTL-bounded cached snapshot so a
+    /readyz burst collapses to one underlying computation per window (#914)."""
+
+    def _counting_compute(self, ready=True):
+        calls = {"n": 0}
+
+        def compute():
+            calls["n"] += 1
+            return {"ready": ready, "checks": {"agent_runtime": {"ok": ready}}}
+
+        return calls, compute
+
+    def test_within_ttl_serves_cached_without_reprobe(self, monkeypatch):
         readyz = _load_readyz()
-        monkeypatch.setattr(
-            readyz.subprocess,
-            "run",
-            lambda *a, **k: SimpleNamespace(
-                stdout="hermes-gateway RUNNING pid 42, uptime 0:10\n", returncode=0
-            ),
-        )
-        assert readyz._supervisorctl_status("hermes-gateway") == "RUNNING"
+        readyz.clear_cache()
+        clock = _FakeClock()
+        monkeypatch.setattr(readyz, "time", clock)
+        calls, compute = self._counting_compute(ready=True)
+        monkeypatch.setattr(readyz, "_compute_readiness", compute)
+
+        for _ in range(50):
+            assert readyz.get_readiness()["ready"] is True
+        assert calls["n"] == 1
+
+    def test_unhealthy_snapshot_is_cached(self, monkeypatch):
+        # A flood during an outage must not re-probe per request.
+        readyz = _load_readyz()
+        readyz.clear_cache()
+        clock = _FakeClock()
+        monkeypatch.setattr(readyz, "time", clock)
+        calls, compute = self._counting_compute(ready=False)
+        monkeypatch.setattr(readyz, "_compute_readiness", compute)
+
+        for _ in range(50):
+            assert readyz.get_readiness()["ready"] is False
+        assert calls["n"] == 1
+
+    def test_ttl_expiry_reprobes(self, monkeypatch):
+        readyz = _load_readyz()
+        readyz.clear_cache()
+        clock = _FakeClock()
+        monkeypatch.setattr(readyz, "time", clock)
+        calls, compute = self._counting_compute(ready=True)
+        monkeypatch.setattr(readyz, "_compute_readiness", compute)
+
+        readyz.get_readiness()
+        assert calls["n"] == 1
+        clock.advance(readyz._READINESS_TTL_S + 0.01)
+        readyz.get_readiness()
+        assert calls["n"] == 2
+
+    def test_clear_cache_forces_recompute(self, monkeypatch):
+        readyz = _load_readyz()
+        readyz.clear_cache()
+        clock = _FakeClock()
+        monkeypatch.setattr(readyz, "time", clock)
+        calls, compute = self._counting_compute(ready=True)
+        monkeypatch.setattr(readyz, "_compute_readiness", compute)
+
+        readyz.get_readiness()
+        readyz.clear_cache()
+        readyz.get_readiness()
+        assert calls["n"] == 2
 
 
 def _clear_qdrant_env(monkeypatch):

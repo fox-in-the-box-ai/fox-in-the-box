@@ -11,14 +11,18 @@ module adds ``/readyz`` to upstream ``api.auth.PUBLIC_PATHS`` so
 
 from __future__ import annotations
 
+import configparser
+import http.client
 import json
 import logging
 import os
-import shutil
-import subprocess
+import socket
+import threading
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import xmlrpc.client
 
 logger = logging.getLogger(__name__)
 
@@ -28,42 +32,96 @@ _SUPERVISOR_CONF = os.environ.get(
 )
 _EMBED_HEALTH_URL = "http://127.0.0.1:8644/health"
 
+# Single-flight, short-TTL cache over the whole readiness snapshot.  /readyz
+# is public, unauthenticated, and served one-thread-per-request, so a burst
+# must collapse to one underlying probe per window instead of dialing every
+# dependency per request.  The TTL is well under the 30s Docker HEALTHCHECK
+# interval, so a real dependency transition still surfaces within one window
+# (#914).  The unhealthy snapshot is cached too — a flood during an outage
+# must not re-probe per request.
+_READINESS_TTL_S = 1.0
+_readiness_lock = threading.Lock()
+_readiness_cache: tuple[float, dict] | None = None  # (monotonic_ts, snapshot)
+
 
 def _check_http_server() -> dict:
     return {"ok": True}
 
 
+def _supervisor_sock() -> str | None:
+    """Resolve the supervisord control-socket path.
+
+    ``SUPERVISORD_SOCK`` wins (container-vs-deb topologies differ:
+    /run/fitb/supervisor.sock vs /run/foxinthebox/supervisor.sock); otherwise
+    read ``[unix_http_server] file=`` from ``_SUPERVISOR_CONF``.  None means
+    'no supervisord configured' (standalone)."""
+    override = os.environ.get("SUPERVISORD_SOCK", "").strip()
+    if override:
+        return override
+    parser = configparser.ConfigParser()
+    try:
+        parser.read(_SUPERVISOR_CONF)
+        path = parser.get("unix_http_server", "file", fallback="").strip()
+    except (configparser.Error, OSError):
+        return None
+    return path or None
+
+
 def _supervisorctl_available() -> bool:
-    """True iff supervisorctl is on PATH.
+    """True iff a supervisord control socket is present on disk.
 
     Its ABSENCE is the one positively-verified 'standalone' signal.  A present
-    supervisorctl whose status query cannot be read is 'unknown', not
-    standalone — the two must never be conflated (see ``_check_agent_runtime``,
-    #904)."""
-    return shutil.which("supervisorctl") is not None
+    socket whose XML-RPC query cannot be read is 'unknown', not standalone —
+    the two must never be conflated (see ``_check_agent_runtime``, #904)."""
+    sock = _supervisor_sock()
+    return bool(sock) and os.path.exists(sock)
+
+
+class _UnixStreamHTTPConnection(http.client.HTTPConnection):
+    """HTTPConnection over an AF_UNIX stream socket (``host`` is the path)."""
+
+    def connect(self) -> None:
+        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        s.settimeout(self.timeout)
+        s.connect(self.host)
+        self.sock = s
+
+
+class _UnixStreamTransport(xmlrpc.client.Transport):
+    """xmlrpc.client transport that dials supervisord's unix socket directly —
+    stdlib only, so /readyz no longer forks a supervisorctl subprocess per
+    request (#914)."""
+
+    def __init__(self, sock_path: str) -> None:
+        super().__init__()
+        self._sock_path = sock_path
+
+    def make_connection(self, host):  # noqa: ARG002 — path carried on the transport
+        return _UnixStreamHTTPConnection(self._sock_path, timeout=2.0)
 
 
 def _supervisorctl_status(program: str) -> str | None:
-    """Parsed supervisord status for *program*, or None when it could not be
-    read — the status query timed out / errored, OR *program* was absent from
-    the output.
+    """supervisord process ``statename`` for *program* over the unix-socket
+    XML-RPC API, or None when it could not be read (socket gone, timeout,
+    connection error, or an XML-RPC fault such as BAD_NAME).
 
     Callers MUST treat None as 'unknown' and fail closed, never as
     'standalone'; the standalone case is detected separately via
-    ``_supervisorctl_available()`` (#904)."""
+    ``_supervisorctl_available()`` (#904).  The 2s socket timeout is tighter
+    than the old 5s subprocess timeout so a wedged supervisord yields None
+    rather than pinning the single-flight lock."""
+    sock = _supervisor_sock()
+    if not sock:
+        return None
     try:
-        result = subprocess.run(
-            ["supervisorctl", "-c", _SUPERVISOR_CONF, "status", program],
-            capture_output=True,
-            text=True,
-            timeout=5.0,
+        proxy = xmlrpc.client.ServerProxy(
+            "http://localhost", transport=_UnixStreamTransport(sock)
         )
-        for line in (result.stdout or "").splitlines():
-            parts = line.split()
-            if parts and parts[0] == program and len(parts) >= 2:
-                return parts[1]
-    except (subprocess.TimeoutExpired, OSError):
-        pass
+        info = proxy.supervisor.getProcessInfo(program)
+    except (OSError, xmlrpc.client.Fault, xmlrpc.client.ProtocolError):
+        return None
+    if isinstance(info, dict):
+        return info.get("statename")
     return None
 
 
@@ -297,7 +355,7 @@ def _check_memory() -> dict:
     return {"ok": True, "detail": f"memory state '{status}' unrecognized"}
 
 
-def get_readiness() -> dict:
+def _compute_readiness() -> dict:
     checks = {
         "http_server": _check_http_server(),
         "agent_runtime": _check_agent_runtime(),
@@ -307,6 +365,34 @@ def get_readiness() -> dict:
     }
     ready = all(c["ok"] for c in checks.values())
     return {"ready": ready, "checks": checks}
+
+
+def get_readiness() -> dict:
+    """Cached front door over ``_compute_readiness`` (#914).
+
+    Double-checked locking collapses a concurrent burst of /readyz probes onto
+    a single underlying computation per TTL window; the single-flight lock caps
+    concurrent external work (the supervisord query plus the two 2s HTTP probes
+    on a configured instance) at exactly one probe per window.  The returned
+    dict is shared by reference across a window and must not be mutated."""
+    global _readiness_cache
+    cached = _readiness_cache
+    if cached is not None and time.monotonic() - cached[0] < _READINESS_TTL_S:
+        return cached[1]
+    with _readiness_lock:
+        cached = _readiness_cache
+        if cached is not None and time.monotonic() - cached[0] < _READINESS_TTL_S:
+            return cached[1]
+        snapshot = _compute_readiness()
+        _readiness_cache = (time.monotonic(), snapshot)
+        return snapshot
+
+
+def clear_cache() -> None:
+    """Drop the cached snapshot (tests / explicit refresh; mirrors ollama.py)."""
+    global _readiness_cache
+    with _readiness_lock:
+        _readiness_cache = None
 
 
 # ── Dispatcher integration ─────────────────────────────────────────────
