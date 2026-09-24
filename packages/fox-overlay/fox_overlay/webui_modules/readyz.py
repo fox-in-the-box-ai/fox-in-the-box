@@ -33,9 +33,24 @@ def _check_http_server() -> dict:
     return {"ok": True}
 
 
+def _supervisorctl_available() -> bool:
+    """True iff supervisorctl is on PATH.
+
+    Its ABSENCE is the one positively-verified 'standalone' signal.  A present
+    supervisorctl whose status query cannot be read is 'unknown', not
+    standalone — the two must never be conflated (see ``_check_agent_runtime``,
+    #904)."""
+    return shutil.which("supervisorctl") is not None
+
+
 def _supervisorctl_status(program: str) -> str | None:
-    if not shutil.which("supervisorctl"):
-        return None
+    """Parsed supervisord status for *program*, or None when it could not be
+    read — the status query timed out / errored, OR *program* was absent from
+    the output.
+
+    Callers MUST treat None as 'unknown' and fail closed, never as
+    'standalone'; the standalone case is detected separately via
+    ``_supervisorctl_available()`` (#904)."""
     try:
         result = subprocess.run(
             ["supervisorctl", "-c", _SUPERVISOR_CONF, "status", program],
@@ -53,9 +68,19 @@ def _supervisorctl_status(program: str) -> str | None:
 
 
 def _check_agent_runtime() -> dict:
+    # Genuine standalone / runtime-agnostic deployment: no supervisor at all.
+    if not _supervisorctl_available():
+        return {"ok": True, "detail": "supervisor unavailable (standalone)"}
+    # Supervisor is present — its gateway status must be verified.  A status
+    # we could not read (timeout / error / gateway absent from output) is
+    # 'unknown' and fails closed; masking it as healthy is the #904 fail-open.
     status = _supervisorctl_status(_GATEWAY_PROGRAM)
     if status is None:
-        return {"ok": True, "detail": "supervisor unavailable (standalone)"}
+        logger.warning("agent_runtime status unknown: supervisor query failed")
+        return {
+            "ok": False,
+            "detail": "gateway status unknown (supervisor query failed)",
+        }
     if status == "RUNNING":
         return {"ok": True, "detail": f"{_GATEWAY_PROGRAM} {status}"}
     return {"ok": False, "detail": f"{_GATEWAY_PROGRAM} {status}"}

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
 import types
 import urllib.parse
@@ -247,23 +248,95 @@ class TestHttpServerCheck:
 
 class TestAgentRuntimeCheck:
     def test_running(self):
+        # Supervisor present + gateway RUNNING → ok.  Must patch
+        # _supervisorctl_available too, else on a host without supervisorctl
+        # the standalone short-circuit fires before the status is consulted.
         readyz = _load_readyz()
-        with mock.patch.object(readyz, "_supervisorctl_status", return_value="RUNNING"):
+        with (
+            mock.patch.object(readyz, "_supervisorctl_available", return_value=True),
+            mock.patch.object(readyz, "_supervisorctl_status", return_value="RUNNING"),
+        ):
             result = readyz._check_agent_runtime()
         assert result["ok"] is True
 
     def test_fatal(self):
         readyz = _load_readyz()
-        with mock.patch.object(readyz, "_supervisorctl_status", return_value="FATAL"):
+        with (
+            mock.patch.object(readyz, "_supervisorctl_available", return_value=True),
+            mock.patch.object(readyz, "_supervisorctl_status", return_value="FATAL"),
+        ):
             result = readyz._check_agent_runtime()
         assert result["ok"] is False
 
     def test_no_supervisor(self):
+        # Genuine standalone: supervisorctl is not present at all → ok:true.
+        # This is now the ONLY path that may be ok:true for a non-RUNNING
+        # state; a present-but-unverifiable supervisor fails closed (#904).
         readyz = _load_readyz()
-        with mock.patch.object(readyz, "_supervisorctl_status", return_value=None):
+        with mock.patch.object(readyz, "_supervisorctl_available", return_value=False):
             result = readyz._check_agent_runtime()
         assert result["ok"] is True
         assert "standalone" in result.get("detail", "")
+
+    def test_present_but_status_unknown_fails(self):
+        # #904 regression guard: supervisor present but its status could not be
+        # verified (None) must FAIL CLOSED, never map to standalone ok:true.
+        readyz = _load_readyz()
+        with (
+            mock.patch.object(readyz, "_supervisorctl_available", return_value=True),
+            mock.patch.object(readyz, "_supervisorctl_status", return_value=None),
+        ):
+            result = readyz._check_agent_runtime()
+        assert result["ok"] is False
+        assert "unknown" in result.get("detail", "")
+
+
+class TestSupervisorStatusProbe:
+    """``_supervisorctl_status`` returns None ONLY for the 'unknown' cases —
+    timeout, OSError, and the gateway program absent from the output — so the
+    caller can fail closed on each (#904).  It never encodes 'standalone'."""
+
+    def test_timeout_is_unknown(self, monkeypatch):
+        readyz = _load_readyz()
+
+        def _timeout(*args, **kwargs):
+            raise subprocess.TimeoutExpired(cmd="supervisorctl", timeout=5.0)
+
+        monkeypatch.setattr(readyz.subprocess, "run", _timeout)
+        assert readyz._supervisorctl_status("hermes-gateway") is None
+
+    def test_oserror_is_unknown(self, monkeypatch):
+        readyz = _load_readyz()
+
+        def _oserror(*args, **kwargs):
+            raise OSError("connection refused")
+
+        monkeypatch.setattr(readyz.subprocess, "run", _oserror)
+        assert readyz._supervisorctl_status("hermes-gateway") is None
+
+    def test_program_absent_from_output_is_unknown(self, monkeypatch):
+        # The loop fall-through: supervisorctl answered, but hermes-gateway is
+        # not in the output.  Folded into the same fail-closed None (#904).
+        readyz = _load_readyz()
+        monkeypatch.setattr(
+            readyz.subprocess,
+            "run",
+            lambda *a, **k: SimpleNamespace(
+                stdout="other-prog RUNNING pid 1, uptime 0:10\n", returncode=0
+            ),
+        )
+        assert readyz._supervisorctl_status("hermes-gateway") is None
+
+    def test_running_line_parsed(self, monkeypatch):
+        readyz = _load_readyz()
+        monkeypatch.setattr(
+            readyz.subprocess,
+            "run",
+            lambda *a, **k: SimpleNamespace(
+                stdout="hermes-gateway RUNNING pid 42, uptime 0:10\n", returncode=0
+            ),
+        )
+        assert readyz._supervisorctl_status("hermes-gateway") == "RUNNING"
 
 
 def _clear_qdrant_env(monkeypatch):
