@@ -534,7 +534,7 @@ stdout_logfile_maxbytes=10MB
 stdout_logfile_backups=3
 stderr_logfile_maxbytes=10MB
 stderr_logfile_backups=3
-environment=HOME="${app}",PYTHONPATH="${data}/apps/hermes-agent",PATH="${app}/venv/bin:/usr/local/bin:/usr/bin:/bin",HERMES_HOME="${data}/data/hermes",BRAVE_API_KEY="__BRAVE_API_KEY__",HERMES_ENV_PATH="${data}/config/hermes.env",SUPERVISORD_CONF="${conf_path}",MEM0_TELEMETRY="False"
+environment=HOME="${app}",PYTHONPATH="${data}/apps/hermes-agent",PATH="${app}/venv/bin:/usr/local/bin:/usr/bin:/bin",HERMES_HOME="${data}/data/hermes",HERMES_ENV_PATH="${data}/config/hermes.env",SUPERVISORD_CONF="${conf_path}",MEM0_TELEMETRY="False"
 priority=30
 
 ; ── hermes webui ──────────────────────────────────────────────────────────────

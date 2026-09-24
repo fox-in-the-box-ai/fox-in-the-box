@@ -12,6 +12,8 @@
 
 ENTRYPOINT="$BATS_TEST_DIRNAME/../../packages/integration/entrypoint.sh"
 SUPERVISORD_CONF="$BATS_TEST_DIRNAME/../../packages/integration/supervisord.conf"
+PREFLIGHT="$BATS_TEST_DIRNAME/../../packages/install-core/preflight.sh"
+INSTALL_CORE="$BATS_TEST_DIRNAME/../../packages/install-core/install-core.sh"
 
 # Mirrors the entrypoint §5b escape+rewrite. Portable sed (no -i) so the escape
 # logic is exercised identically on GNU (container/CI) and BSD (macOS) sed.
@@ -50,6 +52,32 @@ _patch_yaml() {
 @test "#908 container: entrypoint escapes the key before the hermes.yaml rewrite" {
   run grep -F '_brave_repl="${_brave_repl//\\/\\\\}"' "$ENTRYPOINT"
   [ "$status" -eq 0 ]
+}
+
+# ---------------------------------------------------------------------------
+# Source-text gates — desktop/.deb path. preflight runs as systemd
+# ExecStartPre=, so the %(ENV_x)s recipe cannot be reused; the key must reach
+# the gateway via run-with-env.sh sourcing hermes.env, with no supervisord.conf
+# templating at all.
+# ---------------------------------------------------------------------------
+@test "#908 desktop: preflight no longer seds BRAVE into supervisord.conf" {
+  run grep -nE 'sed .*__BRAVE_API_KEY__' "$PREFLIGHT"
+  [ "$status" -ne 0 ]
+}
+
+@test "#908 desktop: preflight has no SUPERVISORD_CONF assignment (orphan removed)" {
+  run grep -nE '^[[:space:]]*SUPERVISORD_CONF=' "$PREFLIGHT"
+  [ "$status" -ne 0 ]
+}
+
+@test "#908 desktop: preflight escapes the key before the hermes.yaml rewrite" {
+  run grep -F '_brave_repl="${_brave_repl//\\/\\\\}"' "$PREFLIGHT"
+  [ "$status" -eq 0 ]
+}
+
+@test "#908 desktop: install-core gateway environment= carries no BRAVE_API_KEY" {
+  run grep -F 'BRAVE_API_KEY' "$INSTALL_CORE"
+  [ "$status" -ne 0 ]
 }
 
 # ---------------------------------------------------------------------------

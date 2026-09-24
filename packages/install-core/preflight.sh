@@ -95,7 +95,17 @@ fi
 
 HERMES_YAML="$DATA_DIR/config/hermes.yaml"
 if [ -f "$HERMES_YAML" ] && [ -n "${BRAVE_API_KEY:-}" ]; then
-    sed -i "s|\${BRAVE_API_KEY}|${BRAVE_API_KEY}|g" "$HERMES_YAML"
+    # Treat the key as literal data, not a sed program. Escape the bytes that are
+    # meaningful in the replacement half of s|...|...| (backslash first, then the
+    # delimiter and the whole-match back-reference), and keep the sed non-fatal
+    # so no key content can brick boot under set -e.
+    _brave_repl="${BRAVE_API_KEY}"
+    _brave_repl="${_brave_repl//\\/\\\\}"   # backslash — must be first
+    _brave_repl="${_brave_repl//|/\\|}"     # sed delimiter
+    _brave_repl="${_brave_repl//&/\\&}"     # whole-match back-reference
+    if ! sed -i "s|\${BRAVE_API_KEY}|${_brave_repl}|g" "$HERMES_YAML"; then
+        _warn "could not patch BRAVE_API_KEY into hermes.yaml (web search disabled)"
+    fi
 fi
 
 if [ -f "$HERMES_YAML" ] && ! grep -q "^skills:" "$HERMES_YAML"; then
@@ -109,9 +119,12 @@ skills:
 EOF
 fi
 
-# ── 8. Patch supervisord.conf with runtime env vars ───────────────────────────
-SUPERVISORD_CONF="/etc/foxinthebox/supervisord.conf"
-sed -i "s|__BRAVE_API_KEY__|${BRAVE_API_KEY:-}|g" "$SUPERVISORD_CONF"
+# ── 8. supervisord.conf: BRAVE_API_KEY is no longer templated here ─────────────
+# preflight runs as systemd ExecStartPre= — a separate process whose exports do
+# not reach the ExecStart= supervisord, so the container's %(ENV_x)s recipe would
+# hard-fail here. The gateway program runs via run-with-env.sh, which sources
+# hermes.env (and ~/.hermes/.env) with `set -a`, so BRAVE_API_KEY reaches the
+# gateway from its documented desktop source without any supervisord.conf sed.
 
 # ── 9. Ensure RPC socket directory exists ────────────────────────────────────
 # Service runs as root; create the supervisord RPC socket directory.
