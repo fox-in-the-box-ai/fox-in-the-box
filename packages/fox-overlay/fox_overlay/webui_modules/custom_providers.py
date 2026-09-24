@@ -13,12 +13,15 @@ Routes:
 
 from __future__ import annotations
 
+import ipaddress
 import json
 import logging
 import re
+import socket
 import urllib.error
 import urllib.request
 from typing import Any
+from urllib.parse import urlsplit
 
 logger = logging.getLogger("fox_overlay.webui_modules.custom_providers")
 
@@ -52,6 +55,61 @@ def _validate_base_url(url: str) -> tuple[bool, str]:
     if not _URL_RE.match(url):
         return False, "Base URL must start with http:// or https://."
     return True, url
+
+
+_NONPUBLIC_MSG = "Base URL must resolve to a public address."
+
+
+def _assert_public_destination(base_url: str) -> tuple[bool, str]:
+    """Resolve base_url's host; reject if ANY resolved address is
+    loopback/private/link-local/multicast/reserved/unspecified (SSRF guard,
+    #900). Deny-by-default: any resolution failure is a rejection.
+
+    Belongs in the fetch path (test_provider) only — NOT in _validate_base_url,
+    which upsert_provider shares and which legitimately stores LAN base URLs.
+    Returns (ok, error).
+    """
+    host = urlsplit(base_url).hostname
+    if not host:
+        return False, _NONPUBLIC_MSG
+    try:
+        infos = socket.getaddrinfo(host, None, proto=socket.IPPROTO_TCP)
+    except socket.gaierror:
+        return False, _NONPUBLIC_MSG
+    for info in infos:
+        try:
+            ip = ipaddress.ip_address(info[4][0])
+        except ValueError:
+            return False, _NONPUBLIC_MSG
+        mapped = getattr(ip, "ipv4_mapped", None)
+        if mapped is not None:  # unwrap ::ffff:127.0.0.1 style
+            ip = mapped
+        # Explicit flags are the primary, readable check; `not is_global`
+        # (safe here because ipv4_mapped is already unwrapped) is the
+        # version-robust backstop that also denies CGNAT (100.64.0.0/10),
+        # which is_private classifies inconsistently across Python releases.
+        if (
+            ip.is_private
+            or ip.is_loopback
+            or ip.is_link_local
+            or ip.is_multicast
+            or ip.is_reserved
+            or ip.is_unspecified
+            or not ip.is_global
+        ):
+            return False, _NONPUBLIC_MSG
+    return True, ""
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Disable redirect-following on the probe so a public URL cannot 30x-bounce
+    into a private target after the destination guard has run (#900)."""
+
+    def redirect_request(self, *args, **kwargs):
+        return None
+
+
+_PROBE_OPENER = urllib.request.build_opener(_NoRedirect)
 
 
 def _validate_models(models: Any) -> tuple[bool, list[str] | str]:
@@ -204,6 +262,13 @@ def test_provider(body: dict) -> dict[str, Any]:
     if not ok:
         return {"ok": False, "error": base_url}
 
+    ok, guard_err = _assert_public_destination(base_url)
+    if not ok:
+        logger.warning(
+            "custom_provider_test_blocked host=%s", urlsplit(base_url).hostname
+        )
+        return {"ok": False, "error": guard_err}
+
     api_key = ""
     raw_key = body.get("api_key")
     if isinstance(raw_key, str):
@@ -218,21 +283,25 @@ def test_provider(body: dict) -> dict[str, Any]:
         req.add_header("Authorization", f"Bearer {api_key}")
 
     try:
-        with urllib.request.urlopen(req, timeout=5) as resp:  # nosec B310 -- user-supplied URL, validated to http(s) scheme
+        with _PROBE_OPENER.open(req, timeout=5) as resp:  # nosec B310 -- host-guarded to public address + redirects disabled
             data = json.loads(resp.read(1_048_576).decode("utf-8", errors="replace"))
             models_found = 0
             if isinstance(data, dict) and isinstance(data.get("data"), list):
                 models_found = len(data["data"])
             return {"ok": True, "models_found": models_found}
     except urllib.error.HTTPError as exc:
-        if exc.code == 401 or exc.code == 403:
+        if exc.code in (401, 403):
             return {"ok": False, "error": "Authentication required or denied."}
-        return {"ok": False, "error": f"HTTP {exc.code}: {exc.reason}"}
+        logger.warning("custom_provider_test_http_error code=%s", exc.code)
+        return {"ok": False, "error": "Could not reach the provider endpoint."}
     except urllib.error.URLError as exc:
-        reason = str(getattr(exc, "reason", exc))
-        return {"ok": False, "error": f"Connection failed: {reason}"}
+        logger.warning(
+            "custom_provider_test_url_error reason=%s", getattr(exc, "reason", exc)
+        )
+        return {"ok": False, "error": "Could not reach the provider endpoint."}
     except Exception as exc:
-        return {"ok": False, "error": f"Connection failed: {exc}"}
+        logger.warning("custom_provider_test_error err=%s", exc)
+        return {"ok": False, "error": "Could not reach the provider endpoint."}
 
 
 # ── Route handlers ──────────────────────────────────────────────────────────

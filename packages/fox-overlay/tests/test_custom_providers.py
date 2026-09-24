@@ -345,6 +345,23 @@ class TestDeleteProvider:
         assert body["ok"] is True
 
 
+# A public (example.com) getaddrinfo tuple, so the #900 SSRF guard allows the
+# probe to proceed to the mocked opener.
+_PUBLIC_ADDRINFO = [(2, 1, 6, "", ("93.184.216.34", 0))]
+
+
+def _patch_public_dns(mod):
+    return mock.patch.object(mod.socket, "getaddrinfo", return_value=_PUBLIC_ADDRINFO)
+
+
+def _mock_opener_response(payload):
+    mock_resp = mock.MagicMock()
+    mock_resp.read.return_value = json.dumps(payload).encode()
+    mock_resp.__enter__ = mock.Mock(return_value=mock_resp)
+    mock_resp.__exit__ = mock.Mock(return_value=False)
+    return mock_resp
+
+
 class TestTestProvider:
     def test_rejects_invalid_url(self):
         mod = _load_module()
@@ -353,13 +370,12 @@ class TestTestProvider:
 
     def test_successful_probe(self):
         mod = _load_module()
-        response_data = json.dumps({"data": [{"id": "m1"}, {"id": "m2"}]}).encode()
-        mock_resp = mock.MagicMock()
-        mock_resp.read.return_value = response_data
-        mock_resp.__enter__ = mock.Mock(return_value=mock_resp)
-        mock_resp.__exit__ = mock.Mock(return_value=False)
-        with mock.patch.object(mod.urllib.request, "urlopen", return_value=mock_resp):
-            result = mod.test_provider({"base_url": "http://localhost:8080/v1"})
+        mock_resp = _mock_opener_response({"data": [{"id": "m1"}, {"id": "m2"}]})
+        with (
+            _patch_public_dns(mod),
+            mock.patch.object(mod._PROBE_OPENER, "open", return_value=mock_resp),
+        ):
+            result = mod.test_provider({"base_url": "http://api.example.com/v1"})
         assert result["ok"] is True
         assert result["models_found"] == 2
 
@@ -367,39 +383,164 @@ class TestTestProvider:
         mod = _load_module()
         import urllib.error
 
-        with mock.patch.object(
-            mod.urllib.request,
-            "urlopen",
-            side_effect=urllib.error.URLError("Connection refused"),
+        with (
+            _patch_public_dns(mod),
+            mock.patch.object(
+                mod._PROBE_OPENER,
+                "open",
+                side_effect=urllib.error.URLError("Connection refused"),
+            ),
         ):
-            result = mod.test_provider({"base_url": "http://localhost:9999/v1"})
+            result = mod.test_provider({"base_url": "http://api.example.com/v1"})
         assert result["ok"] is False
-        assert "connection" in result["error"].lower()
+        assert result["error"] == "Could not reach the provider endpoint."
 
     def test_auth_error(self):
         mod = _load_module()
         import urllib.error
 
-        with mock.patch.object(
-            mod.urllib.request,
-            "urlopen",
-            side_effect=urllib.error.HTTPError(
-                "http://x/models", 401, "Unauthorized", {}, None
+        with (
+            _patch_public_dns(mod),
+            mock.patch.object(
+                mod._PROBE_OPENER,
+                "open",
+                side_effect=urllib.error.HTTPError(
+                    "http://x/models", 401, "Unauthorized", {}, None
+                ),
             ),
         ):
-            result = mod.test_provider({"base_url": "http://x/v1"})
+            result = mod.test_provider({"base_url": "http://api.example.com/v1"})
         assert result["ok"] is False
         assert "auth" in result["error"].lower()
 
+    def test_error_surface_does_not_leak_status(self):
+        """#900: a non-auth HTTP status must not be reflected to the caller."""
+        mod = _load_module()
+        import urllib.error
+
+        with (
+            _patch_public_dns(mod),
+            mock.patch.object(
+                mod._PROBE_OPENER,
+                "open",
+                side_effect=urllib.error.HTTPError(
+                    "http://x/models", 404, "Not Found", {}, None
+                ),
+            ),
+        ):
+            result = mod.test_provider({"base_url": "http://api.example.com/v1"})
+        assert result["ok"] is False
+        assert "404" not in result["error"]
+        assert "Not Found" not in result["error"]
+
+    def test_allows_public_host(self):
+        mod = _load_module()
+        mock_resp = _mock_opener_response({"data": [{"id": "m1"}]})
+        with (
+            _patch_public_dns(mod),
+            mock.patch.object(mod._PROBE_OPENER, "open", return_value=mock_resp),
+        ):
+            result = mod.test_provider({"base_url": "http://api.example.com/v1"})
+        assert result["ok"] is True
+        assert result["models_found"] == 1
+
+    # ── SSRF guard: private/loopback/link-local/metadata denied ──────────────
+
+    def _assert_blocked_never_fetches(self, mod, base_url):
+        """The guard must reject before any socket opens: patch the opener to
+        fail the test if it is ever called."""
+
+        def _boom(*a, **kw):
+            raise AssertionError("opener must not be called for a blocked target")
+
+        with mock.patch.object(mod._PROBE_OPENER, "open", side_effect=_boom):
+            result = mod.test_provider({"base_url": base_url})
+        assert result["ok"] is False
+        assert result["error"] == mod._NONPUBLIC_MSG
+
+    def test_rejects_loopback(self):
+        mod = _load_module()
+        self._assert_blocked_never_fetches(mod, "http://127.0.0.1:8787/v1")
+
+    def test_rejects_loopback_ipv6(self):
+        mod = _load_module()
+        self._assert_blocked_never_fetches(mod, "http://[::1]/v1")
+
+    def test_rejects_private_rfc1918(self):
+        mod = _load_module()
+        self._assert_blocked_never_fetches(mod, "http://10.0.0.5/v1")
+        self._assert_blocked_never_fetches(mod, "http://192.168.1.1/v1")
+
+    def test_rejects_link_local_metadata(self):
+        mod = _load_module()
+        self._assert_blocked_never_fetches(mod, "http://169.254.169.254/v1")
+
+    def test_rejects_cgnat(self):
+        mod = _load_module()
+        self._assert_blocked_never_fetches(mod, "http://100.64.0.1/v1")
+
+    def test_rejects_unspecified(self):
+        mod = _load_module()
+        self._assert_blocked_never_fetches(mod, "http://0.0.0.0/v1")
+
+    def test_rejects_rebind_hostname(self):
+        """A public-looking hostname that resolves to a private address is
+        rejected (DNS-rebind style)."""
+        mod = _load_module()
+        with mock.patch.object(
+            mod.socket,
+            "getaddrinfo",
+            return_value=[(2, 1, 6, "", ("10.0.0.5", 0))],
+        ):
+
+            def _boom(*a, **kw):
+                raise AssertionError("opener must not be called for a blocked target")
+
+            with mock.patch.object(mod._PROBE_OPENER, "open", side_effect=_boom):
+                result = mod.test_provider({"base_url": "http://evil.example.com/v1"})
+        assert result["ok"] is False
+        assert result["error"] == mod._NONPUBLIC_MSG
+
+    def test_rejects_mixed_public_and_private(self):
+        """Deny if ANY resolved address is non-public."""
+        mod = _load_module()
+        with mock.patch.object(
+            mod.socket,
+            "getaddrinfo",
+            return_value=[
+                (2, 1, 6, "", ("93.184.216.34", 0)),
+                (2, 1, 6, "", ("127.0.0.1", 0)),
+            ],
+        ):
+
+            def _boom(*a, **kw):
+                raise AssertionError("opener must not be called for a blocked target")
+
+            with mock.patch.object(mod._PROBE_OPENER, "open", side_effect=_boom):
+                result = mod.test_provider({"base_url": "http://mixed.example.com/v1"})
+        assert result["ok"] is False
+        assert result["error"] == mod._NONPUBLIC_MSG
+
+    def test_upsert_still_accepts_private_url(self):
+        """Regression: the guard is fetch-only — storing a LAN provider works."""
+        mod = _load_module()
+        result = mod.upsert_provider(
+            {
+                "name": "LAN",
+                "base_url": "http://192.168.1.10:8080/v1",
+                "models": ["llama3"],
+            }
+        )
+        assert result["ok"] is True
+
     def test_handler_dispatches(self):
         mod = _load_module()
-        response_data = json.dumps({"data": []}).encode()
-        mock_resp = mock.MagicMock()
-        mock_resp.read.return_value = response_data
-        mock_resp.__enter__ = mock.Mock(return_value=mock_resp)
-        mock_resp.__exit__ = mock.Mock(return_value=False)
-        handler = _make_handler({"base_url": "http://localhost:8080/v1"})
-        with mock.patch.object(mod.urllib.request, "urlopen", return_value=mock_resp):
+        mock_resp = _mock_opener_response({"data": []})
+        handler = _make_handler({"base_url": "http://api.example.com/v1"})
+        with (
+            _patch_public_dns(mod),
+            mock.patch.object(mod._PROBE_OPENER, "open", return_value=mock_resp),
+        ):
             assert (
                 mod._handle_post(
                     handler, _parsed("/api/settings/custom-providers/test")
