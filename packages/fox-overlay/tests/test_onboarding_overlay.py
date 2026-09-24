@@ -12,6 +12,7 @@ Section B (full first-run wizard against real container).
 """
 
 import importlib
+import os
 import sys
 
 import pytest
@@ -289,6 +290,33 @@ def test_write_env_key_sets_0600(fresh_dispatch_and_module, tmp_path):
     _d, m = fresh_dispatch_and_module
     m._ENV_PATH = tmp_path / "hermes.env"
     m._write_env_key("OPENROUTER_API_KEY", "sk-value")
+    assert stat.S_IMODE(m._ENV_PATH.stat().st_mode) == 0o600
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX mode bits only")
+def test_write_env_key_new_file_created_0600_no_window(
+    fresh_dispatch_and_module, tmp_path, monkeypatch
+):
+    """#899: the NEW-file path must create the secret file 0600 from the first
+    byte — never a 0644 window before a follow-up chmod. Assert the create
+    (O_CREAT) call passes mode 0600, and the final file is 0600."""
+    import stat
+
+    _d, m = fresh_dispatch_and_module
+    m._ENV_PATH = tmp_path / "hermes.env"
+
+    captured = {}
+    real_open = os.open
+
+    def _spy_open(path, flags, mode=0o777, *a, **kw):
+        if flags & os.O_CREAT:
+            captured["mode"] = mode
+        return real_open(path, flags, mode, *a, **kw)
+
+    monkeypatch.setattr(m.os, "open", _spy_open)
+    m._write_env_key("OPENROUTER_API_KEY", "sk-value")
+
+    assert captured.get("mode") == 0o600
     assert stat.S_IMODE(m._ENV_PATH.stat().st_mode) == 0o600
 
 

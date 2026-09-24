@@ -161,10 +161,34 @@ def _write_env_key(key: str, value: str) -> None:
             lines.append("")
         lines.append(f"{key}={value}")
 
-    _ENV_PATH.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    # Owner-only: the file holds a provider secret. Applied unconditionally so
-    # a pre-existing 0644 file (shipped before #899) self-heals on next write.
-    os.chmod(_ENV_PATH, 0o600)
+    # Atomic + owner-only from the first byte (#899). A plain write_text creates
+    # the file at the umask default (0644), so the secret would be group/other-
+    # readable in the window before a follow-up chmod. Instead write to a same-
+    # dir temp created 0600 (O_CREAT mode + fchmod pin, immune to a loose umask),
+    # fsync, then os.replace — the destination is never momentarily world-
+    # readable, and replacing the inode self-heals a pre-existing 0644 file.
+    # Mirrors api.config._atomic_write_settings_text.
+    data = "\n".join(lines) + "\n"
+    tmp = _ENV_PATH.with_name(f".{_ENV_PATH.name}.{os.getpid()}.tmp")
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        if hasattr(os, "fchmod"):  # pin exactly 0600 regardless of umask (POSIX)
+            os.fchmod(fd, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
+            handle.write(data)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp, _ENV_PATH)
+    except BaseException:
+        try:
+            os.close(fd)  # no-op if fdopen already closed it
+        except OSError:
+            pass
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
 
 
 # ── Setup route handlers ─────────────────────────────────────────────────────
