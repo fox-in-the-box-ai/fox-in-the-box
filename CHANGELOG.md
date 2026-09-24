@@ -9,6 +9,14 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.7.68] — 2026-09-24
+
+### Fixed
+
+- Long-term memory settings are now written to `mem0_oss.json` atomically (write to a temporary file, then rename), so an interrupted or concurrent write can no longer truncate the file and silently reset your memory configuration to defaults. (#909)
+- A non-numeric or non-positive `MEM0_OSS_TOP_K` (from the environment or from `mem0_oss.json`) now fails long-term memory loudly — memory reports an error state at boot, at preflight, and via `/readyz`, instead of appearing healthy while silently disabled. (#903)
+- Malformed memory tool-call arguments from the model (a non-string query, a non-numeric result count) now degrade gracefully to a clear tool error or a safe default, instead of surfacing a generic internal error and counting against the memory circuit breaker. (#911)
+
 ## [0.7.67] — 2026-09-24
 
 ### Fixed

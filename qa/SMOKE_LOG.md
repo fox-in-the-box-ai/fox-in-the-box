@@ -25,6 +25,22 @@ Skipped sections are OK as long as they're explicitly noted with reason. Empty e
 
 ---
 
+## v0.7.68 — 2026-09-24 (DV — mem0 plugin runtime hardening: fail-loud top_k from env & file #903, atomic config-write durability #909, malformed tool-arg graceful-degrade #911)
+
+HARD GATE per docs/RELEASE_WORKFLOW.md (memory subsystem: R2 changes mem0_oss operational-config resolution — `_coerce_top_k` fail-loud + atomic `save_config`). Container/overlay-only release — no desktop code. Validated by an independent Phase-4 container QA against the PR `:dev` multi-arch image (arm64 variant, digest sha256:e788c50b…1e2d, version.txt `dev-f9943b3`; R2 code confirmed baked — `_coerce_top_k` present, `except OSError` in the atomic writer). Each scenario ran on a FRESH container; runtime paths resolve from `$HERMES_HOME=/data/data/hermes` (state.json at `mem0_oss/state.json`, config at `mem0_oss.json`), health/readyz served by hermes-webui on :8787. embed-server came up as a correct aarch64 binary, so memory resolved fully live (embedder + Qdrant up). Real agent tool-call store/recall with a paid provider key remains a documented-skip (no key; precedent v0.7.60/63/64/65/66/67).
+
+- [x] 1. #909 config durability (LIVE) — `save_config({"collection":"smoke","top_k":7})` → `_read_file_overrides()` `{'collection':'smoke','top_k':7}`; survived `docker restart`; tight save loop + `docker kill -s KILL` + `docker start` → mem0_oss.json still valid JSON (`top_k:49`, never truncated), NO leftover `.mem0_oss.json.*.tmp`, `/health` 200. Atomic tmp+os.replace holds under SIGKILL.
+- [x] 2. #903 bad top_k from ENV (LIVE) — `MEM0_OSS_TOP_K=abc` → preflight-seeded `state.json status:"error" reason:"invalid top_k value 'abc' — must be an integer"`, `/readyz` memory ok:false, ready:false; `=0` and `=-5` → error "…must be a positive integer", memory ok:false; positive control `=15` → state:"ready", memory ok:true, ready:true. All `/health` 200. Change-4 after-preflight guarantee confirmed.
+- [x] 3. #903 bad top_k from mem0_oss.json (LIVE) — planted `{"top_k":"abc"}` → restart → state:"error" + /readyz memory ok:false, ready:false; corrected to `{"top_k":10}` → restart → state:"ready" + memory ok:true, ready:true. `/health` 200 throughout.
+- [x] 4. #911 malformed tool-arg — `_handle_search` driven directly with bad top_k `["abc",-3,None,3.9,[1,2]]` → all returned gracefully (no raise, no breaker trip); covered by in-image `test_mem0_tool_dispatch.py` (default/clamp-1/clamp-50/coerce cases). Deliberately NOT fail-loud (untrusted model output, not operator config).
+- [ ] 5. Real agent store→recall with a paid provider key + real nomic embeddings — documented-skip (no key; precedent v0.7.60/63/64/65/66/67). R2 changes operational-config resolution, not the embed/store wire; the embedder path is out of blast radius.
+
+Findings: none blocking. Fail-loud top_k fires identically from env (#903) and mem0_oss.json (#903), seeded at preflight before the first is_available() so /readyz never lies "ready" on a bad value; correction re-resolves on restart. Atomic config write (#909) survives SIGKILL mid-write with no truncation and no orphan tmp. Malformed tool args (#911) degrade cleanly without raising. Two brief-vs-image notes for the record: runtime HERMES_HOME is /data/data/hermes (not /root/.hermes, the exec-as-root fallback); webui health/readyz port is 8787 (not 8788).
+
+Action items: real-provider store/recall at release-time on the published multi-arch image (row 5), as each cycle.
+
+---
+
 ## v0.7.67 — 2026-09-24 (DV — memory boot-migration integrity: real collection/dims in sentinel #906, file-only collection resolution #915, fail-loud non-numeric dims #912, corrupt-sentinel re-attempt #905)
 
 HARD GATE per docs/RELEASE_WORKFLOW.md (memory subsystem: R1 changes the mem0_oss boot-migration collection/dims resolution and sentinel read/write contract). Container/overlay-only release — no desktop code. Validated by an independent Phase-4 container QA against the PR #916 multi-arch `:dev` image (arm64 variant, digest sha256:3850caff…7957, version.txt `dev-6265c49` = CI merge of PR head 0da6468 "release: v0.7.67"; R1 code confirmed baked — `migrate_store.py` carries `_resolve_collection_and_dims`). Each scenario ran on a FRESH container against the container's own bundled Qdrant server, driving the real boot path `python -m plugins.memory.mem0_oss.migrate_store --boot`. Real agent store/recall with a paid provider key remains a documented-skip (no key; precedent v0.7.60/63/64/65/66).

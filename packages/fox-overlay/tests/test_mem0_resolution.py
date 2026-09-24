@@ -24,6 +24,7 @@ The ``_WELL_KNOWN``/``_POOL_ID_MAP`` sync assertions still run in-image
 
 from __future__ import annotations
 
+import inspect
 import json
 import os
 import sys
@@ -49,9 +50,11 @@ plugin = pytest.importorskip("agent_memory_plugins.mem0_oss")
 
 from agent_memory_plugins.mem0_oss import (  # noqa: E402
     MemoryUnavailable,
+    Mem0OSSMemoryProvider,
     ResolvedConfig,
     _LOCAL_EMBED_BASE_URL,
     _LOCAL_EMBED_MODEL,
+    _read_file_overrides,
 )
 
 
@@ -701,6 +704,19 @@ class TestStateJson:
         assert state["status"] == "error"
         assert "OPENROUTER_API_KEY" in state["reason"]
 
+    def test_bad_top_k_writes_error_not_ready(self, env, monkeypatch, pinned_llm):
+        """#903: a bad top_k must make is_available() return False (no raise)
+        with state=error — not leak an exception that leaves memory off while
+        state.json/readyz still report ready."""
+        monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test-1234")
+        monkeypatch.setenv("MEM0_OSS_TOP_K", "abc")
+        monkeypatch.setattr(plugin, "_embed_server_healthy", lambda: True)
+        provider = plugin.Mem0OSSMemoryProvider()
+        assert provider.is_available() is False
+        state = json.loads((env.home / "mem0_oss" / "state.json").read_text())
+        assert state["status"] == "error"
+        assert "top_k" in state["reason"]
+
 
 # ── Negative invariant: never auth.py resolution functions ─────────────
 
@@ -891,6 +907,139 @@ class TestQdrantPortFailLoud:
         runtime = _qdrant_runtime(qdrant_host="127.0.0.1", qdrant_port="")
         cfg = _build_qdrant_cfg(runtime, store_dims=768)
         assert cfg["port"] == 6333
+
+
+class TestSaveConfigAtomicity:
+    """#909: mem0_oss.json is written via tmp + os.replace so a crash or
+    concurrent read mid-save can never leave a truncated file that
+    _read_file_overrides() would silently revert to defaults."""
+
+    def test_torn_write_leaves_previous_config_intact(self, env, monkeypatch):
+        """A failing os.replace must not truncate the live file — the reader
+        still sees the complete previous config, never {}.  On the pre-fix
+        in-place write_text the file is already truncated at this point."""
+        provider = Mem0OSSMemoryProvider()
+        provider.save_config({"collection": "keep", "top_k": 7}, str(env.home))
+        assert _read_file_overrides() == {"collection": "keep", "top_k": 7}
+
+        def _boom(*_a, **_k):
+            raise OSError("simulated interrupted rename")
+
+        monkeypatch.setattr("agent_memory_plugins.mem0_oss.os.replace", _boom)
+        with pytest.raises(OSError):
+            provider.save_config({"top_k": 50}, str(env.home))
+
+        # The live file is untouched: full previous config, not a truncation.
+        assert _read_file_overrides() == {"collection": "keep", "top_k": 7}
+        # A failed rename leaves no orphan pid-suffixed tmp behind.
+        assert list(env.home.glob(".mem0_oss.json.*.tmp")) == []
+
+    def test_merge_preserves_untouched_keys(self, env):
+        provider = Mem0OSSMemoryProvider()
+        provider.save_config({"collection": "c1", "top_k": 7}, str(env.home))
+        provider.save_config({"top_k": 42}, str(env.home))
+        assert _read_file_overrides() == {"collection": "c1", "top_k": 42}
+
+    def test_corrupt_existing_file_warns_and_overwrites(self, env, monkeypatch, caplog):
+        (env.home / "mem0_oss.json").write_text('{"collection": "c1"', encoding="utf-8")
+        provider = Mem0OSSMemoryProvider()
+        with caplog.at_level("WARNING"):
+            provider.save_config({"top_k": 9}, str(env.home))
+        assert any("unreadable" in r.message for r in caplog.records)
+        assert _read_file_overrides() == {"top_k": 9}
+
+    def test_writer_uses_os_replace(self):
+        """Pattern lock: the durable writer must not drift back to an
+        in-place write_text (secondary to the behavioral test above)."""
+        assert "os.replace" in inspect.getsource(Mem0OSSMemoryProvider.save_config)
+
+
+class TestTopKFailLoud:
+    """#903: a non-integer or non-positive top_k (env MEM0_OSS_TOP_K or the
+    top_k key in mem0_oss.json) fails loud through the state model, exactly
+    like a bad MEM0_OSS_QDRANT_PORT — never a bare ValueError, never a silent
+    default."""
+
+    def test_garbage_top_k_env_raises(self, env, monkeypatch):
+        from agent_memory_plugins.mem0_oss import _load_runtime_config  # noqa: PLC0415
+
+        monkeypatch.setenv("MEM0_OSS_TOP_K", "abc")
+        with pytest.raises(MemoryUnavailable) as excinfo:
+            _load_runtime_config()
+        assert excinfo.value.severity == "error"
+        assert "top_k" in excinfo.value.reason
+
+    def test_garbage_top_k_file_raises(self, env):
+        from agent_memory_plugins.mem0_oss import _load_runtime_config  # noqa: PLC0415
+
+        (env.home / "mem0_oss.json").write_text(
+            json.dumps({"top_k": "abc"}), encoding="utf-8"
+        )
+        with pytest.raises(MemoryUnavailable) as excinfo:
+            _load_runtime_config()
+        assert excinfo.value.severity == "error"
+        assert "top_k" in excinfo.value.reason
+
+    def test_none_top_k_raises(self):
+        from agent_memory_plugins.mem0_oss import _coerce_top_k  # noqa: PLC0415
+
+        with pytest.raises(MemoryUnavailable):
+            _coerce_top_k(None)
+
+    def test_zero_and_negative_top_k_raise(self):
+        from agent_memory_plugins.mem0_oss import _coerce_top_k  # noqa: PLC0415
+
+        with pytest.raises(MemoryUnavailable):
+            _coerce_top_k("0")
+        with pytest.raises(MemoryUnavailable):
+            _coerce_top_k("-5")
+
+    def test_valid_top_k_parses(self, env):
+        from agent_memory_plugins.mem0_oss import (  # noqa: PLC0415
+            _coerce_top_k,
+            _load_runtime_config,
+        )
+
+        assert _coerce_top_k("10") == 10
+        # Unset still defaults to 10 (no over-strict regression).
+        assert _load_runtime_config()["top_k"] == 10
+
+    def test_valid_file_top_k_override_propagates(self, env):
+        from agent_memory_plugins.mem0_oss import _load_runtime_config  # noqa: PLC0415
+
+        (env.home / "mem0_oss.json").write_text(
+            json.dumps({"top_k": 5}), encoding="utf-8"
+        )
+        resolved = _load_runtime_config()["top_k"]
+        assert resolved == 5
+        assert isinstance(resolved, int)
+
+
+class TestPreflightTopK:
+    """#903 Change 4: preflight must seed state=error (not ready) on an
+    invalid top_k, closing the preflight→first-is_available() window where
+    /readyz would otherwise report memory ready."""
+
+    def test_preflight_bad_top_k_seeds_error(self, env, monkeypatch, pinned_llm):
+        from agent_memory_plugins.mem0_oss import preflight  # noqa: PLC0415
+
+        monkeypatch.setattr(preflight.os, "geteuid", lambda: 1000, raising=False)
+        monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test-1234")
+        monkeypatch.setenv("MEM0_OSS_TOP_K", "abc")
+        assert preflight.main() == 0
+        state = json.loads((env.home / "mem0_oss" / "state.json").read_text())
+        assert state["status"] == "error"
+        assert "top_k" in state["reason"]
+
+    def test_preflight_valid_config_seeds_ready(self, env, monkeypatch, pinned_llm):
+        from agent_memory_plugins.mem0_oss import preflight  # noqa: PLC0415
+
+        monkeypatch.setattr(preflight.os, "geteuid", lambda: 1000, raising=False)
+        monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test-1234")
+        assert preflight.main() == 0
+        state = json.loads((env.home / "mem0_oss" / "state.json").read_text())
+        assert state["status"] == "ready"
+        assert state["llm"] == "openrouter"
 
 
 class TestEmbeddedRegression:

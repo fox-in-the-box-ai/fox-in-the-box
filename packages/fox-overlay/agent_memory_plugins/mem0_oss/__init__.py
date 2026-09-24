@@ -1114,6 +1114,32 @@ def _coerce_qdrant_port(raw: Any) -> int:
         )
 
 
+def _coerce_top_k(raw: Any) -> int:
+    """Parse the configured memory recall depth (env ``MEM0_OSS_TOP_K`` or the
+    ``top_k`` key in mem0_oss.json).
+
+    A non-integer or non-positive value is a fail-loud config error (§19.4 #3),
+    surfaced through the state model exactly like a bad ``MEM0_OSS_QDRANT_PORT``
+    — never an uncaught crash on the boot path.  Silently defaulting would mask
+    an operator typo and degrade recall breadth undetectably.  Unlike the port
+    helper there is NO empty-string fallback: ``MEM0_OSS_TOP_K``'s env default
+    is the string ``"10"``, so an empty value is always an explicit override
+    (``int("")`` raises ``ValueError``, handled here as the fail-loud case)."""
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        raise MemoryUnavailable(
+            f"invalid top_k value {raw!r} — must be an integer",
+            severity="error",
+        )
+    if value <= 0:
+        raise MemoryUnavailable(
+            f"invalid top_k value {raw!r} — must be a positive integer",
+            severity="error",
+        )
+    return value
+
+
 def _qdrant_server_mode(runtime_cfg: dict) -> bool:
     """True when a Qdrant server endpoint (URL or host) is configured — i.e.
     the plugin talks HTTP to a shared server instead of the embedded store."""
@@ -1290,7 +1316,10 @@ def _load_runtime_config() -> dict:
         ),
         "collection": os.environ.get("MEM0_OSS_COLLECTION", "hermes"),
         "user_id": os.environ.get("MEM0_OSS_USER_ID", "hermes-user"),
-        "top_k": int(os.environ.get("MEM0_OSS_TOP_K", "10")),
+        # Keep top_k raw here; both the env-default and the file-override paths
+        # are coerced once at the single sink below so a bad value fails loud
+        # from one place (see _coerce_top_k).
+        "top_k": os.environ.get("MEM0_OSS_TOP_K", "10"),
         # Qdrant server mode — when a server URL or host is set, mem0 connects
         # to the shared server (HTTP, no file lock) instead of the embedded
         # store.  Both gateway and WebUI can safely share it concurrently.
@@ -1313,7 +1342,7 @@ def _load_runtime_config() -> dict:
     ):
         if key in file_cfg:
             config[key] = file_cfg[key]
-    config["top_k"] = int(config["top_k"])
+    config["top_k"] = _coerce_top_k(config["top_k"])
     return config
 
 
@@ -1583,11 +1612,13 @@ class Mem0OSSMemoryProvider(MemoryProvider):
 
         # Qdrant server mode (go-gate Q5): fail loud when the shared server is
         # unreachable.  Warn-never-fail like the embed probe — state carries the
-        # reason; boot does not block.  A bad MEM0_OSS_QDRANT_PORT surfaces here
-        # as a MemoryUnavailable (severity=error) from target resolution; catch
-        # it so availability never raises on the boot path (§a.2).
-        runtime_cfg = self._runtime_cfg or _load_runtime_config()
+        # reason; boot does not block.  A bad MEM0_OSS_QDRANT_PORT or top_k
+        # surfaces here as a MemoryUnavailable (severity=error); the load MUST
+        # sit inside the try so a bad top_k does not escape as an unhandled
+        # exception that leaves memory off while state.json/readyz report ready
+        # (§a.2 / §19.4 #3).
         try:
+            runtime_cfg = self._runtime_cfg or _load_runtime_config()
             server_mode = _qdrant_server_mode(runtime_cfg)
             server_healthy = (
                 _qdrant_server_healthy(runtime_cfg) if server_mode else True
@@ -1877,11 +1908,20 @@ class Mem0OSSMemoryProvider(MemoryProvider):
         return tool_error(f"Unknown tool: {tool_name}")
 
     def _handle_search(self, args: Dict[str, Any]) -> str:
-        query = args.get("query", "").strip()
+        # Model-supplied args are untrusted output, not operator config: a
+        # formatting mistake must degrade to a clean tool_error / safe default,
+        # never raise and never trip the circuit breaker.  Deliberately NOT the
+        # fail-loud _coerce_top_k (#903) — that is for operator config (#911).
+        raw_query = args.get("query")
+        query = raw_query.strip() if isinstance(raw_query, str) else ""
         if not query:
             return tool_error("mem0_oss_search requires 'query'")
 
-        top_k = min(int(args.get("top_k", self._top_k)), 50)
+        try:
+            top_k = min(int(args.get("top_k", self._top_k)), 50)
+        except (TypeError, ValueError):
+            top_k = self._top_k
+        top_k = max(1, top_k)
 
         try:
             mem = self._get_memory()
@@ -1915,7 +1955,10 @@ class Mem0OSSMemoryProvider(MemoryProvider):
             return tool_error(f"mem0_oss_search failed: {exc}")
 
     def _handle_add(self, args: Dict[str, Any]) -> str:
-        content = args.get("content", "").strip()
+        # Untrusted model output (see _handle_search): a non-string content
+        # degrades to the existing tool_error, never an AttributeError.
+        raw_content = args.get("content")
+        content = raw_content.strip() if isinstance(raw_content, str) else ""
         if not content:
             return tool_error("mem0_oss_add requires 'content'")
 
@@ -2060,10 +2103,30 @@ class Mem0OSSMemoryProvider(MemoryProvider):
         if config_path.exists():
             try:
                 existing = json.loads(config_path.read_text(encoding="utf-8"))
-            except Exception:
-                pass
+            except (OSError, ValueError) as exc:
+                logger.warning(
+                    "mem0_oss: existing config %s unreadable, overwriting "
+                    "with new values (recoverable keys lost): %s",
+                    config_path,
+                    exc,
+                )
         existing.update(values)
-        config_path.write_text(json.dumps(existing, indent=2), encoding="utf-8")
+        # Atomic write (tmp + os.replace), mirroring _write_state: a crash or
+        # concurrent read mid-save can never leave a truncated mem0_oss.json
+        # that _read_file_overrides() would silently revert to defaults.  The
+        # tmp lives in the target's own directory so os.replace is a real
+        # rename (a cross-device tmp under /data bind-mounts raises EXDEV).
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = config_path.parent / f".{config_path.name}.{os.getpid()}.tmp"
+        try:
+            tmp.write_text(json.dumps(existing, indent=2), encoding="utf-8")
+            os.replace(tmp, config_path)
+        except OSError:
+            # The live file stays intact (atomicity preserved); remove the
+            # orphan tmp so a failed rename can't leave it behind.  Re-raise
+            # so the failure is never swallowed.
+            tmp.unlink(missing_ok=True)
+            raise
         _invalidate_memo()
 
     # -- Shutdown ----------------------------------------------------------
