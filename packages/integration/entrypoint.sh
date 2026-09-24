@@ -177,7 +177,11 @@ if [ -f "$HERMES_ENV" ]; then
     echo "[entrypoint] Loading environment from $HERMES_ENV ..."
     set -a
     # shellcheck source=/dev/null
-    source "$HERMES_ENV"
+    # Best-effort: hermes.env is user-writable (wizard/manual edits). A malformed
+    # line must not brick boot — same contract as scripts/run-with-env.sh. A
+    # missing/invalid key then surfaces downstream as "no provider configured"
+    # via /readyz, not as a dead container.
+    source "$HERMES_ENV" || echo "[entrypoint] WARN: $HERMES_ENV failed to source (malformed) — continuing without it"
     set +a
 fi
 
