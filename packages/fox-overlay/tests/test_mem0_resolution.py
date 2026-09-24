@@ -704,6 +704,19 @@ class TestStateJson:
         assert state["status"] == "error"
         assert "OPENROUTER_API_KEY" in state["reason"]
 
+    def test_bad_top_k_writes_error_not_ready(self, env, monkeypatch, pinned_llm):
+        """#903: a bad top_k must make is_available() return False (no raise)
+        with state=error — not leak an exception that leaves memory off while
+        state.json/readyz still report ready."""
+        monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test-1234")
+        monkeypatch.setenv("MEM0_OSS_TOP_K", "abc")
+        monkeypatch.setattr(plugin, "_embed_server_healthy", lambda: True)
+        provider = plugin.Mem0OSSMemoryProvider()
+        assert provider.is_available() is False
+        state = json.loads((env.home / "mem0_oss" / "state.json").read_text())
+        assert state["status"] == "error"
+        assert "top_k" in state["reason"]
+
 
 # ── Negative invariant: never auth.py resolution functions ─────────────
 
@@ -937,6 +950,57 @@ class TestSaveConfigAtomicity:
         """Pattern lock: the durable writer must not drift back to an
         in-place write_text (secondary to the behavioral test above)."""
         assert "os.replace" in inspect.getsource(Mem0OSSMemoryProvider.save_config)
+
+
+class TestTopKFailLoud:
+    """#903: a non-integer or non-positive top_k (env MEM0_OSS_TOP_K or the
+    top_k key in mem0_oss.json) fails loud through the state model, exactly
+    like a bad MEM0_OSS_QDRANT_PORT — never a bare ValueError, never a silent
+    default."""
+
+    def test_garbage_top_k_env_raises(self, env, monkeypatch):
+        from agent_memory_plugins.mem0_oss import _load_runtime_config  # noqa: PLC0415
+
+        monkeypatch.setenv("MEM0_OSS_TOP_K", "abc")
+        with pytest.raises(MemoryUnavailable) as excinfo:
+            _load_runtime_config()
+        assert excinfo.value.severity == "error"
+        assert "top_k" in excinfo.value.reason
+
+    def test_garbage_top_k_file_raises(self, env):
+        from agent_memory_plugins.mem0_oss import _load_runtime_config  # noqa: PLC0415
+
+        (env.home / "mem0_oss.json").write_text(
+            json.dumps({"top_k": "abc"}), encoding="utf-8"
+        )
+        with pytest.raises(MemoryUnavailable) as excinfo:
+            _load_runtime_config()
+        assert excinfo.value.severity == "error"
+        assert "top_k" in excinfo.value.reason
+
+    def test_none_top_k_raises(self):
+        from agent_memory_plugins.mem0_oss import _coerce_top_k  # noqa: PLC0415
+
+        with pytest.raises(MemoryUnavailable):
+            _coerce_top_k(None)
+
+    def test_zero_and_negative_top_k_raise(self):
+        from agent_memory_plugins.mem0_oss import _coerce_top_k  # noqa: PLC0415
+
+        with pytest.raises(MemoryUnavailable):
+            _coerce_top_k("0")
+        with pytest.raises(MemoryUnavailable):
+            _coerce_top_k("-5")
+
+    def test_valid_top_k_parses(self, env):
+        from agent_memory_plugins.mem0_oss import (  # noqa: PLC0415
+            _coerce_top_k,
+            _load_runtime_config,
+        )
+
+        assert _coerce_top_k("10") == 10
+        # Unset still defaults to 10 (no over-strict regression).
+        assert _load_runtime_config()["top_k"] == 10
 
 
 class TestEmbeddedRegression:

@@ -1114,6 +1114,32 @@ def _coerce_qdrant_port(raw: Any) -> int:
         )
 
 
+def _coerce_top_k(raw: Any) -> int:
+    """Parse the configured memory recall depth (env ``MEM0_OSS_TOP_K`` or the
+    ``top_k`` key in mem0_oss.json).
+
+    A non-integer or non-positive value is a fail-loud config error (§19.4 #3),
+    surfaced through the state model exactly like a bad ``MEM0_OSS_QDRANT_PORT``
+    — never an uncaught crash on the boot path.  Silently defaulting would mask
+    an operator typo and degrade recall breadth undetectably.  Unlike the port
+    helper there is NO empty-string fallback: ``MEM0_OSS_TOP_K``'s env default
+    is the string ``"10"``, so an empty value is always an explicit override
+    (``int("")`` raises ``ValueError``, handled here as the fail-loud case)."""
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        raise MemoryUnavailable(
+            f"invalid top_k value {raw!r} — must be an integer",
+            severity="error",
+        )
+    if value <= 0:
+        raise MemoryUnavailable(
+            f"invalid top_k value {raw!r} — must be a positive integer",
+            severity="error",
+        )
+    return value
+
+
 def _qdrant_server_mode(runtime_cfg: dict) -> bool:
     """True when a Qdrant server endpoint (URL or host) is configured — i.e.
     the plugin talks HTTP to a shared server instead of the embedded store."""
@@ -1290,7 +1316,10 @@ def _load_runtime_config() -> dict:
         ),
         "collection": os.environ.get("MEM0_OSS_COLLECTION", "hermes"),
         "user_id": os.environ.get("MEM0_OSS_USER_ID", "hermes-user"),
-        "top_k": int(os.environ.get("MEM0_OSS_TOP_K", "10")),
+        # Keep top_k raw here; both the env-default and the file-override paths
+        # are coerced once at the single sink below so a bad value fails loud
+        # from one place (see _coerce_top_k).
+        "top_k": os.environ.get("MEM0_OSS_TOP_K", "10"),
         # Qdrant server mode — when a server URL or host is set, mem0 connects
         # to the shared server (HTTP, no file lock) instead of the embedded
         # store.  Both gateway and WebUI can safely share it concurrently.
@@ -1313,7 +1342,7 @@ def _load_runtime_config() -> dict:
     ):
         if key in file_cfg:
             config[key] = file_cfg[key]
-    config["top_k"] = int(config["top_k"])
+    config["top_k"] = _coerce_top_k(config["top_k"])
     return config
 
 
@@ -1583,11 +1612,13 @@ class Mem0OSSMemoryProvider(MemoryProvider):
 
         # Qdrant server mode (go-gate Q5): fail loud when the shared server is
         # unreachable.  Warn-never-fail like the embed probe — state carries the
-        # reason; boot does not block.  A bad MEM0_OSS_QDRANT_PORT surfaces here
-        # as a MemoryUnavailable (severity=error) from target resolution; catch
-        # it so availability never raises on the boot path (§a.2).
-        runtime_cfg = self._runtime_cfg or _load_runtime_config()
+        # reason; boot does not block.  A bad MEM0_OSS_QDRANT_PORT or top_k
+        # surfaces here as a MemoryUnavailable (severity=error); the load MUST
+        # sit inside the try so a bad top_k does not escape as an unhandled
+        # exception that leaves memory off while state.json/readyz report ready
+        # (§a.2 / §19.4 #3).
         try:
+            runtime_cfg = self._runtime_cfg or _load_runtime_config()
             server_mode = _qdrant_server_mode(runtime_cfg)
             server_healthy = (
                 _qdrant_server_healthy(runtime_cfg) if server_mode else True
