@@ -2,7 +2,7 @@
 
 Bridges three subsystems:
 
-1. The download manager from #10 (`api/models_download`) — pulls the GGUF
+1. The download manager from #10 (`fox_overlay.webui_modules.models_download`) — pulls the GGUF
    model file lazily into /data/models/.
 2. The bundled `llama-server` binary at /app/llama-cpp/llama-server,
    supervised by supervisord with autostart=false (so it costs zero
@@ -60,7 +60,7 @@ logger = logging.getLogger(__name__)
 # bool in settings.json. The UI's Local fallback tile binds to this.
 SETTINGS_KEY = "local_fallback_enabled"
 
-# The model registered in api/models_download.KNOWN_MODELS that the
+# The model registered in fox_overlay.webui_modules.models_download.KNOWN_MODELS that the
 # fallback runtime targets. Hard-coded here because llama-server's command
 # line in supervisord.conf points at this exact path.
 MODEL_ID = "phi4-mini"
@@ -298,7 +298,7 @@ def get_status() -> dict[str, Any]:
 
     # Model installation state from #10's manager.
     try:
-        from api.models_download import list_models
+        from fox_overlay.webui_modules.models_download import list_models
 
         models = list_models().get("models", [])
         model = next((m for m in models if m["id"] == MODEL_ID), None)
@@ -368,7 +368,7 @@ def _start_when_ready(timeout_s: float = 600.0, poll_s: float = 1.0) -> None:
     download manager's own state, which the wizard already surfaces.
     """
     try:
-        from api.models_download import (
+        from fox_overlay.webui_modules.models_download import (
             KNOWN_MODELS,
             _is_final_present,
             list_models,
@@ -442,7 +442,11 @@ def enable() -> dict[str, Any]:
 
     # Make sure the model is on disk (or downloading).
     try:
-        from api.models_download import KNOWN_MODELS, _is_final_present, start_download
+        from fox_overlay.webui_modules.models_download import (
+            KNOWN_MODELS,
+            _is_final_present,
+            start_download,
+        )
 
         model = KNOWN_MODELS.get(MODEL_ID)
         if model and not _is_final_present(model):
@@ -454,7 +458,10 @@ def enable() -> dict[str, Any]:
     # If model already present, start immediately. Otherwise spawn the
     # background watcher that starts llama-server once the file appears.
     try:
-        from api.models_download import KNOWN_MODELS, _is_final_present
+        from fox_overlay.webui_modules.models_download import (
+            KNOWN_MODELS,
+            _is_final_present,
+        )
 
         model = KNOWN_MODELS.get(MODEL_ID)
         if model and _is_final_present(model):

@@ -170,3 +170,57 @@ def test_prefix_does_not_match_adjacent_paths(fresh_dispatch_and_module):
     h = _FakeHandler()
     assert d.handle_get(h, urlparse("/api/local-fallbackx")) is False
     assert d.handle_get(h, urlparse("/api/local-fallback-x/status")) is False
+
+
+# ── #902: download-manager import path resolves (was api.models_download) ──
+
+
+def test_enable_has_no_import_errors(fresh_dispatch_and_module, monkeypatch):
+    """#902: enable() must resolve the migrated models_download module — no
+    'No module named' / start_download: / schedule_llama_server: in errors[]."""
+    _d, m = fresh_dispatch_and_module
+    import fox_overlay.webui_modules.models_download as md
+
+    monkeypatch.setattr(m, "set_enabled", lambda v: None)
+    monkeypatch.setattr(m, "start_llama_server", lambda: {"ok": True})
+    monkeypatch.setattr(m, "get_status", lambda: {})
+    monkeypatch.setattr(md, "_is_final_present", lambda model: True)
+
+    result = m.enable()
+    assert not result.get("errors")
+    assert not result.get("error")
+
+
+def test_get_status_no_import_failure(fresh_dispatch_and_module, monkeypatch):
+    """#902: get_status() must resolve list_models — a broken import used to
+    swallow to model=None → ui_state 'missing-model-registry'."""
+    _d, m = fresh_dispatch_and_module
+    import fox_overlay.webui_modules.models_download as md
+
+    monkeypatch.setattr(m, "is_enabled", lambda: True)
+    monkeypatch.setattr(m, "supervisor_status", lambda: "RUNNING")
+    monkeypatch.setattr(m, "_server_healthy", lambda: True)
+    monkeypatch.setattr(
+        md,
+        "list_models",
+        lambda: {"models": [{"id": m.MODEL_ID, "installed": True, "state": {}}]},
+    )
+
+    status = m.get_status()
+    assert status["ui_state"] != "missing-model-registry"
+    assert status["model_installed"] is True
+
+
+def test_no_stale_api_models_download_import():
+    """Cheap regression lock: the pre-Phase-5 import path must not return."""
+    import pathlib
+
+    src = (
+        pathlib.Path(__file__).resolve().parent.parent
+        / "fox_overlay"
+        / "webui_modules"
+        / "local_fallback.py"
+    )
+    text = src.read_text(encoding="utf-8")
+    assert "from api.models_download" not in text
+    assert "import api.models_download" not in text
