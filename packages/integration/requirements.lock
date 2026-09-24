@@ -35,11 +35,16 @@
 # [anthropic,bedrock,google,mem0] install target does not include; uvicorn
 # falls back to the stdlib asyncio loop). Re-resolved via the documented
 # `pip freeze` method; no other pins moved.
+# 2026-09-24 (#897a): anyio 4.14.0 -> 4.14.2, the reachable fixable CRITICAL
+# on the async backend under fastapi/starlette on the published gateway port.
+# Re-resolved via the documented `pip freeze` method; anyio's own
+# dependencies (idna, sniffio, typing_extensions) are already satisfied by
+# the pinned set, so no other pin moved.
 
 annotated-doc==0.0.4
 annotated-types==0.7.0
 anthropic==0.87.0
-anyio==4.14.0
+anyio==4.14.2
 backoff==2.2.1
 boto3==1.42.89
 botocore==1.42.97

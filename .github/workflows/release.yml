@@ -110,6 +110,54 @@ jobs:
           R2_SECRET_KEY:   ${{ secrets.R2_SECRET_KEY }}
         run: bash packages/deb/publish-apt.sh
 
+  # ── Trivy release gate (#897b) ──────────────────────────────────────────────
+  # A fixable CRITICAL/HIGH must never become :stable / :vX.Y.Z. Scans the exact
+  # bytes wait-for-container pushed, by immutable index digest — not a mutable
+  # tag. This runs ONLY on tag push (release.yml), never on PRs, so it cannot
+  # self-block the PR that ships a fix. promote-container gates on it via needs,
+  # so a vulnerable image can never be promoted.
+  #   - ignore-unfixed: true is load-bearing — without it the ~104 unfixed
+  #     Debian CVEs (no vendor patch) would red every release.
+  #   - .trivyignore carries the curated accepted-until-upstream set (fixable
+  #     findings with no in-repo control point), each with a justification.
+  trivy-release-gate:
+    name: Trivy release gate (fixable CRITICAL/HIGH)
+    needs: [wait-for-container]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Checkout (for .trivyignore)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Log in to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Assert digest present (fail loud)
+        env:
+          DIGEST: ${{ needs.wait-for-container.outputs.digest }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$DIGEST" ]]; then
+            echo "::error::wait-for-container produced no digest — refusing to promote an unscanned image."
+            exit 1
+          fi
+
+      - name: Trivy scan release digest — fail on fixable CRITICAL/HIGH
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ghcr.io/fox-in-the-box-ai/cloud@${{ needs.wait-for-container.outputs.digest }}
+          format: table
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          trivyignores: .trivyignore
+          exit-code: 1
+
   # ── Container :stable + :vX.Y.Z promotion ──────────────────────────────────
   # Decoupled from the GitHub Release job (#550) so that a failing Electron
   # build does not block :stable advancement. Operators using :stable get
@@ -117,7 +165,7 @@ jobs:
   # artifacts) follows once all platform builds succeed.
   promote-container:
     name: Promote container image
-    needs: [wait-for-container]
+    needs: [wait-for-container, trivy-release-gate]
     runs-on: ubuntu-latest
 
     permissions:
@@ -193,12 +241,14 @@ jobs:
   # fire for workflow-published releases (see sbom.yml header).
   sbom:
     name: Attach SBOM
-    needs: [release]
+    needs: [release, wait-for-container]
     uses: ./.github/workflows/sbom.yml
     permissions:
       contents: write
+      packages: read
     with:
       tag: ${{ github.ref_name }}
+      image_digest: ${{ needs.wait-for-container.outputs.digest }}
 
   release:
     name: Create GitHub Release

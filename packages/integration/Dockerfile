@@ -68,8 +68,16 @@ RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-reco
     && rm -rf /var/lib/apt/lists/*
 
 # ── Node.js (LTS) — required for npx-based MCP servers (e.g. Brave Search) ───
+# Upgrade npm to latest after the apt install: the npm bundled with the LTS
+# nodejs package (11.19.0) ships vulnerable bundled deps — brace-expansion
+# 5.0.7 (CVE-2026-14257, CVE-2026-69152), ip-address 10.2.0 (CVE-2026-69192),
+# tar 7.5.19 (CVE-2026-73566). npm 12.x bundles the fixed versions
+# (brace-expansion 5.0.9, ip-address 10.5.0, tar 7.5.22), so upgrading npm at
+# its real control point clears all four — no .trivyignore needed. Rebuild-
+# driven, like the LTS node pull itself.
 RUN curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - \
     && apt-get install -y --no-install-recommends nodejs \
+    && npm install -g npm@latest \
     && rm -rf /var/lib/apt/lists/*
 
 # ── Tailscale ─────────────────────────────────────────────────────────────────
@@ -82,7 +90,13 @@ RUN curl -fsSL "https://pkgs.tailscale.com/stable/debian/$(lsb_release -cs).noar
     && rm -rf /var/lib/apt/lists/*
 
 # ── Python packages (supervisor + Hermes apps from monorepo forks) ────────────
-RUN pip install --no-cache-dir --upgrade pip wheel setuptools \
+# setuptools floored at >=78.1.1 to keep CVE-2025-47273 (path traversal in
+# package_index, fixed in 78.1.1) out of the image regardless of base-snapshot
+# drift (#897c). Current python:3.11-slim already ships >=79, but pinning the
+# security floor makes it deterministic and fail-loud rather than dependent on
+# whatever setuptools the base image happens to carry. Quote the specifier so
+# the shell does not read `>=` as a redirection.
+RUN pip install --no-cache-dir --upgrade pip wheel "setuptools>=78.1.1" \
     && pip install --no-cache-dir supervisor
 
 # ── Qdrant binary ─────────────────────────────────────────────────────────────

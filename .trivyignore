@@ -1,0 +1,58 @@
+# Trivy accepted-until-upstream ignore list (#897b gate escape hatch).
+#
+# Policy: only FIXABLE CRITICAL/HIGH findings that cannot be remediated at a
+# real control point in this repo belong here. The gate already runs with
+# `ignore-unfixed: true`, so the ~104 unfixed Debian CVEs (no vendor patch)
+# are NOT listed — they are suppressed by that flag, not by this file.
+#
+# Every entry MUST carry: the finding ID, the package + version, WHY it can't
+# be fixed here, and a tracking/expiry note. Review each entry on every
+# release; drop it the moment the real fix lands upstream.
+
+# msgpack 1.1.2 (fix 1.2.1) — #897c.
+# This is NOT an application dependency: it is pip's own vendored copy at
+# pip/_vendor/msgpack, bundled with pip and used only by pip's HTTP cache
+# during package resolution (not on the runtime request path). It is absent
+# from requirements.lock and cannot be added there — adding it would break the
+# build-container.yml lock==freeze gate and would not touch pip's vendored
+# copy anyway. pip 26.2.1 (the latest, installed at Dockerfile:85) still
+# vendors 1.1.2; there is no pip release yet that vendors >=1.2.1, so there is
+# no in-repo control point. Accept until a pip release vendors msgpack>=1.2.1,
+# then drop this entry. Tracking: #897 (workstream c).
+#
+# ID note: the GitHub Advisory DB has NO CVE alias for this GHSA (confirmed via
+# `gh api /advisories/GHSA-6v7p-g79w-8964` → cve_id: null), so the GHSA is the
+# only identifier and is the key Trivy emits from its GitHub-advisory-backed
+# PyPI source. If a CVE alias is later assigned, or the live release-digest
+# scan emits a different key, add that ID here too (with this same comment).
+GHSA-6v7p-g79w-8964
+
+# setuptools CVE-2025-47273 (70.3.0 -> 78.1.1) — #897c.
+# The ACTIVE interpreter's setuptools is floored at >=78.1.1 in the Dockerfile
+# and resolves to 84.0.0 (fixed) — that is the real control point and it is
+# remediated. This remaining finding is pip's OWN vendored copy: pip 26.2.1
+# (the latest, installed at Dockerfile:85) declares `setuptools==70.3.0` in
+# pip/_vendor/vendor.txt and ships pip/_vendor/bom.cdx.json listing
+# pkg:pypi/setuptools@70.3.0 — Trivy reads that embedded BOM and reports it
+# with an empty file path. It is bundled with pip (pip's internal pkg_resources,
+# not the vulnerable PackageIndex download path), cannot be upgraded
+# independently, and pip 26.2.1 is the newest release. Deleting pip's vendored
+# BOM would only blind the scanner, not remove the code, so this is an
+# accept-until a pip release vendors setuptools>=78.1.1 (or drops pkg_resources).
+# Tracking: #925.
+CVE-2025-47273
+
+# tailscale Go deps — baked into /usr/bin/tailscale + /usr/sbin/tailscaled by
+# the upstream apt package (#897d). As of 2026-09-24 the latest STABLE
+# tailscale release is v1.102.4 (the version we install), and its go.mod still
+# pins the vulnerable versions; even v1.103.0-pre still pins x/crypto v0.54.0 /
+# x/image v0.41.0. There is no fixed tailscale release to bump to. Rebuild-
+# driven: the next image rebuild after a fixed tailscale stable ships pulls it
+# automatically — then drop these. Reachable only when Tailscale is enabled.
+# Tracking: #925.
+# golang.org/x/crypto v0.54.0 -> fixed v0.55.0 (needs a fixed tailscale release)
+CVE-2026-56854
+# golang.org/x/image v0.41.0 -> fixed v0.43.0 (needs a fixed tailscale release)
+CVE-2026-46602
+# golang.org/x/image v0.41.0 -> fixed v0.45.0 (needs a fixed tailscale release)
+CVE-2026-46603
