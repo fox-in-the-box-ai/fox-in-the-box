@@ -2060,10 +2060,23 @@ class Mem0OSSMemoryProvider(MemoryProvider):
         if config_path.exists():
             try:
                 existing = json.loads(config_path.read_text(encoding="utf-8"))
-            except Exception:
-                pass
+            except (OSError, ValueError) as exc:
+                logger.warning(
+                    "mem0_oss: existing config %s unreadable, overwriting "
+                    "with new values (recoverable keys lost): %s",
+                    config_path,
+                    exc,
+                )
         existing.update(values)
-        config_path.write_text(json.dumps(existing, indent=2), encoding="utf-8")
+        # Atomic write (tmp + os.replace), mirroring _write_state: a crash or
+        # concurrent read mid-save can never leave a truncated mem0_oss.json
+        # that _read_file_overrides() would silently revert to defaults.  The
+        # tmp lives in the target's own directory so os.replace is a real
+        # rename (a cross-device tmp under /data bind-mounts raises EXDEV).
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = config_path.parent / f".{config_path.name}.{os.getpid()}.tmp"
+        tmp.write_text(json.dumps(existing, indent=2), encoding="utf-8")
+        os.replace(tmp, config_path)
         _invalidate_memo()
 
     # -- Shutdown ----------------------------------------------------------

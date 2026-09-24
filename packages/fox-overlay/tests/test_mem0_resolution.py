@@ -24,6 +24,7 @@ The ``_WELL_KNOWN``/``_POOL_ID_MAP`` sync assertions still run in-image
 
 from __future__ import annotations
 
+import inspect
 import json
 import os
 import sys
@@ -49,9 +50,11 @@ plugin = pytest.importorskip("agent_memory_plugins.mem0_oss")
 
 from agent_memory_plugins.mem0_oss import (  # noqa: E402
     MemoryUnavailable,
+    Mem0OSSMemoryProvider,
     ResolvedConfig,
     _LOCAL_EMBED_BASE_URL,
     _LOCAL_EMBED_MODEL,
+    _read_file_overrides,
 )
 
 
@@ -891,6 +894,49 @@ class TestQdrantPortFailLoud:
         runtime = _qdrant_runtime(qdrant_host="127.0.0.1", qdrant_port="")
         cfg = _build_qdrant_cfg(runtime, store_dims=768)
         assert cfg["port"] == 6333
+
+
+class TestSaveConfigAtomicity:
+    """#909: mem0_oss.json is written via tmp + os.replace so a crash or
+    concurrent read mid-save can never leave a truncated file that
+    _read_file_overrides() would silently revert to defaults."""
+
+    def test_torn_write_leaves_previous_config_intact(self, env, monkeypatch):
+        """A failing os.replace must not truncate the live file — the reader
+        still sees the complete previous config, never {}.  On the pre-fix
+        in-place write_text the file is already truncated at this point."""
+        provider = Mem0OSSMemoryProvider()
+        provider.save_config({"collection": "keep", "top_k": 7}, str(env.home))
+        assert _read_file_overrides() == {"collection": "keep", "top_k": 7}
+
+        def _boom(*_a, **_k):
+            raise OSError("simulated interrupted rename")
+
+        monkeypatch.setattr("agent_memory_plugins.mem0_oss.os.replace", _boom)
+        with pytest.raises(OSError):
+            provider.save_config({"top_k": 50}, str(env.home))
+
+        # The live file is untouched: full previous config, not a truncation.
+        assert _read_file_overrides() == {"collection": "keep", "top_k": 7}
+
+    def test_merge_preserves_untouched_keys(self, env):
+        provider = Mem0OSSMemoryProvider()
+        provider.save_config({"collection": "c1", "top_k": 7}, str(env.home))
+        provider.save_config({"top_k": 42}, str(env.home))
+        assert _read_file_overrides() == {"collection": "c1", "top_k": 42}
+
+    def test_corrupt_existing_file_warns_and_overwrites(self, env, monkeypatch, caplog):
+        (env.home / "mem0_oss.json").write_text('{"collection": "c1"', encoding="utf-8")
+        provider = Mem0OSSMemoryProvider()
+        with caplog.at_level("WARNING"):
+            provider.save_config({"top_k": 9}, str(env.home))
+        assert any("unreadable" in r.message for r in caplog.records)
+        assert _read_file_overrides() == {"top_k": 9}
+
+    def test_writer_uses_os_replace(self):
+        """Pattern lock: the durable writer must not drift back to an
+        in-place write_text (secondary to the behavioral test above)."""
+        assert "os.replace" in inspect.getsource(Mem0OSSMemoryProvider.save_config)
 
 
 class TestEmbeddedRegression:
