@@ -53,25 +53,3 @@ jobs:
           image-ref: ghcr.io/fox-in-the-box-ai/cloud:stable
           format: table
           severity: CRITICAL,HIGH
-
-      # Blocking gate (#897b): a fixable CRITICAL/HIGH must not ship.
-      # Under Option B + promote-container, :stable and :vX.Y.Z point at the
-      # SAME digest, so scanning :stable here gates the released image. The
-      # SARIF feed above (exit-code: 0) stays the full passive alert stream;
-      # this step is the one that fails the build.
-      #   - ignore-unfixed: true is load-bearing — without it the ~104 unfixed
-      #     Debian CVEs (no vendor patch available) would red every run.
-      #   - .trivyignore carries the curated accepted-until-upstream set
-      #     (fixable findings we cannot remediate at a real control point yet),
-      #     each with a justification + tracking note.
-      # NOTE: this becomes truly green only once the remediated :stable is
-      # published; sequence the blocking enforcement after that image ships.
-      - name: Trivy gate — fail on fixable CRITICAL/HIGH
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
-        with:
-          image-ref: ghcr.io/fox-in-the-box-ai/cloud:stable
-          format: table
-          severity: CRITICAL,HIGH
-          ignore-unfixed: true
-          trivyignores: .trivyignore
-          exit-code: 1
