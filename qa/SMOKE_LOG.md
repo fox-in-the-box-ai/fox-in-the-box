@@ -25,6 +25,23 @@ Skipped sections are OK as long as they're explicitly noted with reason. Empty e
 
 ---
 
+## v0.7.67 — 2026-09-24 (DV — memory boot-migration integrity: real collection/dims in sentinel #906, file-only collection resolution #915, fail-loud non-numeric dims #912, corrupt-sentinel re-attempt #905)
+
+HARD GATE per docs/RELEASE_WORKFLOW.md (memory subsystem: R1 changes the mem0_oss boot-migration collection/dims resolution and sentinel read/write contract). Container/overlay-only release — no desktop code. Validated by an independent Phase-4 container QA against the PR #916 multi-arch `:dev` image (arm64 variant, digest sha256:3850caff…7957, version.txt `dev-6265c49` = CI merge of PR head 0da6468 "release: v0.7.67"; R1 code confirmed baked — `migrate_store.py` carries `_resolve_collection_and_dims`). Each scenario ran on a FRESH container against the container's own bundled Qdrant server, driving the real boot path `python -m plugins.memory.mem0_oss.migrate_store --boot`. Real agent store/recall with a paid provider key remains a documented-skip (no key; precedent v0.7.60/63/64/65/66).
+
+- [x] 1. #906 real collection/dims in sentinel (LIVE) — seed `tA`/1024 (5 pts) + `MEM0_OSS_COLLECTION=tA MEM0_OSS_EMBEDDER_DIMS=1024` → `migrated 5/5 into 'tA' (1024-dim)`; sentinel `schema:1, reason:"migrated", collection:"tA", dims:1024, source_count:5, migrated:5` (NOT hermes/768); server `tA` count 5, payloads [0..4].
+- [x] 2. #915 collection only in mem0_oss.json, env unset (LIVE) — `mem0_oss.json={"collection":"mywork"}`, seed `mywork`/768 (3 pts), `MEM0_OSS_COLLECTION` unset → `migrated 3/3 into 'mywork' (768-dim)`; sentinel collection:"mywork" dims:768; server `mywork` count 3. File>env>default honored; the pre-fix false empty-source-for-hermes stranding is gone.
+- [x] 3. #912 non-numeric dims fails loud, no crash-loop (LIVE) — `MEM0_OSS_EMBEDDER_DIMS=not-a-number` → clean `boot migration FAILED — invalid embedder_dims 'not-a-number' … must be an integer`, real exit code 1, ZERO tracebacks, NO sentinel; second boot identical (no sentinel, no loop); corrected to 768 → `migrated 4/4 into 'hermes'`, sentinel written, server count 4.
+- [x] 4. #905 corrupt sentinel re-attempts + positive control (LIVE) — seed `hermes`/768 (6 pts), plant `not json` at sentinel → `sentinel is not valid JSON — re-attempting` + `ignoring untrustworthy sentinel … — re-attempting` then `migrated 6/6`; garbage replaced with a valid marker, server count 6 (store not stranded). Positive control: re-boot with the now-valid schema-1 reason:"migrated" current-collection sentinel → `already migrated — skipping`, no re-migration.
+- [x] 5. Migration outcome never bricks chat (LIVE) — real entrypoint boot with forced-fail dims: `mem0-migrate EXITED` while `hermes-gateway`/`hermes-webui`/`qdrant` RUNNING; gateway `GET /health` → 200, `/readyz` → 200. `[program:mem0-migrate]` is autorestart=false / startretries=0 / priority=22 (one-shot ahead of gateway 30 / webui 40, not a completion barrier).
+- [ ] 6. Real agent store→recall with a paid provider key + real nomic embeddings — documented-skip (no key; precedent v0.7.60/63/64/65/66). Migration is a verbatim point-copy (never re-embeds), so the embedder path is out of R1's blast radius; embed-server FATAL locally = x86-on-arm classic-build artifact (non-defect), irrelevant to migration.
+
+Findings: none blocking. All four R1 fixes verified LIVE on the PR #916 image; sentinels are honest audit records of the resolved collection/dims; fail-loud paths write no sentinel and exit 1 without a traceback; corrupt/foreign sentinels re-attempt idempotently; a valid current-collection sentinel fast-skips.
+
+Action items: real-provider store/recall at release-time on the published multi-arch image (row 6), as each cycle.
+
+---
+
 ## v0.7.66 — 2026-09-23 (DV — mem0_oss Qdrant endpoint env-only + fail-loud #883, prompt config-error recovery #893, container HEALTHCHECK #884)
 
 HARD GATE per docs/RELEASE_WORKFLOW.md (memory subsystem: #883/#893 change mem0_oss config resolution). Container/overlay-only release — no desktop code. Validated by an independent Phase-4 container QA against a native-arm64 RC image built from main (df29ee3): the #883 fail-loud + #893 recovery were driven LIVE through the real boot resolution path (`python -m plugins.memory.mem0_oss.preflight`). Real agent store/recall with a paid provider key remains a documented-skip (no key; precedent v0.7.60/63/64/65).

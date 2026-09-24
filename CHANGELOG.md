@@ -9,6 +9,19 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.7.67] — 2026-09-24
+
+### Fixed
+
+- The one-shot memory migration (embedded store → Qdrant server) now records the collection and embedding dimension it actually migrated in its completion marker, instead of always writing the defaults `hermes`/768. (#906)
+- Boot migration and the manual `migrate` CLI now resolve the memory collection and embedder dimension using the documented `mem0_oss.json` > environment > default precedence. The boot path previously read them from the environment only, so a collection or dimension configured through `mem0_oss.json` (as the Settings UI writes it) was ignored — migrating to the default collection and leaving the configured memories stranded on disk. (#915)
+- A non-numeric `MEM0_OSS_EMBEDDER_DIMS` — from the environment or from `mem0_oss.json` — now fails the boot migration loudly with a clear error and leaves no completion marker, so it retries on the next boot, instead of crashing with an unhandled error on every boot. (#912)
+- Boot migration now validates the contents of its completion marker before trusting it. The marker is honored only when it is well-formed and records a completed migration for the current collection; a corrupt, foreign, or incomplete marker triggers a fresh migration attempt instead of silently skipping and stranding memories, and a "nothing to migrate" marker no longer permanently blocks a later-restored store from migrating. (#905)
+
+### Changed
+
+- Installs that use a non-default memory collection (set via `MEM0_OSS_COLLECTION` or `mem0_oss.json`) re-run the one-shot embedded→server memory migration once on first boot of this version, because earlier versions recorded the wrong collection in the completion marker. The migration re-upserts points by their stable id, so it neither loses nor duplicates memories.
+
 ## [0.7.66] — 2026-09-23
 
 ### Added
