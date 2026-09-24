@@ -2118,8 +2118,15 @@ class Mem0OSSMemoryProvider(MemoryProvider):
         # rename (a cross-device tmp under /data bind-mounts raises EXDEV).
         config_path.parent.mkdir(parents=True, exist_ok=True)
         tmp = config_path.parent / f".{config_path.name}.{os.getpid()}.tmp"
-        tmp.write_text(json.dumps(existing, indent=2), encoding="utf-8")
-        os.replace(tmp, config_path)
+        try:
+            tmp.write_text(json.dumps(existing, indent=2), encoding="utf-8")
+            os.replace(tmp, config_path)
+        except OSError:
+            # The live file stays intact (atomicity preserved); remove the
+            # orphan tmp so a failed rename can't leave it behind.  Re-raise
+            # so the failure is never swallowed.
+            tmp.unlink(missing_ok=True)
+            raise
         _invalidate_memo()
 
     # -- Shutdown ----------------------------------------------------------

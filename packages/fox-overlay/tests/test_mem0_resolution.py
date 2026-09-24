@@ -931,6 +931,8 @@ class TestSaveConfigAtomicity:
 
         # The live file is untouched: full previous config, not a truncation.
         assert _read_file_overrides() == {"collection": "keep", "top_k": 7}
+        # A failed rename leaves no orphan pid-suffixed tmp behind.
+        assert list(env.home.glob(".mem0_oss.json.*.tmp")) == []
 
     def test_merge_preserves_untouched_keys(self, env):
         provider = Mem0OSSMemoryProvider()
@@ -1001,6 +1003,16 @@ class TestTopKFailLoud:
         assert _coerce_top_k("10") == 10
         # Unset still defaults to 10 (no over-strict regression).
         assert _load_runtime_config()["top_k"] == 10
+
+    def test_valid_file_top_k_override_propagates(self, env):
+        from agent_memory_plugins.mem0_oss import _load_runtime_config  # noqa: PLC0415
+
+        (env.home / "mem0_oss.json").write_text(
+            json.dumps({"top_k": 5}), encoding="utf-8"
+        )
+        resolved = _load_runtime_config()["top_k"]
+        assert resolved == 5
+        assert isinstance(resolved, int)
 
 
 class TestPreflightTopK:
