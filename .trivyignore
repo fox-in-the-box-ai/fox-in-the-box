@@ -19,4 +19,10 @@
 # vendors 1.1.2; there is no pip release yet that vendors >=1.2.1, so there is
 # no in-repo control point. Accept until a pip release vendors msgpack>=1.2.1,
 # then drop this entry. Tracking: #897 (workstream c).
+#
+# ID note: the GitHub Advisory DB has NO CVE alias for this GHSA (confirmed via
+# `gh api /advisories/GHSA-6v7p-g79w-8964` → cve_id: null), so the GHSA is the
+# only identifier and is the key Trivy emits from its GitHub-advisory-backed
+# PyPI source. If a CVE alias is later assigned, or the live release-digest
+# scan emits a different key, add that ID here too (with this same comment).
 GHSA-6v7p-g79w-8964
