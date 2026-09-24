@@ -398,6 +398,23 @@ _write_supervisord_conf() {
         embed_autostart="true"
     fi
 
+    # BRAVE_API_KEY delivery to the gateway differs by context (#908):
+    #   * Container: carry the value through supervisord's env channel. The
+    #     entrypoint execs supervisord in the same process and exports
+    #     BRAVE_API_KEY (empty when unset), so %(ENV_x)s always resolves and the
+    #     value never passes through sed or the environment= grammar — quotes,
+    #     commas, and sed metacharacters are inert.
+    #   * Desktop: NOT via %(ENV_x)s — preflight runs as systemd ExecStartPre=,
+    #     a separate process whose exports don't reach the ExecStart= supervisord,
+    #     so an absent var would hard-fail expansion. The key reaches the gateway
+    #     via run-with-env.sh sourcing hermes.env instead, so no entry here.
+    # The trailing comma is inside the value so the env list stays well-formed
+    # when this expands to empty on the desktop path.
+    local gateway_brave_env=""
+    if [ "$FITB_CONTEXT" = "docker" ]; then
+        gateway_brave_env='BRAVE_API_KEY="%(ENV_BRAVE_API_KEY)s",'
+    fi
+
     cat > "$conf_path" << SUPERVISORD_EOF
 [supervisord]
 nodaemon=true
@@ -534,7 +551,7 @@ stdout_logfile_maxbytes=10MB
 stdout_logfile_backups=3
 stderr_logfile_maxbytes=10MB
 stderr_logfile_backups=3
-environment=HOME="${app}",PYTHONPATH="${data}/apps/hermes-agent",PATH="${app}/venv/bin:/usr/local/bin:/usr/bin:/bin",HERMES_HOME="${data}/data/hermes",HERMES_ENV_PATH="${data}/config/hermes.env",SUPERVISORD_CONF="${conf_path}",MEM0_TELEMETRY="False"
+environment=HOME="${app}",PYTHONPATH="${data}/apps/hermes-agent",PATH="${app}/venv/bin:/usr/local/bin:/usr/bin:/bin",HERMES_HOME="${data}/data/hermes",${gateway_brave_env}HERMES_ENV_PATH="${data}/config/hermes.env",SUPERVISORD_CONF="${conf_path}",MEM0_TELEMETRY="False"
 priority=30
 
 ; ── hermes webui ──────────────────────────────────────────────────────────────

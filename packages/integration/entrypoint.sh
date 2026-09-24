@@ -340,11 +340,13 @@ except Exception:
 
 # ── 6b. Ensure BRAVE_API_KEY is present for supervisord env expansion ──────────
 # supervisord's %(ENV_x)s hard-fails on an absent var; export a definite value
-# (empty when unset) so expansion always succeeds. The value is carried through
-# the environment (supervisord.conf uses %(ENV_BRAVE_API_KEY)s) and is never
-# re-parsed by sed or by the config grammar — so quotes, commas, and sed
-# metacharacters in the key are inert. The export is in scope because the
-# entrypoint execs supervisord in this same process.
+# (empty when unset) so expansion always succeeds. The container's generated
+# supervisord.conf (install-core.sh _write_supervisord_conf, docker branch)
+# carries the gateway key as BRAVE_API_KEY="%(ENV_BRAVE_API_KEY)s", so the value
+# is delivered through this process environment and never re-parsed by sed or by
+# the config grammar — quotes, commas, and sed metacharacters in the key are
+# inert. The export is in scope because the entrypoint execs supervisord in this
+# same process.
 export BRAVE_API_KEY="${BRAVE_API_KEY:-}"
 
 # ── 6c. Supervisord RPC socket directory (must not be on a host bind-mounted /data)
