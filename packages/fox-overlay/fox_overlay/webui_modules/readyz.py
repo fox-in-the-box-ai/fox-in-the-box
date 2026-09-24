@@ -22,6 +22,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import xml.parsers.expat
 import xmlrpc.client
 
 logger = logging.getLogger(__name__)
@@ -109,7 +110,13 @@ def _supervisorctl_status(program: str) -> str | None:
     'standalone'; the standalone case is detected separately via
     ``_supervisorctl_available()`` (#904).  The 2s socket timeout is tighter
     than the old 5s subprocess timeout so a wedged supervisord yields None
-    rather than pinning the single-flight lock."""
+    rather than pinning the single-flight lock.
+
+    The except is deliberately broad across the transport/parse surface: a
+    present-but-nonconforming socket (a stale or wrong daemon returning
+    malformed HTTP or XML) must fail closed to 'unknown', never escape as an
+    HTTP 500 on /readyz (the #885 class).  Cancellation/system signals still
+    propagate — the caught types are all I/O or malformed-response errors."""
     sock = _supervisor_sock()
     if not sock:
         return None
@@ -118,7 +125,14 @@ def _supervisorctl_status(program: str) -> str | None:
             "http://localhost", transport=_UnixStreamTransport(sock)
         )
         info = proxy.supervisor.getProcessInfo(program)
-    except (OSError, xmlrpc.client.Fault, xmlrpc.client.ProtocolError):
+    except (
+        OSError,
+        http.client.HTTPException,
+        xmlrpc.client.Fault,
+        xmlrpc.client.ProtocolError,
+        xmlrpc.client.ResponseError,
+        xml.parsers.expat.ExpatError,
+    ):
         return None
     if isinstance(info, dict):
         return info.get("statename")

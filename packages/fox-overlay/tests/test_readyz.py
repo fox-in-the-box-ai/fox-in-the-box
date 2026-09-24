@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import http.client
 import json
 import sys
 import types
@@ -396,6 +397,41 @@ class TestSupervisorStatusProbe:
 
         monkeypatch.setattr(readyz.xmlrpc.client, "ServerProxy", _boom)
         assert readyz._supervisorctl_status("hermes-gateway") is None
+
+    def test_malformed_http_response_is_unknown(self, tmp_path, monkeypatch):
+        # A present-but-nonconforming socket (stale/garbage daemon speaking
+        # malformed HTTP) must fail closed to unknown, never escape as a 500
+        # on /readyz (the #885 class).
+        readyz = _load_readyz()
+        self._seed_socket(tmp_path, monkeypatch)
+        monkeypatch.setattr(
+            readyz.xmlrpc.client,
+            "ServerProxy",
+            lambda *a, **k: _FakeSupervisorProxy(
+                raises=http.client.BadStatusLine("garbage")
+            ),
+        )
+        assert readyz._supervisorctl_status("hermes-gateway") is None
+        result = readyz._check_agent_runtime()
+        assert result["ok"] is False
+        assert "unknown" in result["detail"]
+
+    def test_malformed_xml_response_is_unknown(self, tmp_path, monkeypatch):
+        # Malformed XML body → ResponseError (a well-formed-but-wrong reply) or
+        # ExpatError (unparseable) — both fail closed to unknown, no 500.
+        readyz = _load_readyz()
+        self._seed_socket(tmp_path, monkeypatch)
+        monkeypatch.setattr(
+            readyz.xmlrpc.client,
+            "ServerProxy",
+            lambda *a, **k: _FakeSupervisorProxy(
+                raises=xmlrpc.client.ResponseError("no valid XML-RPC response")
+            ),
+        )
+        assert readyz._supervisorctl_status("hermes-gateway") is None
+        result = readyz._check_agent_runtime()
+        assert result["ok"] is False
+        assert "unknown" in result["detail"]
 
 
 class _FakeClock:
