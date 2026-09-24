@@ -429,6 +429,40 @@ def test_boot_successful_migrate_writes_sentinel(boot_env, monkeypatch):
     assert isinstance(payload["migrated_at"], int)
 
 
+def test_boot_sentinel_records_resolved_collection_and_dims(boot_env, monkeypatch):
+    """#906: the migrated sentinel records the collection/dims actually migrated,
+    not the module defaults.  Forces BOTH a non-default collection and non-default
+    dims — pre-fix this wrote "hermes"/768 regardless."""
+    monkeypatch.setenv("MEM0_OSS_COLLECTION", "tA")
+    monkeypatch.setenv("MEM0_OSS_EMBEDDER_DIMS", "1024")
+    source = FakeQdrant()
+    source.seed("tA", 1024, _make_records(5, dims=1024))
+    dest = FakeQdrant()
+    _install_clients(monkeypatch, source, dest)
+
+    assert run_boot_migration() == 0
+
+    assert dest.point_count("tA") == 5
+    payload = json.loads(_sentinel_file(boot_env).read_text())
+    assert payload["reason"] == "migrated"
+    assert payload["collection"] == "tA"  # was "hermes" pre-fix
+    assert payload["dims"] == 1024  # was 768 pre-fix
+
+
+def test_boot_empty_source_sentinel_records_resolved_collection(boot_env, monkeypatch):
+    """#906: the empty-source rung (no summary in scope) records the resolved
+    collection, not the module default."""
+    monkeypatch.setenv("MEM0_OSS_COLLECTION", "tA")
+    source = FakeQdrant()  # store dir exists but no "tA" collection
+    dest = FakeQdrant()
+    _install_clients(monkeypatch, source, dest)
+
+    assert run_boot_migration() == 0
+    payload = json.loads(_sentinel_file(boot_env).read_text())
+    assert payload["reason"] == "empty-source"
+    assert payload["collection"] == "tA"  # was "hermes" pre-fix
+
+
 def test_boot_partial_run_no_sentinel_then_idempotent_rerun(boot_env, monkeypatch):
     records = _make_records(4)
 

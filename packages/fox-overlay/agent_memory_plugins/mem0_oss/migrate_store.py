@@ -456,16 +456,24 @@ def _sentinel_path() -> Path:
     return Path(hermes_home) / "mem0_oss" / _SENTINEL_NAME
 
 
-def _write_sentinel(reason: str, source_count: int, migrated: int) -> None:
+def _write_sentinel(
+    reason: str, *, collection: str, dims: int, source_count: int, migrated: int
+) -> None:
     """Atomically write the migration sentinel (tmp + os.replace, mirroring
     ``__init__._write_state``).  Called ONLY on verified success or a
-    verified-empty source — see the WRITE-ORDERING invariant above."""
+    verified-empty source — see the WRITE-ORDERING invariant above.
+
+    ``collection``/``dims`` record the values the operation actually ran
+    against (the migrated store on the success path; the resolved config on an
+    empty-source no-op), never the module defaults — so the sentinel is an
+    honest audit record and the read side can match it against the current
+    collection (issue #906)."""
     payload = {
         "schema": _SENTINEL_SCHEMA,
         "reason": reason,
         "migrated_at": int(time.time()),
-        "collection": DEFAULT_COLLECTION,
-        "dims": DEFAULT_DIMS,
+        "collection": collection,
+        "dims": dims,
         "source_count": source_count,
         "migrated": migrated,
     }
@@ -638,7 +646,15 @@ def run_boot_migration() -> int:
             "mem0_oss.migrate: no embedded store at %s — nothing to migrate",
             source_path,
         )
-        _write_sentinel("empty-source", source_count=0, migrated=0)
+        # dims here is the configured expectation, not an observed value —
+        # nothing was read, so it records the scope of the verified no-op.
+        _write_sentinel(
+            "empty-source",
+            collection=collection,
+            dims=expected_dims,
+            source_count=0,
+            migrated=0,
+        )
         return 0
 
     source, dest = _open_boot_clients(source_path, server_url, api_key)
@@ -659,7 +675,14 @@ def run_boot_migration() -> int:
                     "nothing to migrate",
                     collection,
                 )
-                _write_sentinel("empty-source", source_count=0, migrated=0)
+                # dims is the configured expectation, not an observed value.
+                _write_sentinel(
+                    "empty-source",
+                    collection=collection,
+                    dims=expected_dims,
+                    source_count=0,
+                    migrated=0,
+                )
                 return 0
 
             # 6. Migrate, then read the destination count back to confirm it
@@ -687,8 +710,13 @@ def run_boot_migration() -> int:
             )
             return 1
 
+        # summary.dims is the store-observed source dimension actually
+        # migrated (not merely the requested value); summary.collection is the
+        # collection the copy ran against.
         _write_sentinel(
             "migrated",
+            collection=summary.collection,
+            dims=summary.dims,
             source_count=summary.source_count,
             migrated=summary.migrated,
         )
