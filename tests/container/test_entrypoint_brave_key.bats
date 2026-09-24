@@ -19,16 +19,30 @@ ENTRYPOINT="$BATS_TEST_DIRNAME/../../packages/integration/entrypoint.sh"
 PREFLIGHT="$BATS_TEST_DIRNAME/../../packages/install-core/preflight.sh"
 INSTALL_CORE="$BATS_TEST_DIRNAME/../../packages/install-core/install-core.sh"
 
-# Mirrors the entrypoint §5b escape+rewrite. Portable sed (no -i) so the escape
-# logic is exercised identically on GNU (container/CI) and BSD (macOS) sed.
+# Mirrors the entrypoint §5b two-plane escape into a double-quoted YAML scalar
+# (BRAVE_API_KEY: "${BRAVE_API_KEY}"): YAML rules first (backslash, double-quote),
+# then sed replacement rules (backslash, delimiter, back-reference). Portable sed
+# (no -i) so it runs identically on GNU (container/CI) and BSD (macOS) sed.
+# Writes the patched YAML to $2.
 _patch_yaml() {
-  local key="$1" yaml="$2"
+  local key="$1" out="$2"
   local repl="$key"
-  repl="${repl//\\/\\\\}"   # backslash — must be first
-  repl="${repl//|/\\|}"     # sed delimiter
-  repl="${repl//&/\\&}"     # whole-match back-reference
-  sed "s|\${BRAVE_API_KEY}|${repl}|g" "$yaml"
+  repl="${repl//\\/\\\\}"   # YAML: backslash — must be first
+  repl="${repl//\"/\\\"}"   # YAML: double-quote inside the scalar
+  repl="${repl//\\/\\\\}"   # sed: backslash — must be first
+  repl="${repl//|/\\|}"     # sed: delimiter
+  repl="${repl//&/\\&}"     # sed: whole-match back-reference
+  local tmpl="$BATS_TEST_TMPDIR/tmpl.yaml"
+  printf 'mcp_servers:\n  brave:\n    env:\n      BRAVE_API_KEY: "${BRAVE_API_KEY}"\nsentinel: foxinthebox\n' > "$tmpl"
+  sed "s|\${BRAVE_API_KEY}|${repl}|g" "$tmpl" > "$out"
 }
+
+# Parse the patched YAML with a real parser and echo the round-tripped key value.
+_yaml_brave() {
+  python3 -c 'import sys,yaml; print(yaml.safe_load(open(sys.argv[1]))["mcp_servers"]["brave"]["env"]["BRAVE_API_KEY"])' "$1"
+}
+
+_have_pyyaml() { python3 -c 'import yaml' >/dev/null 2>&1; }
 
 # Run install-core.sh's real _write_supervisord_conf for one context, with the
 # absolute /etc + /run paths sandboxed into $2 so no root is needed. Echoes the
@@ -58,10 +72,13 @@ _generate_conf() {
 # ---------------------------------------------------------------------------
 # Generated-output gates — the container conf that actually ships (#908).
 # ---------------------------------------------------------------------------
-@test "#908 container: generated gateway environment= carries %(ENV_BRAVE_API_KEY)s" {
+@test "#908 container: generated gateway environment= carries NO BRAVE_API_KEY (inherited instead)" {
+  # A `"` in the key would break supervisord's environment= grammar even via
+  # %(ENV_x)s. The gateway inherits BRAVE_API_KEY from supervisord's process env
+  # (entrypoint §6b export) instead, so it must not appear in environment=.
   local conf; conf="$(_generate_conf docker "$BATS_TEST_TMPDIR/docker")"
-  run grep -F 'BRAVE_API_KEY="%(ENV_BRAVE_API_KEY)s"' "$conf"
-  [ "$status" -eq 0 ]
+  run grep -F 'BRAVE_API_KEY' "$conf"
+  [ "$status" -ne 0 ]
 }
 
 @test "#908 container: generated conf leaves no __BRAVE_API_KEY__ placeholder" {
@@ -82,6 +99,11 @@ _generate_conf() {
 
 @test "#908 container: entrypoint escapes the key before the hermes.yaml rewrite" {
   run grep -F '_brave_repl="${_brave_repl//\\/\\\\}"' "$ENTRYPOINT"
+  [ "$status" -eq 0 ]
+}
+
+@test "#908 container: entrypoint YAML-escapes a double-quote in the key" {
+  run grep -F '_brave_repl="${_brave_repl//\"/\\\"}"' "$ENTRYPOINT"
   [ "$status" -eq 0 ]
 }
 
@@ -106,6 +128,11 @@ _generate_conf() {
   [ "$status" -eq 0 ]
 }
 
+@test "#908 desktop: preflight YAML-escapes a double-quote in the key" {
+  run grep -F '_brave_repl="${_brave_repl//\"/\\\"}"' "$PREFLIGHT"
+  [ "$status" -eq 0 ]
+}
+
 @test "#908 desktop: generated gateway environment= carries no BRAVE_API_KEY" {
   # Desktop relies on run-with-env.sh sourcing hermes.env, never %(ENV_x)s
   # (ExecStartPre= != ExecStart=). The generated conf must carry no BRAVE entry.
@@ -115,34 +142,54 @@ _generate_conf() {
 }
 
 # ---------------------------------------------------------------------------
-# Behavioral — the escape technique lands the value verbatim, no injection.
+# Behavioral — the patched hermes.yaml is VALID YAML and the key round-trips
+# to its exact value, for any metacharacter content. Parsed with a real YAML
+# parser so a `"`/`\` that would corrupt the scalar is caught.
 # ---------------------------------------------------------------------------
-@test "#908 hermes.yaml: a key with sed metachars lands verbatim" {
-  local yaml="$BATS_TEST_TMPDIR/hermes.yaml"
-  printf 'brave:\n  api_key: ${BRAVE_API_KEY}\n' > "$yaml"
-  run _patch_yaml 'a|b&c\d' "$yaml"
+@test "#908 hermes.yaml: a quote+backslash key stays valid YAML and round-trips" {
+  _have_pyyaml || skip "pyyaml not available (CI installs python3-yaml)"
+  local out="$BATS_TEST_TMPDIR/hermes.yaml"
+  # The RC acceptance trigger: sed metachars + supervisord-breakers + a quote.
+  local key='a&b|c\d"e,f'
+  _patch_yaml "$key" "$out"
+  run _yaml_brave "$out"
   [ "$status" -eq 0 ]
-  [[ "$output" == *'api_key: a|b&c\d'* ]]
+  [ "$output" = "$key" ]
+}
+
+@test "#908 hermes.yaml: a key with sed metachars round-trips" {
+  _have_pyyaml || skip "pyyaml not available (CI installs python3-yaml)"
+  local out="$BATS_TEST_TMPDIR/hermes.yaml"
+  local key='a|b&c\d'
+  _patch_yaml "$key" "$out"
+  run _yaml_brave "$out"
+  [ "$status" -eq 0 ]
+  [ "$output" = "$key" ]
 }
 
 @test "#908 hermes.yaml: an injection payload does not execute as a sed program" {
-  local yaml="$BATS_TEST_TMPDIR/hermes.yaml"
-  printf 'brave:\n  api_key: ${BRAVE_API_KEY}\nsentinel: foxinthebox\n' > "$yaml"
-  run _patch_yaml 'abc|g;s|foxinthebox|INJECTED|g' "$yaml"
+  _have_pyyaml || skip "pyyaml not available (CI installs python3-yaml)"
+  local out="$BATS_TEST_TMPDIR/hermes.yaml"
+  local key='abc|g;s|foxinthebox|INJECTED|g'
+  _patch_yaml "$key" "$out"
+  # Sentinel untouched: if the payload had run as a sed program it would have
+  # rewritten this line to "sentinel: INJECTED".
+  run grep -F 'sentinel: foxinthebox' "$out"
   [ "$status" -eq 0 ]
-  # The sentinel must survive untouched: if the payload had run as a sed program
-  # it would have rewritten this line to "sentinel: INJECTED".
-  [[ "$output" == *"sentinel: foxinthebox"* ]]
-  [[ "$output" != *"sentinel: INJECTED"* ]]
-  # The whole payload lands literally as the key value (INJECTED here is inert
-  # text inside the key, not an executed substitution).
-  [[ "$output" == *'api_key: abc|g;s|foxinthebox|INJECTED|g'* ]]
+  run grep -F 'sentinel: INJECTED' "$out"
+  [ "$status" -ne 0 ]
+  # The whole payload round-trips as the key value (inert text, not executed).
+  run _yaml_brave "$out"
+  [ "$status" -eq 0 ]
+  [ "$output" = "$key" ]
 }
 
-@test "#908 hermes.yaml: an ordinary alphanumeric key lands verbatim (no over-escaping)" {
-  local yaml="$BATS_TEST_TMPDIR/hermes.yaml"
-  printf 'brave:\n  api_key: ${BRAVE_API_KEY}\n' > "$yaml"
-  run _patch_yaml 'BSAplainKey123' "$yaml"
+@test "#908 hermes.yaml: an ordinary alphanumeric key round-trips (no over-escaping)" {
+  _have_pyyaml || skip "pyyaml not available (CI installs python3-yaml)"
+  local out="$BATS_TEST_TMPDIR/hermes.yaml"
+  local key='BSAplainKey123'
+  _patch_yaml "$key" "$out"
+  run _yaml_brave "$out"
   [ "$status" -eq 0 ]
-  [[ "$output" == *'api_key: BSAplainKey123'* ]]
+  [ "$output" = "$key" ]
 }

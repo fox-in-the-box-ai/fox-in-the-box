@@ -211,15 +211,22 @@ fi
 # Replace ${BRAVE_API_KEY} placeholder so Hermes MCP server gets the real key.
 HERMES_YAML="/data/config/hermes.yaml"
 if [ -f "$HERMES_YAML" ] && [ -n "${BRAVE_API_KEY:-}" ]; then
-    # Treat the key as literal data, not a sed program. Escape the bytes that are
-    # meaningful in the replacement half of s|...|...| (backslash first, then the
-    # delimiter and the whole-match back-reference). The if/else keeps a
-    # pathological value (e.g. an embedded newline) from bricking boot under
-    # set -e: escaping is the primary fix, the guard is the residual safety net.
+    # The placeholder lives inside a double-quoted YAML scalar
+    # (BRAVE_API_KEY: "${BRAVE_API_KEY}"), so escape the value on two planes,
+    # innermost first:
+    #   1. YAML double-quoted rules — backslash then double-quote — so the value
+    #      lands as a valid scalar (a `"` in the key can't break the YAML).
+    #   2. sed replacement rules — backslash, the `|` delimiter, and the `&`
+    #      whole-match back-reference — so the key is data, not a sed program.
+    # The if/else keeps a pathological value (e.g. an embedded newline) from
+    # bricking boot under set -e: escaping is the primary fix, the guard is the
+    # residual safety net.
     _brave_repl="${BRAVE_API_KEY}"
-    _brave_repl="${_brave_repl//\\/\\\\}"   # backslash — must be first
-    _brave_repl="${_brave_repl//|/\\|}"     # sed delimiter
-    _brave_repl="${_brave_repl//&/\\&}"     # whole-match back-reference
+    _brave_repl="${_brave_repl//\\/\\\\}"   # YAML: backslash — must be first
+    _brave_repl="${_brave_repl//\"/\\\"}"   # YAML: double-quote inside the scalar
+    _brave_repl="${_brave_repl//\\/\\\\}"   # sed: backslash — must be first
+    _brave_repl="${_brave_repl//|/\\|}"     # sed: delimiter
+    _brave_repl="${_brave_repl//&/\\&}"     # sed: whole-match back-reference
     if sed -i "s|\${BRAVE_API_KEY}|${_brave_repl}|g" "$HERMES_YAML"; then
         echo "[entrypoint] Patched BRAVE_API_KEY into $HERMES_YAML"
     else
@@ -338,15 +345,16 @@ except Exception:
     echo "[entrypoint] Tailscale Serve not configured (no Running backend within timeout — OK for port-only)."
 ) &
 
-# ── 6b. Ensure BRAVE_API_KEY is present for supervisord env expansion ──────────
-# supervisord's %(ENV_x)s hard-fails on an absent var; export a definite value
-# (empty when unset) so expansion always succeeds. The container's generated
-# supervisord.conf (install-core.sh _write_supervisord_conf, docker branch)
-# carries the gateway key as BRAVE_API_KEY="%(ENV_BRAVE_API_KEY)s", so the value
-# is delivered through this process environment and never re-parsed by sed or by
-# the config grammar — quotes, commas, and sed metacharacters in the key are
-# inert. The export is in scope because the entrypoint execs supervisord in this
-# same process.
+# ── 6b. Export BRAVE_API_KEY so the gateway inherits it from supervisord ───────
+# The gateway receives the key by process-environment INHERITANCE, not via a
+# supervisord environment= field: this entrypoint execs supervisord in the same
+# process, supervisord passes its own environment to every child program, and a
+# program's environment= line only ADDS/overrides keys. So exporting the value
+# here (empty when unset) delivers it to the gateway for ANY content — a `"` or
+# `,` would break supervisord's environment= grammar even via %(ENV_x)s (the
+# value expands inside a double-quoted field), so it is intentionally kept out of
+# environment= entirely. Inheritance never routes the value through a config
+# grammar, so it is quote-safe by construction.
 export BRAVE_API_KEY="${BRAVE_API_KEY:-}"
 
 # ── 6c. Supervisord RPC socket directory (must not be on a host bind-mounted /data)

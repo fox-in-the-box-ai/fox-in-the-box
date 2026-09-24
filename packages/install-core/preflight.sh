@@ -100,14 +100,18 @@ fi
 
 HERMES_YAML="$DATA_DIR/config/hermes.yaml"
 if [ -f "$HERMES_YAML" ] && [ -n "${BRAVE_API_KEY:-}" ]; then
-    # Treat the key as literal data, not a sed program. Escape the bytes that are
-    # meaningful in the replacement half of s|...|...| (backslash first, then the
-    # delimiter and the whole-match back-reference), and keep the sed non-fatal
-    # so no key content can brick boot under set -e.
+    # The placeholder lives inside a double-quoted YAML scalar
+    # (BRAVE_API_KEY: "${BRAVE_API_KEY}"), so escape the value on two planes,
+    # innermost first: YAML double-quoted rules (backslash then double-quote) so a
+    # `"` in the key can't break the YAML, then sed replacement rules (backslash,
+    # the `|` delimiter, the `&` back-reference) so the key is data, not a sed
+    # program. Keep the sed non-fatal so no key content can brick boot under set -e.
     _brave_repl="${BRAVE_API_KEY}"
-    _brave_repl="${_brave_repl//\\/\\\\}"   # backslash — must be first
-    _brave_repl="${_brave_repl//|/\\|}"     # sed delimiter
-    _brave_repl="${_brave_repl//&/\\&}"     # whole-match back-reference
+    _brave_repl="${_brave_repl//\\/\\\\}"   # YAML: backslash — must be first
+    _brave_repl="${_brave_repl//\"/\\\"}"   # YAML: double-quote inside the scalar
+    _brave_repl="${_brave_repl//\\/\\\\}"   # sed: backslash — must be first
+    _brave_repl="${_brave_repl//|/\\|}"     # sed: delimiter
+    _brave_repl="${_brave_repl//&/\\&}"     # sed: whole-match back-reference
     if ! sed -i "s|\${BRAVE_API_KEY}|${_brave_repl}|g" "$HERMES_YAML"; then
         _warn "could not patch BRAVE_API_KEY into hermes.yaml (web search disabled)"
     fi

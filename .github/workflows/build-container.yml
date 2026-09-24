@@ -44,8 +44,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Install bats
-        run: sudo apt-get update && sudo apt-get install -y bats
+      - name: Install bats and PyYAML
+        # python3-yaml backs the hermes.yaml round-trip validity assertions in
+        # test_entrypoint_brave_key.bats (a `"`/`\` in the key must stay valid YAML).
+        run: sudo apt-get update && sudo apt-get install -y bats python3-yaml
 
       - name: Syntax-check boot scripts
         run: |
