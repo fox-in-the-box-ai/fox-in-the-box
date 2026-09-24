@@ -211,8 +211,20 @@ fi
 # Replace ${BRAVE_API_KEY} placeholder so Hermes MCP server gets the real key.
 HERMES_YAML="/data/config/hermes.yaml"
 if [ -f "$HERMES_YAML" ] && [ -n "${BRAVE_API_KEY:-}" ]; then
-    sed -i "s|\${BRAVE_API_KEY}|${BRAVE_API_KEY}|g" "$HERMES_YAML"
-    echo "[entrypoint] Patched BRAVE_API_KEY into $HERMES_YAML"
+    # Treat the key as literal data, not a sed program. Escape the bytes that are
+    # meaningful in the replacement half of s|...|...| (backslash first, then the
+    # delimiter and the whole-match back-reference). The if/else keeps a
+    # pathological value (e.g. an embedded newline) from bricking boot under
+    # set -e: escaping is the primary fix, the guard is the residual safety net.
+    _brave_repl="${BRAVE_API_KEY}"
+    _brave_repl="${_brave_repl//\\/\\\\}"   # backslash — must be first
+    _brave_repl="${_brave_repl//|/\\|}"     # sed delimiter
+    _brave_repl="${_brave_repl//&/\\&}"     # whole-match back-reference
+    if sed -i "s|\${BRAVE_API_KEY}|${_brave_repl}|g" "$HERMES_YAML"; then
+        echo "[entrypoint] Patched BRAVE_API_KEY into $HERMES_YAML"
+    else
+        echo "[entrypoint] WARN: could not patch BRAVE_API_KEY into $HERMES_YAML (web search disabled)"
+    fi
 fi
 
 # ── 5c. Ensure skills block is present in hermes.yaml ─────────────────────────
@@ -326,12 +338,14 @@ except Exception:
     echo "[entrypoint] Tailscale Serve not configured (no Running backend within timeout — OK for port-only)."
 ) &
 
-# ── 6b. Patch supervisord.conf with runtime env vars ──────────────────────────
-# supervisord %(ENV_VAR)s expansion fails when the var is absent from the process
-# environment. Use a placeholder + sed to inject the value (or empty string) at
-# runtime so supervisord always starts cleanly.
-SUPERVISORD_CONF="/etc/supervisor/supervisord.conf"
-sed -i "s|__BRAVE_API_KEY__|${BRAVE_API_KEY:-}|g" "$SUPERVISORD_CONF"
+# ── 6b. Ensure BRAVE_API_KEY is present for supervisord env expansion ──────────
+# supervisord's %(ENV_x)s hard-fails on an absent var; export a definite value
+# (empty when unset) so expansion always succeeds. The value is carried through
+# the environment (supervisord.conf uses %(ENV_BRAVE_API_KEY)s) and is never
+# re-parsed by sed or by the config grammar — so quotes, commas, and sed
+# metacharacters in the key are inert. The export is in scope because the
+# entrypoint execs supervisord in this same process.
+export BRAVE_API_KEY="${BRAVE_API_KEY:-}"
 
 # ── 6c. Supervisord RPC socket directory (must not be on a host bind-mounted /data)
 mkdir -p /run/fitb
