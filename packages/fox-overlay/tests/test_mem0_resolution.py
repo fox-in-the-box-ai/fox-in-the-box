@@ -1003,6 +1003,33 @@ class TestTopKFailLoud:
         assert _load_runtime_config()["top_k"] == 10
 
 
+class TestPreflightTopK:
+    """#903 Change 4: preflight must seed state=error (not ready) on an
+    invalid top_k, closing the preflight→first-is_available() window where
+    /readyz would otherwise report memory ready."""
+
+    def test_preflight_bad_top_k_seeds_error(self, env, monkeypatch, pinned_llm):
+        from agent_memory_plugins.mem0_oss import preflight  # noqa: PLC0415
+
+        monkeypatch.setattr(preflight.os, "geteuid", lambda: 1000, raising=False)
+        monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test-1234")
+        monkeypatch.setenv("MEM0_OSS_TOP_K", "abc")
+        assert preflight.main() == 0
+        state = json.loads((env.home / "mem0_oss" / "state.json").read_text())
+        assert state["status"] == "error"
+        assert "top_k" in state["reason"]
+
+    def test_preflight_valid_config_seeds_ready(self, env, monkeypatch, pinned_llm):
+        from agent_memory_plugins.mem0_oss import preflight  # noqa: PLC0415
+
+        monkeypatch.setattr(preflight.os, "geteuid", lambda: 1000, raising=False)
+        monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test-1234")
+        assert preflight.main() == 0
+        state = json.loads((env.home / "mem0_oss" / "state.json").read_text())
+        assert state["status"] == "ready"
+        assert state["llm"] == "openrouter"
+
+
 class TestEmbeddedRegression:
     """Embedded default must not drift when server mode is unconfigured."""
 

@@ -44,6 +44,7 @@ def main() -> int:
 
     from . import (
         MemoryUnavailable,
+        _load_runtime_config,
         _read_file_overrides,
         _resolve_embedder,
         _resolve_memoized,
@@ -54,6 +55,12 @@ def main() -> int:
         try:
             resolved = _resolve_memoized()
             embedder = _resolve_embedder(_read_file_overrides())
+            # Validate operational config (top_k) here so a bad value seeds
+            # state=error at preflight instead of a false "ready" — closing the
+            # window where /readyz would lie before the first is_available()
+            # (#903).  A non-integer/non-positive top_k raises MemoryUnavailable,
+            # caught by the same handler as any other misconfiguration.
+            _load_runtime_config()
         except MemoryUnavailable as exc:
             status = "error" if exc.severity == "error" else "off"
             _write_state(status, exc.reason, strict=True)
