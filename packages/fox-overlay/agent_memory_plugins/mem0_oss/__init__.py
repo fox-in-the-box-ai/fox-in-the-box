@@ -1908,11 +1908,20 @@ class Mem0OSSMemoryProvider(MemoryProvider):
         return tool_error(f"Unknown tool: {tool_name}")
 
     def _handle_search(self, args: Dict[str, Any]) -> str:
-        query = args.get("query", "").strip()
+        # Model-supplied args are untrusted output, not operator config: a
+        # formatting mistake must degrade to a clean tool_error / safe default,
+        # never raise and never trip the circuit breaker.  Deliberately NOT the
+        # fail-loud _coerce_top_k (#903) — that is for operator config (#911).
+        raw_query = args.get("query")
+        query = raw_query.strip() if isinstance(raw_query, str) else ""
         if not query:
             return tool_error("mem0_oss_search requires 'query'")
 
-        top_k = min(int(args.get("top_k", self._top_k)), 50)
+        try:
+            top_k = min(int(args.get("top_k", self._top_k)), 50)
+        except (TypeError, ValueError):
+            top_k = self._top_k
+        top_k = max(1, top_k)
 
         try:
             mem = self._get_memory()
@@ -1946,7 +1955,10 @@ class Mem0OSSMemoryProvider(MemoryProvider):
             return tool_error(f"mem0_oss_search failed: {exc}")
 
     def _handle_add(self, args: Dict[str, Any]) -> str:
-        content = args.get("content", "").strip()
+        # Untrusted model output (see _handle_search): a non-string content
+        # degrades to the existing tool_error, never an AttributeError.
+        raw_content = args.get("content")
+        content = raw_content.strip() if isinstance(raw_content, str) else ""
         if not content:
             return tool_error("mem0_oss_add requires 'content'")
 
