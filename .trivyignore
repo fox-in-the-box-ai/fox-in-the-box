@@ -8,3 +8,15 @@
 # Every entry MUST carry: the finding ID, the package + version, WHY it can't
 # be fixed here, and a tracking/expiry note. Review each entry on every
 # release; drop it the moment the real fix lands upstream.
+
+# msgpack 1.1.2 (fix 1.2.1) — #897c.
+# This is NOT an application dependency: it is pip's own vendored copy at
+# pip/_vendor/msgpack, bundled with pip and used only by pip's HTTP cache
+# during package resolution (not on the runtime request path). It is absent
+# from requirements.lock and cannot be added there — adding it would break the
+# build-container.yml lock==freeze gate and would not touch pip's vendored
+# copy anyway. pip 26.2.1 (the latest, installed at Dockerfile:85) still
+# vendors 1.1.2; there is no pip release yet that vendors >=1.2.1, so there is
+# no in-repo control point. Accept until a pip release vendors msgpack>=1.2.1,
+# then drop this entry. Tracking: #897 (workstream c).
+GHSA-6v7p-g79w-8964
