@@ -17,6 +17,7 @@ explicit `install()` call from server.py only. Use this in test
 environments and any context where unintended patching would corrupt
 state isolation.
 """
+
 import logging
 import os
 import threading
@@ -61,6 +62,7 @@ def _check_managed_mode_invariant() -> None:
         _log.critical(_msg)
         try:
             import sys
+
             print(_msg, file=sys.stderr)
         except Exception:
             pass
@@ -83,7 +85,18 @@ def install() -> None:
         try:
             from fox_overlay import webui_modules  # noqa: F401
         except ImportError as e:
-            _log.warning("[fox-overlay] webui_modules import failed (%s); Fox routes degraded", e)
+            _log.warning(
+                "[fox-overlay] webui_modules import failed (%s); Fox routes degraded", e
+            )
+        except Exception:
+            # A non-ImportError at import time (e.g. an operator config typo that
+            # raises ValueError while a module builds its registry) must degrade
+            # Fox routes, not brick WebUI boot (§19.4 #2). Full traceback so the
+            # failure is loud (§19.4 #3), not silently swallowed.
+            _log.exception(
+                "[fox-overlay] webui_modules import raised a non-ImportError "
+                "(operator config error or module bug); Fox routes degraded, WebUI core continues"
+            )
 
         # Phase 6: apply monkey-patches to upstream mid-file edits.
         # Each patch is idempotent (sentinel attribute guard inside
@@ -103,9 +116,13 @@ def install() -> None:
         #   the affected patch; webui core is upstream so it survives.
         try:
             from fox_overlay import webui_patches
+
             webui_patches.apply_all()
         except ImportError as e:
-            _log.warning("[fox-overlay] webui_patches import failed (%s); Fox mid-file edits degraded", e)
+            _log.warning(
+                "[fox-overlay] webui_patches import failed (%s); Fox mid-file edits degraded",
+                e,
+            )
         except AssertionError:
             _log.exception(
                 "[fox-overlay] webui_patches.apply_all() ABORTED — anchor/signature drift "
@@ -113,9 +130,12 @@ def install() -> None:
             )
             raise
         except Exception:
-            _log.exception("[fox-overlay] webui_patches.apply_all() failed; Fox mid-file edits degraded")
+            _log.exception(
+                "[fox-overlay] webui_patches.apply_all() failed; Fox mid-file edits degraded"
+            )
 
         from fox_overlay import dispatch
+
         dispatch.freeze()
         # The "did Fox load?" signal for ops smoke checks. Goes to two
         # destinations:

@@ -235,3 +235,85 @@ def test_get_progress_model_id_with_slashes(fresh_dispatch_and_module, monkeypat
     h = _FakeHandler()
     assert d.handle_get(h, urlparse("/api/local-models/qwen/2.5/1.5b/progress")) is True
     assert captured == ["qwen/2.5/1.5b"]
+
+
+# ── #910: fail-loud MODEL_SIZE_PHI4MINI coercion ─────────────────────────────
+
+
+def _reload_clean(monkeypatch):
+    """Reset dispatch + models_download to a clean, env-unset state so a
+    mutated KNOWN_MODELS / failed reload does not leak into other tests."""
+    monkeypatch.delenv("MODEL_SIZE_PHI4MINI", raising=False)
+    import fox_overlay.dispatch as d
+
+    importlib.reload(d)
+    import fox_overlay.webui_modules.models_download as md
+
+    importlib.reload(md)
+    return md
+
+
+def test_model_size_from_env_default(monkeypatch):
+    monkeypatch.delenv("MODEL_SIZE_PHI4MINI", raising=False)
+    from fox_overlay.webui_modules.models_download import _model_size_from_env
+
+    assert _model_size_from_env("MODEL_SIZE_PHI4MINI", 2491874688) == 2491874688
+
+
+def test_model_size_from_env_valid_override(monkeypatch):
+    monkeypatch.setenv("MODEL_SIZE_PHI4MINI", "3000000000")
+    from fox_overlay.webui_modules.models_download import _model_size_from_env
+
+    assert _model_size_from_env("MODEL_SIZE_PHI4MINI", 2491874688) == 3000000000
+
+
+def test_model_size_from_env_empty_is_default(monkeypatch):
+    monkeypatch.setenv("MODEL_SIZE_PHI4MINI", "   ")
+    from fox_overlay.webui_modules.models_download import _model_size_from_env
+
+    assert _model_size_from_env("MODEL_SIZE_PHI4MINI", 2491874688) == 2491874688
+
+
+@pytest.mark.parametrize(
+    "garbage", ["2,491,874,688", "2491874688 bytes", "2.49e9", "0x9", "abc"]
+)
+def test_model_size_from_env_non_numeric_raises(monkeypatch, garbage):
+    monkeypatch.setenv("MODEL_SIZE_PHI4MINI", garbage)
+    from fox_overlay.webui_modules.models_download import _model_size_from_env
+
+    with pytest.raises(ValueError) as exc:
+        _model_size_from_env("MODEL_SIZE_PHI4MINI", 2491874688)
+    assert "MODEL_SIZE_PHI4MINI" in str(exc.value)
+    assert garbage in str(exc.value)
+
+
+def test_known_models_reflects_valid_override(monkeypatch):
+    """A valid numeric override still flows into KNOWN_MODELS at import."""
+    import fox_overlay.dispatch as d
+
+    importlib.reload(d)
+    import fox_overlay.webui_modules.models_download as md
+
+    monkeypatch.setenv("MODEL_SIZE_PHI4MINI", "12345")
+    importlib.reload(md)
+    try:
+        assert md.KNOWN_MODELS["phi4-mini"]["size_bytes"] == 12345
+    finally:
+        _reload_clean(monkeypatch)
+
+
+def test_known_models_import_raises_on_non_numeric(monkeypatch):
+    """The bare int() used to crash at import; the helper now raises a
+    ValueError naming the variable (bootstrap's guard degrades on it)."""
+    import fox_overlay.dispatch as d
+
+    importlib.reload(d)
+    import fox_overlay.webui_modules.models_download as md
+
+    monkeypatch.setenv("MODEL_SIZE_PHI4MINI", "2,491,874,688")
+    try:
+        with pytest.raises(ValueError) as exc:
+            importlib.reload(md)
+        assert "MODEL_SIZE_PHI4MINI" in str(exc.value)
+    finally:
+        _reload_clean(monkeypatch)

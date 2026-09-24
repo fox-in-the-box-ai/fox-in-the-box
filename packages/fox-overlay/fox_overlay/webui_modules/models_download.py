@@ -44,6 +44,29 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
+def _model_size_from_env(name: str, default: int) -> int:
+    """Coerce an operator-facing integer size override.
+
+    Empty/unset falls back to the pinned default. A non-empty, non-numeric
+    value is a fail-loud config error (§19.4 #3): silently defaulting a size
+    the operator set on purpose would mask the typo and feed the wrong
+    threshold to the download-completeness check (st_size == size_bytes).
+    Raises ValueError with an actionable message naming the variable and the
+    bad value; bootstrap.install()'s broadened webui_modules guard degrades
+    Fox routes on it while the WebUI core keeps booting.
+    """
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        raise ValueError(
+            f"{name}={raw!r} is not an integer — set a plain byte count "
+            f"(e.g. {default}) or unset it to use the default"
+        )
+
+
 # ── Model registry ──────────────────────────────────────────────────────────
 
 # Known models. The URL + SHA256 are env-overridable so we can flip to a
@@ -67,7 +90,7 @@ KNOWN_MODELS: dict[str, dict[str, Any]] = {
         # File size in bytes — drives the progress bar denominator before
         # the upstream Content-Length is observed (also used to flag
         # silently-rotated upstreams during resume verification).
-        "size_bytes": int(os.environ.get("MODEL_SIZE_PHI4MINI", "2491874688")),
+        "size_bytes": _model_size_from_env("MODEL_SIZE_PHI4MINI", 2491874688),
         "description": "3.8B parameters, runs on CPU. ~3 GB RAM at runtime, ~6–10 tok/s on a 4-core machine.",
     },
 }
