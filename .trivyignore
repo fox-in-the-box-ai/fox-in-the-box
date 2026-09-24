@@ -1,0 +1,10 @@
+# Trivy accepted-until-upstream ignore list (#897b gate escape hatch).
+#
+# Policy: only FIXABLE CRITICAL/HIGH findings that cannot be remediated at a
+# real control point in this repo belong here. The gate already runs with
+# `ignore-unfixed: true`, so the ~104 unfixed Debian CVEs (no vendor patch)
+# are NOT listed — they are suppressed by that flag, not by this file.
+#
+# Every entry MUST carry: the finding ID, the package + version, WHY it can't
+# be fixed here, and a tracking/expiry note. Review each entry on every
+# release; drop it the moment the real fix lands upstream.
