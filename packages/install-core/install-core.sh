@@ -398,6 +398,15 @@ _write_supervisord_conf() {
         embed_autostart="true"
     fi
 
+    # BRAVE_API_KEY is deliberately NOT listed in any program's environment=
+    # here (#908): a value containing a `"` or `,` would break supervisord's
+    # environment= grammar even via %(ENV_x)s, since expansion happens inside the
+    # double-quoted field. The gateway instead inherits BRAVE_API_KEY from the
+    # process environment — the container entrypoint exports it before exec'ing
+    # supervisord (which passes its own env to every child), and the desktop
+    # gateway picks it up from run-with-env.sh sourcing hermes.env. Inheritance
+    # never routes the value through a config grammar, so any value is safe.
+
     cat > "$conf_path" << SUPERVISORD_EOF
 [supervisord]
 nodaemon=true
@@ -534,7 +543,7 @@ stdout_logfile_maxbytes=10MB
 stdout_logfile_backups=3
 stderr_logfile_maxbytes=10MB
 stderr_logfile_backups=3
-environment=HOME="${app}",PYTHONPATH="${data}/apps/hermes-agent",PATH="${app}/venv/bin:/usr/local/bin:/usr/bin:/bin",HERMES_HOME="${data}/data/hermes",BRAVE_API_KEY="__BRAVE_API_KEY__",HERMES_ENV_PATH="${data}/config/hermes.env",SUPERVISORD_CONF="${conf_path}",MEM0_TELEMETRY="False"
+environment=HOME="${app}",PYTHONPATH="${data}/apps/hermes-agent",PATH="${app}/venv/bin:/usr/local/bin:/usr/bin:/bin",HERMES_HOME="${data}/data/hermes",HERMES_ENV_PATH="${data}/config/hermes.env",SUPERVISORD_CONF="${conf_path}",MEM0_TELEMETRY="False"
 priority=30
 
 ; ── hermes webui ──────────────────────────────────────────────────────────────

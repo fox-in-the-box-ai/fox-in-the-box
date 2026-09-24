@@ -9,6 +9,13 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.7.71] — 2026-09-24
+
+### Fixed
+
+- A corrupt or partially written `hermes.env` can no longer stop the assistant from starting. Both the container entrypoint and the desktop install's pre-start step now load `hermes.env` defensively — a malformed file logs a warning and boot continues, instead of aborting under `set -e` and leaving the container or service dead. (#907)
+- A `BRAVE_API_KEY` containing shell/`sed`/config metacharacters (`&`, `|`, `\`, `"`, `,`) no longer breaks boot. The key is now delivered to the search MCP server as literal data — via supervisord's environment interpolation in the container and via the environment file on desktop — instead of being spliced through `sed` and supervisord's `environment=` grammar. (#908)
+
 ## [0.7.70] — 2026-09-24
 
 ### Security

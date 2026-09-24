@@ -89,13 +89,32 @@ HERMES_ENV="$DATA_DIR/config/hermes.env"
 if [ -f "$HERMES_ENV" ]; then
     set -a
     # shellcheck source=/dev/null
-    source "$HERMES_ENV"
+    # Best-effort: hermes.env is user-writable. preflight runs as systemd
+    # ExecStartPre= under set -e, so a malformed line here would abort preflight
+    # and systemd would never reach ExecStart= — bricking desktop boot. Guard it
+    # the same way as the container entrypoint; a missing key surfaces downstream
+    # as "no provider configured", not as a failed start.
+    source "$HERMES_ENV" || _warn "hermes.env failed to source (malformed) — continuing without it"
     set +a
 fi
 
 HERMES_YAML="$DATA_DIR/config/hermes.yaml"
 if [ -f "$HERMES_YAML" ] && [ -n "${BRAVE_API_KEY:-}" ]; then
-    sed -i "s|\${BRAVE_API_KEY}|${BRAVE_API_KEY}|g" "$HERMES_YAML"
+    # The placeholder lives inside a double-quoted YAML scalar
+    # (BRAVE_API_KEY: "${BRAVE_API_KEY}"), so escape the value on two planes,
+    # innermost first: YAML double-quoted rules (backslash then double-quote) so a
+    # `"` in the key can't break the YAML, then sed replacement rules (backslash,
+    # the `|` delimiter, the `&` back-reference) so the key is data, not a sed
+    # program. Keep the sed non-fatal so no key content can brick boot under set -e.
+    _brave_repl="${BRAVE_API_KEY}"
+    _brave_repl="${_brave_repl//\\/\\\\}"   # YAML: backslash — must be first
+    _brave_repl="${_brave_repl//\"/\\\"}"   # YAML: double-quote inside the scalar
+    _brave_repl="${_brave_repl//\\/\\\\}"   # sed: backslash — must be first
+    _brave_repl="${_brave_repl//|/\\|}"     # sed: delimiter
+    _brave_repl="${_brave_repl//&/\\&}"     # sed: whole-match back-reference
+    if ! sed -i "s|\${BRAVE_API_KEY}|${_brave_repl}|g" "$HERMES_YAML"; then
+        _warn "could not patch BRAVE_API_KEY into hermes.yaml (web search disabled)"
+    fi
 fi
 
 if [ -f "$HERMES_YAML" ] && ! grep -q "^skills:" "$HERMES_YAML"; then
@@ -109,9 +128,12 @@ skills:
 EOF
 fi
 
-# ── 8. Patch supervisord.conf with runtime env vars ───────────────────────────
-SUPERVISORD_CONF="/etc/foxinthebox/supervisord.conf"
-sed -i "s|__BRAVE_API_KEY__|${BRAVE_API_KEY:-}|g" "$SUPERVISORD_CONF"
+# ── 8. supervisord.conf: BRAVE_API_KEY is no longer templated here ─────────────
+# preflight runs as systemd ExecStartPre= — a separate process whose exports do
+# not reach the ExecStart= supervisord, so the container's %(ENV_x)s recipe would
+# hard-fail here. The gateway program runs via run-with-env.sh, which sources
+# hermes.env (and ~/.hermes/.env) with `set -a`, so BRAVE_API_KEY reaches the
+# gateway from its documented desktop source without any supervisord.conf sed.
 
 # ── 9. Ensure RPC socket directory exists ────────────────────────────────────
 # Service runs as root; create the supervisord RPC socket directory.

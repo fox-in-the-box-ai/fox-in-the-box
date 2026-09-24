@@ -30,6 +30,40 @@ env:
   IMAGE: ghcr.io/fox-in-the-box-ai/cloud
 
 jobs:
+  # ── Gate the boot scripts before spending ~3 min/arch on a Docker build.
+  # entrypoint.sh / supervisord.conf are baked into the image; a boot-brick
+  # regression here (see #907, #908) is invisible until a container fails to
+  # start, so lint + run the boot-brick bats files up front and make the
+  # build depend on it.
+  boot-scripts:
+    name: Boot scripts (bats + syntax)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install bats and PyYAML
+        # python3-yaml backs the hermes.yaml round-trip validity assertions in
+        # test_entrypoint_brave_key.bats (a `"`/`\` in the key must stay valid YAML).
+        run: sudo apt-get update && sudo apt-get install -y bats python3-yaml
+
+      - name: Syntax-check boot scripts
+        run: |
+          bash -n packages/integration/entrypoint.sh
+          bash -n packages/install-core/preflight.sh
+          bash -n packages/install-core/install-core.sh
+
+      - name: Run boot-brick bats suite
+        # Scope to the boot-brick files only. The rest of tests/container
+        # (test_install.bats) is a pre-existing install-helper suite with
+        # runner-specific assumptions and is not gated here — tracked for a
+        # separate CI-wiring fix (follow-up filed).
+        run: |
+          bats tests/container/test_entrypoint_env.bats \
+               tests/container/test_entrypoint_brave_key.bats
+
   # ── Build per platform, push by digest, export the digest as an artifact.
   # No tag is written at this stage — tagging happens in the merge job once
   # both per-platform manifests are confirmed pushed. Cache scopes are
@@ -37,6 +71,7 @@ jobs:
   # contamination (#82 reviewer concern).
   build:
     name: Build & Push (${{ matrix.platform.short }})
+    needs: [boot-scripts]
     strategy:
       fail-fast: false
       matrix:

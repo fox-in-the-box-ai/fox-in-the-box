@@ -177,7 +177,11 @@ if [ -f "$HERMES_ENV" ]; then
     echo "[entrypoint] Loading environment from $HERMES_ENV ..."
     set -a
     # shellcheck source=/dev/null
-    source "$HERMES_ENV"
+    # Best-effort: hermes.env is user-writable (wizard/manual edits). A malformed
+    # line must not brick boot — same contract as scripts/run-with-env.sh. A
+    # missing/invalid key then surfaces downstream as "no provider configured"
+    # via /readyz, not as a dead container.
+    source "$HERMES_ENV" || echo "[entrypoint] WARN: $HERMES_ENV failed to source (malformed) — continuing without it"
     set +a
 fi
 
@@ -207,8 +211,27 @@ fi
 # Replace ${BRAVE_API_KEY} placeholder so Hermes MCP server gets the real key.
 HERMES_YAML="/data/config/hermes.yaml"
 if [ -f "$HERMES_YAML" ] && [ -n "${BRAVE_API_KEY:-}" ]; then
-    sed -i "s|\${BRAVE_API_KEY}|${BRAVE_API_KEY}|g" "$HERMES_YAML"
-    echo "[entrypoint] Patched BRAVE_API_KEY into $HERMES_YAML"
+    # The placeholder lives inside a double-quoted YAML scalar
+    # (BRAVE_API_KEY: "${BRAVE_API_KEY}"), so escape the value on two planes,
+    # innermost first:
+    #   1. YAML double-quoted rules — backslash then double-quote — so the value
+    #      lands as a valid scalar (a `"` in the key can't break the YAML).
+    #   2. sed replacement rules — backslash, the `|` delimiter, and the `&`
+    #      whole-match back-reference — so the key is data, not a sed program.
+    # The if/else keeps a pathological value (e.g. an embedded newline) from
+    # bricking boot under set -e: escaping is the primary fix, the guard is the
+    # residual safety net.
+    _brave_repl="${BRAVE_API_KEY}"
+    _brave_repl="${_brave_repl//\\/\\\\}"   # YAML: backslash — must be first
+    _brave_repl="${_brave_repl//\"/\\\"}"   # YAML: double-quote inside the scalar
+    _brave_repl="${_brave_repl//\\/\\\\}"   # sed: backslash — must be first
+    _brave_repl="${_brave_repl//|/\\|}"     # sed: delimiter
+    _brave_repl="${_brave_repl//&/\\&}"     # sed: whole-match back-reference
+    if sed -i "s|\${BRAVE_API_KEY}|${_brave_repl}|g" "$HERMES_YAML"; then
+        echo "[entrypoint] Patched BRAVE_API_KEY into $HERMES_YAML"
+    else
+        echo "[entrypoint] WARN: could not patch BRAVE_API_KEY into $HERMES_YAML (web search disabled)"
+    fi
 fi
 
 # ── 5c. Ensure skills block is present in hermes.yaml ─────────────────────────
@@ -322,12 +345,17 @@ except Exception:
     echo "[entrypoint] Tailscale Serve not configured (no Running backend within timeout — OK for port-only)."
 ) &
 
-# ── 6b. Patch supervisord.conf with runtime env vars ──────────────────────────
-# supervisord %(ENV_VAR)s expansion fails when the var is absent from the process
-# environment. Use a placeholder + sed to inject the value (or empty string) at
-# runtime so supervisord always starts cleanly.
-SUPERVISORD_CONF="/etc/supervisor/supervisord.conf"
-sed -i "s|__BRAVE_API_KEY__|${BRAVE_API_KEY:-}|g" "$SUPERVISORD_CONF"
+# ── 6b. Export BRAVE_API_KEY so the gateway inherits it from supervisord ───────
+# The gateway receives the key by process-environment INHERITANCE, not via a
+# supervisord environment= field: this entrypoint execs supervisord in the same
+# process, supervisord passes its own environment to every child program, and a
+# program's environment= line only ADDS/overrides keys. So exporting the value
+# here (empty when unset) delivers it to the gateway for ANY content — a `"` or
+# `,` would break supervisord's environment= grammar even via %(ENV_x)s (the
+# value expands inside a double-quoted field), so it is intentionally kept out of
+# environment= entirely. Inheritance never routes the value through a config
+# grammar, so it is quote-safe by construction.
+export BRAVE_API_KEY="${BRAVE_API_KEY:-}"
 
 # ── 6c. Supervisord RPC socket directory (must not be on a host bind-mounted /data)
 mkdir -p /run/fitb
