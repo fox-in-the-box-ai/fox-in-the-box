@@ -9,6 +9,15 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.7.72] — 2026-09-24
+
+### Security
+
+- Bumped `anyio` 4.14.0 → 4.14.2 to remediate a CRITICAL advisory reachable on the gateway's async path. (#897)
+- Floored `setuptools` to `>=78.1.1` in the container image to remediate CVE-2025-47273. (#897)
+- The release pipeline now fails the release when the shipped container image carries a fixable CRITICAL/HIGH vulnerability: a Trivy scan of the release image (by immutable digest, fixable-only) now gates image promotion, so a vulnerable image can never become `:stable` or a `vX.Y.Z` tag. (#897)
+- The published SBOM is now generated against the shipped container image by digest (not the source tree), and asserts it describes a container with Debian and PyPI components — so the SBOM reflects what actually ships. (#898)
+
 ## [0.7.71] — 2026-09-24
 
 ### Fixed
