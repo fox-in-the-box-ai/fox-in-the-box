@@ -12,6 +12,7 @@ fails/times out, the endpoint returns ``{explanation: null}`` — the
 frontend simply hides the explanation element and the card behaves as
 before.
 """
+
 from __future__ import annotations
 
 import logging
@@ -57,9 +58,9 @@ def _generate_explanation(command: str, description: str) -> str | None:
 
     def _call():
         try:
-            user_content = (
-                "<command>\n%s\n</command>\n<context>\n%s\n</context>"
-                % (command[:500], description[:200])
+            user_content = "<command>\n%s\n</command>\n<context>\n%s\n</context>" % (
+                command[:500],
+                description[:200],
             )
             response = call_llm(
                 task="approval",
@@ -79,7 +80,9 @@ def _generate_explanation(command: str, description: str) -> str | None:
     t.start()
     t.join(timeout=_EXPLAIN_TIMEOUT)
     if t.is_alive():
-        logger.debug("approval-explain: aux LLM call timed out (%.1fs)", _EXPLAIN_TIMEOUT)
+        logger.debug(
+            "approval-explain: aux LLM call timed out (%.1fs)", _EXPLAIN_TIMEOUT
+        )
         return None
     if exc_box[0]:
         logger.debug("approval-explain: aux LLM call failed: %s", exc_box[0])
@@ -95,8 +98,13 @@ from fox_overlay import dispatch  # noqa: E402
 def _handle_post(handler, parsed) -> bool:
     if parsed.path != "/api/approval-explain/":
         return False
-    from api.helpers import j, read_body, bad
-    body = read_body(handler)
+    from api.helpers import bad, j
+
+    from fox_overlay.webui_modules._body_shape import require_object_body
+
+    body = require_object_body(handler)
+    if body is None:
+        return True
     command = (body.get("command") or "").strip()
     description = (body.get("description") or "").strip()
     if not command:

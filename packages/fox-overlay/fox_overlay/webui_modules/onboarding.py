@@ -18,7 +18,9 @@ logger = logging.getLogger(__name__)
 
 # ── Onboarding state file ────────────────────────────────────────────────────
 
-ONBOARDING_PATH = Path(os.environ.get("ONBOARDING_PATH", "/data/config/onboarding.json"))
+ONBOARDING_PATH = Path(
+    os.environ.get("ONBOARDING_PATH", "/data/config/onboarding.json")
+)
 
 # ── Paths exempt from redirect ───────────────────────────────────────────────
 
@@ -87,6 +89,7 @@ def onboarding_complete() -> bool:
         pass
     try:
         from api.config import load_settings
+
         if load_settings().get("onboarding_completed") is True:
             return True
     except Exception:  # broad on purpose — settings are auxiliary state
@@ -126,7 +129,17 @@ def _write_env_key(key: str, value: str) -> None:
 
     Creates the file and parent directory if they do not exist.
     Preserves existing lines. Updates in-place if key already present.
+
+    Enforces the "one key, one physical line" invariant structurally: a
+    control character in ``value`` (newline/CR/tab/NUL/DEL) would inject
+    extra env lines, so it is rejected loudly (#899). The file holds a
+    provider secret, so it is written owner-only (0600).
     """
+    if any(ord(ch) < 0x20 or ord(ch) == 0x7F for ch in value):
+        raise ValueError("env value contains control characters")
+    if not key or any(ord(ch) < 0x20 or ord(ch) == 0x7F or ch == "=" for ch in key):
+        raise ValueError(f"invalid env key: {key!r}")
+
     _ENV_PATH.parent.mkdir(parents=True, exist_ok=True)
 
     lines: list[str] = []
@@ -148,7 +161,34 @@ def _write_env_key(key: str, value: str) -> None:
             lines.append("")
         lines.append(f"{key}={value}")
 
-    _ENV_PATH.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    # Atomic + owner-only from the first byte (#899). A plain write_text creates
+    # the file at the umask default (0644), so the secret would be group/other-
+    # readable in the window before a follow-up chmod. Instead write to a same-
+    # dir temp created 0600 (O_CREAT mode + fchmod pin, immune to a loose umask),
+    # fsync, then os.replace — the destination is never momentarily world-
+    # readable, and replacing the inode self-heals a pre-existing 0644 file.
+    # Mirrors api.config._atomic_write_settings_text.
+    data = "\n".join(lines) + "\n"
+    tmp = _ENV_PATH.with_name(f".{_ENV_PATH.name}.{os.getpid()}.tmp")
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        if hasattr(os, "fchmod"):  # pin exactly 0600 regardless of umask (POSIX)
+            os.fchmod(fd, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
+            handle.write(data)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp, _ENV_PATH)
+    except BaseException:
+        try:
+            os.close(fd)  # no-op if fdopen already closed it
+        except OSError:
+            pass
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
 
 
 # ── Setup route handlers ─────────────────────────────────────────────────────
@@ -160,7 +200,10 @@ def handle_setup_page(handler) -> None:
     # webui_static/. Read from overlay-local path; do NOT depend on
     # api.config.REPO_ROOT (fork-side concept).
     from pathlib import Path as _Path
-    setup_path = _Path(__file__).resolve().parent.parent.parent / "webui_static" / "setup.html"
+
+    setup_path = (
+        _Path(__file__).resolve().parent.parent.parent / "webui_static" / "setup.html"
+    )
     if not setup_path.exists():
         handler.send_response(500)
         handler.send_header("Content-Type", "text/plain")
@@ -193,9 +236,16 @@ def handle_setup_openrouter(handler, body: dict) -> dict:
         return {"ok": False, "error": "Key must start with sk-."}
     if len(key) > 512:
         return {"ok": False, "error": "Key is too long."}
+    # str.strip() only removes leading/trailing whitespace; an embedded newline
+    # or other control char survives and would inject extra env lines (#899).
+    if any(ord(ch) < 0x20 or ord(ch) == 0x7F for ch in key):
+        return {"ok": False, "error": "Key contains invalid characters."}
 
     try:
         _write_env_key("OPENROUTER_API_KEY", key)
+    except ValueError:
+        # Backstop: the writer's own control-char guard fired. Never 500 here.
+        return {"ok": False, "error": "Key contains invalid characters."}
     except OSError as exc:
         logger.error("Failed to write env file: %s", exc)
         return {"ok": False, "error": "Failed to save key."}
@@ -245,6 +295,7 @@ def _mark_onboarding_complete(*, skipped: bool, extra: dict | None = None) -> di
     # consults settings (e.g. future CLI bootstrappers) sees the same truth.
     try:
         from api.config import load_settings, save_settings
+
         s = load_settings()
         s["onboarding_completed"] = True
         save_settings(s)
@@ -262,9 +313,9 @@ def _mark_onboarding_complete(*, skipped: bool, extra: dict | None = None) -> di
 # default below ships in packages/integration/default-configs/onboarding.md
 # and is copied into /data/config on first container run by entrypoint.sh.
 
-_ONBOARDING_MD_PATH = Path(os.environ.get(
-    "ONBOARDING_MD_PATH", "/data/config/onboarding.md"
-))
+_ONBOARDING_MD_PATH = Path(
+    os.environ.get("ONBOARDING_MD_PATH", "/data/config/onboarding.md")
+)
 
 _DEFAULT_WELCOME = (
     "Let's get you set up. This will only take a minute.\n\n"
@@ -299,8 +350,11 @@ def handle_setup_restart(handler) -> dict:
         result = subprocess.run(
             [
                 "supervisorctl",
-                "-c", os.environ.get("SUPERVISORD_CONF", "/etc/supervisor/supervisord.conf"),
-                "restart", "hermes-gateway", "hermes-webui",
+                "-c",
+                os.environ.get("SUPERVISORD_CONF", "/etc/supervisor/supervisord.conf"),
+                "restart",
+                "hermes-gateway",
+                "hermes-webui",
             ],
             capture_output=True,
             text=True,
@@ -358,9 +412,13 @@ def _handle_api_setup_get(handler, parsed) -> bool:
 
 def _handle_api_setup_post(handler, parsed) -> bool:
     """POST /api/setup/* — returns True if handled, False to fall through."""
-    from api.helpers import j, read_body
+    from api.helpers import j
 
-    body = read_body(handler)
+    from fox_overlay.webui_modules._body_shape import require_object_body
+
+    body = require_object_body(handler)
+    if body is None:
+        return True  # 400 already written by the helper
 
     if parsed.path == "/api/setup/openrouter":
         result = handle_setup_openrouter(handler, body)

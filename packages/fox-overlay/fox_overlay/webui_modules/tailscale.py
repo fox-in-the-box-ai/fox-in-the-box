@@ -109,7 +109,9 @@ _TS_ROUTE_RE = __import__("re").compile(
 # Hostname / IP charset for --exit-node. Drop `/` (was a copy-paste from
 # the URL regex; exit-node values never contain `/`).
 _TS_HOST_RE = __import__("re").compile(r"^[a-zA-Z0-9.\-_:]+$")
-_TS_URL_RE = __import__("re").compile(r"^https?://[a-zA-Z0-9.\-_:/]+(?:/[a-zA-Z0-9.\-_:/?&=%~]*)?$")
+_TS_URL_RE = __import__("re").compile(
+    r"^https?://[a-zA-Z0-9.\-_:/]+(?:/[a-zA-Z0-9.\-_:/?&=%~]*)?$"
+)
 
 
 def _safe_str_value(v: Any, max_len: int = _MAX_OPT_LEN) -> str | None:
@@ -216,6 +218,7 @@ def _load_persisted_opts() -> dict[str, Any]:
     }
     try:
         from api.config import load_settings
+
         s = load_settings()
         out["login_server"] = s.get("tailscale_login_server") or ""
         out["advertise_routes"] = s.get("tailscale_advertise_routes") or ""
@@ -227,6 +230,7 @@ def _load_persisted_opts() -> dict[str, Any]:
         pass
     try:
         from api.hostname import _read_configured_hostname
+
         out["hostname"] = _read_configured_hostname() or ""
     except Exception:
         pass
@@ -272,8 +276,10 @@ def get_status() -> dict[str, Any]:
     # the user authed via Connect (up_state populated) or via the desktop
     # Tailscale app (up_state stays idle; user clicks the button manually).
     with _up_lock:
-        serve_snap = (_up_state.get("serve_state", "idle"),
-                      _up_state.get("serve_error", ""))
+        serve_snap = (
+            _up_state.get("serve_state", "idle"),
+            _up_state.get("serve_error", ""),
+        )
 
     # FITB#140: if tailscaled is Running but serve_state is still "idle"
     # (we've never attempted to configure Serve for this Running session),
@@ -290,8 +296,10 @@ def get_status() -> dict[str, Any]:
         try:
             _attempt_configure_serve()
             with _up_lock:
-                serve_snap = (_up_state.get("serve_state", "idle"),
-                              _up_state.get("serve_error", ""))
+                serve_snap = (
+                    _up_state.get("serve_state", "idle"),
+                    _up_state.get("serve_error", ""),
+                )
         except Exception:
             logger.debug("Auto-configure Serve from get_status failed", exc_info=True)
 
@@ -405,7 +413,8 @@ def _build_up_argv(opts: dict) -> list[str]:
     'Access denied: login access denied' — bug surfaced in v0.4.7 QA.
     """
     argv = [
-        "tailscale", "up",
+        "tailscale",
+        "up",
         "--operator=foxinthebox",
         f"--timeout={int(_UP_TIMEOUT_S)}s",
     ]
@@ -486,10 +495,20 @@ def _up_subprocess(argv: list[str], env: dict | None, attempt_id: int) -> None:
             env=env,
         )
     except FileNotFoundError:
-        _set_up_state(attempt_id, state="failed", error="tailscale CLI not found", ended_at=time.time())
+        _set_up_state(
+            attempt_id,
+            state="failed",
+            error="tailscale CLI not found",
+            ended_at=time.time(),
+        )
         return
     except OSError as exc:
-        _set_up_state(attempt_id, state="failed", error=f"failed to spawn tailscale up: {exc}", ended_at=time.time())
+        _set_up_state(
+            attempt_id,
+            state="failed",
+            error=f"failed to spawn tailscale up: {exc}",
+            ended_at=time.time(),
+        )
         return
 
     # Publish the proc so logout() can SIGKILL it.
@@ -518,7 +537,12 @@ def _up_subprocess(argv: list[str], env: dict | None, attempt_id: int) -> None:
                 proc.kill()
             except Exception:
                 pass
-            _set_up_state(attempt_id, state="failed", error="auth timed out before completion", ended_at=time.time())
+            _set_up_state(
+                attempt_id,
+                state="failed",
+                error="auth timed out before completion",
+                ended_at=time.time(),
+            )
             break
 
         # Was the attempt superseded?
@@ -548,7 +572,9 @@ def _up_subprocess(argv: list[str], env: dict | None, attempt_id: int) -> None:
                     candidate = raw.get("AuthURL") or ""
                     if candidate:
                         auth_url = candidate
-                        _set_up_state(attempt_id, state="awaiting-auth", auth_url=candidate)
+                        _set_up_state(
+                            attempt_id, state="awaiting-auth", auth_url=candidate
+                        )
             except Exception:
                 pass
 
@@ -603,8 +629,10 @@ def _up_subprocess(argv: list[str], env: dict | None, attempt_id: int) -> None:
             # been bumped and we'd otherwise re-establish a Serve
             # binding against a tunnel the user just disconnected.
             with _up_lock:
-                still_current = (_up_state.get("attempt_id") == attempt_id and
-                                 _up_state.get("state") == "running")
+                still_current = (
+                    _up_state.get("attempt_id") == attempt_id
+                    and _up_state.get("state") == "running"
+                )
             if still_current:
                 _attempt_configure_serve(attempt_id)
         else:
@@ -619,7 +647,12 @@ def _up_subprocess(argv: list[str], env: dict | None, attempt_id: int) -> None:
     else:
         with _up_lock:
             tail = "\n".join(_up_log[-10:]) or "(no output)"
-        _set_up_state(attempt_id, state="failed", error=f"tailscale up exited {rc}: {tail}", ended_at=time.time())
+        _set_up_state(
+            attempt_id,
+            state="failed",
+            error=f"tailscale up exited {rc}: {tail}",
+            ended_at=time.time(),
+        )
 
 
 def start_up(opts: dict) -> dict[str, Any]:
@@ -663,17 +696,19 @@ def start_up(opts: dict) -> dict[str, Any]:
                 pass
             _up_proc = None
         _up_log.clear()
-        _up_state.update({
-            "state": "starting",
-            "auth_url": "",
-            # v0.7.12 (#146): fresh attempt → drop the previous attempt's
-            # sticky URL so the new poll won't return a stale link.
-            "last_auth_url": "",
-            "started_at": time.time(),
-            "ended_at": 0.0,
-            "error": "",
-            "attempt_id": new_attempt_id,
-        })
+        _up_state.update(
+            {
+                "state": "starting",
+                "auth_url": "",
+                # v0.7.12 (#146): fresh attempt → drop the previous attempt's
+                # sticky URL so the new poll won't return a stale link.
+                "last_auth_url": "",
+                "started_at": time.time(),
+                "ended_at": 0.0,
+                "error": "",
+                "attempt_id": new_attempt_id,
+            }
+        )
 
     # Merge persisted power-user settings (#96 phase 2) with body opts —
     # body wins per-key, so the user can override at Connect time without
@@ -692,12 +727,15 @@ def start_up(opts: dict) -> dict[str, Any]:
     env = None
     if auth_key:
         import os
+
         env = dict(os.environ)
         env["TS_AUTHKEY"] = auth_key
 
     threading.Thread(
-        target=_up_subprocess, args=(argv, env, new_attempt_id),
-        name=f"tailscale-up-{new_attempt_id}", daemon=True,
+        target=_up_subprocess,
+        args=(argv, env, new_attempt_id),
+        name=f"tailscale-up-{new_attempt_id}",
+        daemon=True,
     ).start()
 
     # Auth-key path is non-interactive; client doesn't need an auth_url.
@@ -805,18 +843,20 @@ def logout() -> dict[str, Any]:
             except Exception:
                 pass
             _up_proc = None
-        _up_state.update({
-            "state": "idle",
-            "auth_url": "",
-            # v0.7.12 (#146): logout clears the sticky URL too — the next
-            # Connect starts an entirely fresh auth flow with a fresh URL.
-            "last_auth_url": "",
-            "error": "",
-            "started_at": 0.0,
-            "ended_at": 0.0,
-            "serve_state": "idle",
-            "serve_error": "",
-        })
+        _up_state.update(
+            {
+                "state": "idle",
+                "auth_url": "",
+                # v0.7.12 (#146): logout clears the sticky URL too — the next
+                # Connect starts an entirely fresh auth flow with a fresh URL.
+                "last_auth_url": "",
+                "error": "",
+                "started_at": 0.0,
+                "ended_at": 0.0,
+                "serve_state": "idle",
+                "serve_error": "",
+            }
+        )
 
     # Reset Tailscale Serve config best-effort. `tailscale serve reset`
     # exists on recent builds; older builds use `tailscale serve / off`
@@ -883,8 +923,11 @@ def _attempt_configure_serve(attempt_id: int | None = None) -> dict[str, Any]:
         _set_up_state(attempt_id, serve_state="error", serve_error=err_msg)
         return {"ok": False, "error": err_msg}
     if not result.get("ok"):
-        _set_up_state(attempt_id, serve_state="error",
-                      serve_error=result.get("error", "tailscale serve failed"))
+        _set_up_state(
+            attempt_id,
+            serve_state="error",
+            serve_error=result.get("error", "tailscale serve failed"),
+        )
     else:
         _set_up_state(attempt_id, serve_state="ok", serve_error="")
     return result
@@ -894,7 +937,10 @@ def get_serve_status() -> dict[str, Any]:
     """GET /api/tailscale/serve — current `tailscale serve status`."""
     rc, out, err = _run_tailscale(["serve", "status", "--json"], timeout=5.0)
     if rc != 0:
-        return {"ok": False, "error": err.strip() or f"tailscale serve status exited {rc}"}
+        return {
+            "ok": False,
+            "error": err.strip() or f"tailscale serve status exited {rc}",
+        }
     try:
         return {"ok": True, "config": json.loads(out) if out else {}}
     except json.JSONDecodeError:
@@ -959,9 +1005,13 @@ def _handle_get(handler, parsed) -> bool:
 
 def _handle_post(handler, parsed) -> bool:
     """POST /api/tailscale/* — returns True if handled, False to fall through."""
-    from api.helpers import j, read_body
+    from api.helpers import j
 
-    body = read_body(handler)
+    from fox_overlay.webui_modules._body_shape import require_object_body
+
+    body = require_object_body(handler)
+    if body is None:
+        return True
 
     if parsed.path == "/api/tailscale/up":
         result = handle_post_up(handler, body)
@@ -983,5 +1033,3 @@ def _handle_post(handler, parsed) -> bool:
 
 dispatch.register_get("/api/tailscale/", _handle_get)
 dispatch.register_post("/api/tailscale/", _handle_post)
-
-

@@ -32,9 +32,18 @@ logger = logging.getLogger(__name__)
 # Kept in sync intentionally — both places generate names from the same pool so
 # host-script users and Electron users produce indistinguishable defaults.
 _ADJECTIVES = (
-    "quick", "clever", "bright", "swift", "keen",
-    "amber", "nimble", "fierce", "bold", "sly",
-    "golden", "autumn",
+    "quick",
+    "clever",
+    "bright",
+    "swift",
+    "keen",
+    "amber",
+    "nimble",
+    "fierce",
+    "bold",
+    "sly",
+    "golden",
+    "autumn",
 )
 
 # Tailscale's effective hostname rule, derived from
@@ -156,6 +165,7 @@ def get_hostname_state() -> dict[str, Any]:
     # Settings ignores it.
     try:
         from api.config import load_settings
+
         prompted = bool(load_settings().get("hostname_prompted", False))
     except Exception:
         prompted = False
@@ -181,6 +191,7 @@ def mark_hostname_prompted() -> dict[str, Any]:
     Used by both the explicit "Skip" button and implicitly when the modal saves."""
     try:
         from api.config import save_settings
+
         save_settings({"hostname_prompted": True})
         return {"ok": True}
     except Exception as exc:
@@ -209,11 +220,16 @@ def apply_hostname(hostname: str) -> dict[str, Any]:
 
     try:
         _write_env_key(_FOX_HOSTNAME_KEY, sanitized)
-    except OSError as exc:
+    except (OSError, ValueError) as exc:
+        # ValueError cannot fire today (sanitize_hostname collapses control
+        # chars), but a future sanitizer regression should surface as this
+        # error, not an uncaught 500 (#899 defense-in-depth).
         logger.error("Failed to write FOX_HOSTNAME to hermes.env: %s", exc)
         return {"ok": False, "error": "Failed to persist hostname."}
 
-    rc, _out, err_text = _run_tailscale(["set", f"--hostname={sanitized}"], timeout=10.0)
+    rc, _out, err_text = _run_tailscale(
+        ["set", f"--hostname={sanitized}"], timeout=10.0
+    )
 
     # The persist already succeeded — `FOX_HOSTNAME` is in hermes.env. The
     # live `tailscale set` is a best-effort hot-apply: if it fails (daemon
@@ -224,14 +240,20 @@ def apply_hostname(hostname: str) -> dict[str, Any]:
     # actually a successful save.
     if rc != 0:
         if rc == 127:
-            note = ("Saved. Tailscale binary not on PATH from this process; "
-                    "the new name will apply on the next container start.")
+            note = (
+                "Saved. Tailscale binary not on PATH from this process; "
+                "the new name will apply on the next container start."
+            )
         else:
-            note = ("Saved. Live apply skipped — Tailscale daemon may not be "
-                    "running or authenticated yet. The new name will apply "
-                    "on the next start.")
+            note = (
+                "Saved. Live apply skipped — Tailscale daemon may not be "
+                "running or authenticated yet. The new name will apply "
+                "on the next start."
+            )
         if err_text.strip():
-            logger.info("tailscale set --hostname rc=%d stderr=%s", rc, err_text.strip())
+            logger.info(
+                "tailscale set --hostname rc=%d stderr=%s", rc, err_text.strip()
+            )
         return {
             "ok": True,
             "requested_hostname": sanitized,
@@ -307,16 +329,22 @@ def _handle_get(handler, parsed) -> bool:
 
 def _handle_post(handler, parsed) -> bool:
     """POST /api/settings/hostname[/dismiss-prompt] — returns True if handled, False to fall through."""
-    from api.helpers import j, read_body
+    from api.helpers import j
+
+    from fox_overlay.webui_modules._body_shape import require_object_body
 
     if parsed.path == "/api/settings/hostname":
-        body = read_body(handler)
+        body = require_object_body(handler)
+        if body is None:
+            return True
         result = handle_set_hostname(handler, body)
         j(handler, result, status=200 if result.get("ok") else 400)
         return True
 
     if parsed.path == "/api/settings/hostname/dismiss-prompt":
-        body = read_body(handler)
+        body = require_object_body(handler)
+        if body is None:
+            return True
         result = handle_dismiss_hostname_prompt(handler, body)
         j(handler, result, status=200 if result.get("ok") else 400)
         return True
@@ -330,4 +358,3 @@ def _handle_post(handler, parsed) -> bool:
 # Boundary check above rejects /api/settings/hostnameX etc.
 dispatch.register_get("/api/settings/hostname", _handle_get, allow_bare=True)
 dispatch.register_post("/api/settings/hostname", _handle_post, allow_bare=True)
-

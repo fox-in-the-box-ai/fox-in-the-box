@@ -5,6 +5,7 @@ tailscale subprocess / state / serve-config logic is exercised by the
 smoke checklist Section E against a real tailscaled (per migration
 plan §Validation gates).
 """
+
 import importlib
 import sys
 
@@ -22,16 +23,22 @@ def fresh_dispatch_and_module(monkeypatch):
     def _read_body(handler):
         return getattr(handler, "_body", {})
 
+    def _bad(handler, msg, status=400):
+        _j(handler, {"error": msg}, status=status)
+
     fake_helpers.j = _j
     fake_helpers.read_body = _read_body
+    fake_helpers.bad = _bad
     fake_api = type(sys)("api")
     fake_api.helpers = fake_helpers
     monkeypatch.setitem(sys.modules, "api", fake_api)
     monkeypatch.setitem(sys.modules, "api.helpers", fake_helpers)
 
     import fox_overlay.dispatch as d
+
     importlib.reload(d)
     import fox_overlay.webui_modules.tailscale as m
+
     importlib.reload(m)
     yield d, m
     importlib.reload(d)
@@ -46,6 +53,7 @@ class _FakeHandler:
 
 # ── registration ────────────────────────────────────────────────────────────
 
+
 def test_module_registers_get_and_post(fresh_dispatch_and_module):
     d, _m = fresh_dispatch_and_module
     assert "/api/tailscale/" in d.GET_TABLE
@@ -54,19 +62,26 @@ def test_module_registers_get_and_post(fresh_dispatch_and_module):
 
 # ── GET routing ─────────────────────────────────────────────────────────────
 
+
 def test_get_status(fresh_dispatch_and_module, monkeypatch):
     d, m = fresh_dispatch_and_module
-    monkeypatch.setattr(m, "handle_get_status", lambda h: {"installed": True, "running": False})
+    monkeypatch.setattr(
+        m, "handle_get_status", lambda h: {"installed": True, "running": False}
+    )
     from urllib.parse import urlparse
+
     h = _FakeHandler()
     assert d.handle_get(h, urlparse("/api/tailscale/status")) is True
-    assert h.responses == [{"status": 200, "payload": {"installed": True, "running": False}}]
+    assert h.responses == [
+        {"status": 200, "payload": {"installed": True, "running": False}}
+    ]
 
 
 def test_get_up_poll(fresh_dispatch_and_module, monkeypatch):
     d, m = fresh_dispatch_and_module
     monkeypatch.setattr(m, "handle_get_up_poll", lambda h: {"state": "running"})
     from urllib.parse import urlparse
+
     h = _FakeHandler()
     assert d.handle_get(h, urlparse("/api/tailscale/up/poll")) is True
     assert h.responses[-1]["payload"] == {"state": "running"}
@@ -74,8 +89,13 @@ def test_get_up_poll(fresh_dispatch_and_module, monkeypatch):
 
 def test_get_serve(fresh_dispatch_and_module, monkeypatch):
     d, m = fresh_dispatch_and_module
-    monkeypatch.setattr(m, "handle_get_serve", lambda h: {"serving": True, "url": "https://fox.example.ts.net"})
+    monkeypatch.setattr(
+        m,
+        "handle_get_serve",
+        lambda h: {"serving": True, "url": "https://fox.example.ts.net"},
+    )
     from urllib.parse import urlparse
+
     h = _FakeHandler()
     assert d.handle_get(h, urlparse("/api/tailscale/serve")) is True
     assert h.responses[-1]["payload"]["serving"] is True
@@ -84,6 +104,7 @@ def test_get_serve(fresh_dispatch_and_module, monkeypatch):
 def test_get_unknown_subpath_falls_through(fresh_dispatch_and_module):
     d, _m = fresh_dispatch_and_module
     from urllib.parse import urlparse
+
     h = _FakeHandler()
     assert d.handle_get(h, urlparse("/api/tailscale/nonexistent")) is False
     assert h.responses == []
@@ -91,10 +112,14 @@ def test_get_unknown_subpath_falls_through(fresh_dispatch_and_module):
 
 # ── POST routing ────────────────────────────────────────────────────────────
 
+
 def test_post_up_ok_status_200(fresh_dispatch_and_module, monkeypatch):
     d, m = fresh_dispatch_and_module
-    monkeypatch.setattr(m, "handle_post_up", lambda h, body: {"ok": True, "attempt_id": 7})
+    monkeypatch.setattr(
+        m, "handle_post_up", lambda h, body: {"ok": True, "attempt_id": 7}
+    )
     from urllib.parse import urlparse
+
     h = _FakeHandler(body={"hostname": "fox-test"})
     assert d.handle_post(h, urlparse("/api/tailscale/up")) is True
     assert h.responses[-1]["status"] == 200
@@ -102,8 +127,11 @@ def test_post_up_ok_status_200(fresh_dispatch_and_module, monkeypatch):
 
 def test_post_up_failure_status_400(fresh_dispatch_and_module, monkeypatch):
     d, m = fresh_dispatch_and_module
-    monkeypatch.setattr(m, "handle_post_up", lambda h, body: {"ok": False, "error": "invalid hostname"})
+    monkeypatch.setattr(
+        m, "handle_post_up", lambda h, body: {"ok": False, "error": "invalid hostname"}
+    )
     from urllib.parse import urlparse
+
     h = _FakeHandler(body={"hostname": ""})
     assert d.handle_post(h, urlparse("/api/tailscale/up")) is True
     assert h.responses[-1]["status"] == 400
@@ -113,6 +141,7 @@ def test_post_logout(fresh_dispatch_and_module, monkeypatch):
     d, m = fresh_dispatch_and_module
     monkeypatch.setattr(m, "handle_post_logout", lambda h, body: {"ok": True})
     from urllib.parse import urlparse
+
     h = _FakeHandler(body={})
     assert d.handle_post(h, urlparse("/api/tailscale/logout")) is True
     assert h.responses[-1] == {"status": 200, "payload": {"ok": True}}
@@ -120,8 +149,13 @@ def test_post_logout(fresh_dispatch_and_module, monkeypatch):
 
 def test_post_serve_ok(fresh_dispatch_and_module, monkeypatch):
     d, m = fresh_dispatch_and_module
-    monkeypatch.setattr(m, "handle_post_serve", lambda h, body: {"ok": True, "url": "https://fox.example.ts.net"})
+    monkeypatch.setattr(
+        m,
+        "handle_post_serve",
+        lambda h, body: {"ok": True, "url": "https://fox.example.ts.net"},
+    )
     from urllib.parse import urlparse
+
     h = _FakeHandler(body={})
     assert d.handle_post(h, urlparse("/api/tailscale/serve")) is True
     assert h.responses[-1]["status"] == 200
@@ -129,8 +163,13 @@ def test_post_serve_ok(fresh_dispatch_and_module, monkeypatch):
 
 def test_post_serve_failure(fresh_dispatch_and_module, monkeypatch):
     d, m = fresh_dispatch_and_module
-    monkeypatch.setattr(m, "handle_post_serve", lambda h, body: {"ok": False, "error": "tailscale not running"})
+    monkeypatch.setattr(
+        m,
+        "handle_post_serve",
+        lambda h, body: {"ok": False, "error": "tailscale not running"},
+    )
     from urllib.parse import urlparse
+
     h = _FakeHandler(body={})
     assert d.handle_post(h, urlparse("/api/tailscale/serve")) is True
     assert h.responses[-1]["status"] == 400
@@ -139,15 +178,18 @@ def test_post_serve_failure(fresh_dispatch_and_module, monkeypatch):
 def test_post_unknown_subpath_falls_through(fresh_dispatch_and_module):
     d, _m = fresh_dispatch_and_module
     from urllib.parse import urlparse
+
     h = _FakeHandler()
     assert d.handle_post(h, urlparse("/api/tailscale/nonexistent")) is False
 
 
 # ── prefix-boundary safety ──────────────────────────────────────────────────
 
+
 def test_prefix_does_not_match_adjacent_paths(fresh_dispatch_and_module):
     d, _m = fresh_dispatch_and_module
     from urllib.parse import urlparse
+
     h = _FakeHandler()
     assert d.handle_get(h, urlparse("/api/tailscalex/status")) is False
     assert d.handle_get(h, urlparse("/api/tailscale-other/status")) is False
@@ -160,6 +202,7 @@ def test_prefix_does_not_match_adjacent_paths(fresh_dispatch_and_module):
 # rides out those gaps so the client always sees a stable URL until the
 # attempt is genuinely terminal.
 
+
 def test_set_up_state_populates_last_auth_url(fresh_dispatch_and_module):
     _d, m = fresh_dispatch_and_module
     # Establish a current attempt.
@@ -168,13 +211,19 @@ def test_set_up_state_populates_last_auth_url(fresh_dispatch_and_module):
     m._up_state["auth_url"] = ""
     m._up_state["last_auth_url"] = ""
 
-    m._set_up_state(attempt_id=1, state="awaiting-auth", auth_url="https://login.tailscale.com/abc123")
+    m._set_up_state(
+        attempt_id=1,
+        state="awaiting-auth",
+        auth_url="https://login.tailscale.com/abc123",
+    )
 
     assert m._up_state["auth_url"] == "https://login.tailscale.com/abc123"
     assert m._up_state["last_auth_url"] == "https://login.tailscale.com/abc123"
 
 
-def test_set_up_state_does_not_overwrite_last_auth_url_with_empty(fresh_dispatch_and_module):
+def test_set_up_state_does_not_overwrite_last_auth_url_with_empty(
+    fresh_dispatch_and_module,
+):
     """A stale or transient daemon update that sets auth_url='' must NOT
     clear the sticky last_auth_url — that's exactly the race we're fixing."""
     _d, m = fresh_dispatch_and_module
@@ -191,7 +240,9 @@ def test_set_up_state_does_not_overwrite_last_auth_url_with_empty(fresh_dispatch
     assert m._up_state["last_auth_url"] == "https://login.tailscale.com/abc123"
 
 
-def test_get_up_progress_returns_last_auth_url_when_current_is_empty(fresh_dispatch_and_module, monkeypatch):
+def test_get_up_progress_returns_last_auth_url_when_current_is_empty(
+    fresh_dispatch_and_module, monkeypatch
+):
     """The whole point: poll responses must keep delivering the URL even
     when auth_url has been transiently blanked."""
     _d, m = fresh_dispatch_and_module
@@ -207,14 +258,18 @@ def test_get_up_progress_returns_last_auth_url_when_current_is_empty(fresh_dispa
     assert resp["cleared"] is False  # not terminal, link should be kept rendered
 
 
-def test_get_up_progress_clears_auth_url_on_running_state(fresh_dispatch_and_module, monkeypatch):
+def test_get_up_progress_clears_auth_url_on_running_state(
+    fresh_dispatch_and_module, monkeypatch
+):
     """Once the attempt succeeds (state=running), the link should disappear
     from the poll response — its job is over and showing it would confuse."""
     _d, m = fresh_dispatch_and_module
     monkeypatch.setattr(m, "get_status", lambda: {"backend_state": "Running"})
     m._up_state["state"] = "running"
     m._up_state["auth_url"] = ""
-    m._up_state["last_auth_url"] = "https://login.tailscale.com/abc123"  # leftover from awaiting-auth
+    m._up_state["last_auth_url"] = (
+        "https://login.tailscale.com/abc123"  # leftover from awaiting-auth
+    )
     m._up_state["attempt_id"] = 1
 
     resp = m.get_up_progress()
@@ -222,7 +277,9 @@ def test_get_up_progress_clears_auth_url_on_running_state(fresh_dispatch_and_mod
     assert resp["cleared"] is True
 
 
-def test_get_up_progress_clears_auth_url_on_failed_state(fresh_dispatch_and_module, monkeypatch):
+def test_get_up_progress_clears_auth_url_on_failed_state(
+    fresh_dispatch_and_module, monkeypatch
+):
     """Same for failed — link is no longer actionable, error is what the user needs."""
     _d, m = fresh_dispatch_and_module
     monkeypatch.setattr(m, "get_status", lambda: {"backend_state": "NoState"})
@@ -238,7 +295,9 @@ def test_get_up_progress_clears_auth_url_on_failed_state(fresh_dispatch_and_modu
     assert resp["error"] == "auth timed out"
 
 
-def test_get_up_progress_preserves_auth_url_through_state_promotion(fresh_dispatch_and_module, monkeypatch):
+def test_get_up_progress_preserves_auth_url_through_state_promotion(
+    fresh_dispatch_and_module, monkeypatch
+):
     """When get_up_progress promotes awaiting-auth → running mid-poll (via
     the get_status BackendState check), the auth_url field in the response
     should clear cleanly. Important because that's the natural success
@@ -259,7 +318,9 @@ def test_get_up_progress_preserves_auth_url_through_state_promotion(fresh_dispat
     assert resp["cleared"] is True
 
 
-def test_get_up_progress_includes_cleared_field_for_all_responses(fresh_dispatch_and_module, monkeypatch):
+def test_get_up_progress_includes_cleared_field_for_all_responses(
+    fresh_dispatch_and_module, monkeypatch
+):
     """Defensive: every response shape must include the `cleared` field so
     clients can rely on its presence without conditional checks."""
     _d, m = fresh_dispatch_and_module

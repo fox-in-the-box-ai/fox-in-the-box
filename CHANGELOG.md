@@ -9,6 +9,19 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.7.70] — 2026-09-24
+
+### Security
+
+- Onboarding no longer writes the OpenRouter API key to `hermes.env` when it contains embedded control characters (an env-injection vector), and `hermes.env` is now created `0600` (owner-only) via an atomic write, closing a window in which the secret was briefly world-readable. (#899)
+- The custom-provider connectivity test (`POST /api/settings/custom-providers/test`) now refuses to probe private, loopback, link-local, cloud-metadata (169.254.169.254), CGNAT, and other non-public addresses, and follows no redirects — closing a server-side request forgery (SSRF) vector. Storing a provider with a LAN base URL is still allowed; only the outbound connectivity probe is guarded. (#900)
+
+### Fixed
+
+- WebUI POST endpoints now return a clean `400` for a JSON body that is not an object (an array, string, number, or null), instead of a `500` with a traceback. (#901)
+- The local-model fallback feature is wired to the current `models_download` module again; its enable, status, and auto-start paths had been silently broken by a stale import after that module moved. (#902)
+- A non-numeric `MODEL_SIZE_PHI4MINI` override no longer prevents the WebUI from starting; the bad value now fails loud with a clear message and the affected routes degrade, instead of bricking the whole UI at boot. (#910)
+
 ## [0.7.69] — 2026-09-24
 
 ### Fixed

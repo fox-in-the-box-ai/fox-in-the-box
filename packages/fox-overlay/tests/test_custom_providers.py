@@ -1,4 +1,5 @@
 """Tests for fox_overlay.webui_modules.custom_providers — /api/settings/custom-providers (#144)."""
+
 from __future__ import annotations
 
 import json
@@ -22,14 +23,19 @@ def _stub_upstream():
         handler.end_headers()
         handler._body = body
 
+    def _bad(handler, msg, status=400):
+        _j(handler, {"error": msg}, status=status)
+
     def _read_body(handler):
         return handler._request_body
 
     helpers.j = _j
+    helpers.bad = _bad
     helpers.read_body = _read_body
     api.helpers = helpers
 
     import threading
+
     config._cfg_lock = threading.Lock()
     config._config_store = {"custom_providers": []}
 
@@ -38,14 +44,17 @@ def _stub_upstream():
 
     def _load_yaml_config_file(path):
         import copy
+
         return copy.deepcopy(config._config_store)
 
     def _save_yaml_config_file(path, cfg):
         import copy
+
         config._config_store = copy.deepcopy(cfg)
 
     def get_config():
         import copy
+
         return copy.deepcopy(config._config_store)
 
     config._get_config_path = _get_config_path
@@ -65,6 +74,7 @@ def _stub_upstream():
 def _upstream():
     _stub_upstream()
     from fox_overlay import dispatch
+
     dispatch._GET_TABLE.clear()
     dispatch._POST_TABLE.clear()
     dispatch._BootstrapState.frozen = False
@@ -78,9 +88,11 @@ def _upstream():
 def _load_module():
     sys.modules.pop("fox_overlay.webui_modules.custom_providers", None)
     import fox_overlay.webui_modules as _pkg
+
     if hasattr(_pkg, "custom_providers"):
         delattr(_pkg, "custom_providers")
     from fox_overlay.webui_modules import custom_providers
+
     return custom_providers
 
 
@@ -108,11 +120,13 @@ class TestRegistration:
     def test_registers_get_handler(self):
         _load_module()
         from fox_overlay.dispatch import GET_TABLE
+
         assert "/api/settings/custom-providers" in GET_TABLE
 
     def test_registers_post_handler(self):
         _load_module()
         from fox_overlay.dispatch import POST_TABLE
+
         assert "/api/settings/custom-providers" in POST_TABLE
 
 
@@ -124,10 +138,21 @@ class TestGetProviders:
         assert result["providers"] == []
 
     def test_returns_providers_with_masked_keys(self):
-        _set_providers([
-            {"name": "Local LLM", "base_url": "http://localhost:8080/v1", "api_key": "sk-secret-123", "models": ["llama3"]},
-            {"name": "No Key", "base_url": "http://example.com/v1", "models": ["gpt4"]},
-        ])
+        _set_providers(
+            [
+                {
+                    "name": "Local LLM",
+                    "base_url": "http://localhost:8080/v1",
+                    "api_key": "sk-secret-123",
+                    "models": ["llama3"],
+                },
+                {
+                    "name": "No Key",
+                    "base_url": "http://example.com/v1",
+                    "models": ["gpt4"],
+                },
+            ]
+        )
         mod = _load_module()
         result = mod.get_providers_list()
         assert result["ok"] is True
@@ -140,7 +165,9 @@ class TestGetProviders:
         _set_providers([{"name": "Test", "base_url": "http://x/v1", "models": ["m1"]}])
         mod = _load_module()
         handler = _make_handler()
-        assert mod._handle_get(handler, _parsed("/api/settings/custom-providers")) is True
+        assert (
+            mod._handle_get(handler, _parsed("/api/settings/custom-providers")) is True
+        )
         body = json.loads(handler._body)
         assert body["ok"] is True
         assert len(body["providers"]) == 1
@@ -148,17 +175,22 @@ class TestGetProviders:
     def test_get_declines_wrong_path(self):
         mod = _load_module()
         handler = _make_handler()
-        assert mod._handle_get(handler, _parsed("/api/settings/custom-providersX")) is False
+        assert (
+            mod._handle_get(handler, _parsed("/api/settings/custom-providersX"))
+            is False
+        )
 
 
 class TestUpsertProvider:
     def test_add_valid_provider(self):
         mod = _load_module()
-        result = mod.upsert_provider({
-            "name": "My LLM",
-            "base_url": "http://192.168.1.10:8080/v1",
-            "models": ["llama3", "phi4"],
-        })
+        result = mod.upsert_provider(
+            {
+                "name": "My LLM",
+                "base_url": "http://192.168.1.10:8080/v1",
+                "models": ["llama3", "phi4"],
+            }
+        )
         assert result["ok"] is True
         stored = sys.modules["api.config"]._config_store["custom_providers"]
         assert len(stored) == 1
@@ -169,26 +201,36 @@ class TestUpsertProvider:
 
     def test_add_with_api_key(self):
         mod = _load_module()
-        result = mod.upsert_provider({
-            "name": "Keyed",
-            "base_url": "https://api.example.com/v1",
-            "api_key": "sk-test-key-123",
-            "models": ["model1"],
-        })
+        result = mod.upsert_provider(
+            {
+                "name": "Keyed",
+                "base_url": "https://api.example.com/v1",
+                "api_key": "sk-test-key-123",
+                "models": ["model1"],
+            }
+        )
         assert result["ok"] is True
         stored = sys.modules["api.config"]._config_store["custom_providers"]
         assert stored[0]["api_key"] == "sk-test-key-123"
 
     def test_update_existing_provider(self):
-        _set_providers([
-            {"name": "My LLM", "base_url": "http://old/v1", "models": ["old-model"]},
-        ])
+        _set_providers(
+            [
+                {
+                    "name": "My LLM",
+                    "base_url": "http://old/v1",
+                    "models": ["old-model"],
+                },
+            ]
+        )
         mod = _load_module()
-        result = mod.upsert_provider({
-            "name": "My LLM",
-            "base_url": "http://new/v1",
-            "models": ["new-model"],
-        })
+        result = mod.upsert_provider(
+            {
+                "name": "My LLM",
+                "base_url": "http://new/v1",
+                "models": ["new-model"],
+            }
+        )
         assert result["ok"] is True
         stored = sys.modules["api.config"]._config_store["custom_providers"]
         assert len(stored) == 1
@@ -196,54 +238,75 @@ class TestUpsertProvider:
         assert stored[0]["models"] == ["new-model"]
 
     def test_update_preserves_key_when_masked(self):
-        _set_providers([
-            {"name": "Keyed", "base_url": "http://x/v1", "api_key": "real-secret", "models": ["m1"]},
-        ])
+        _set_providers(
+            [
+                {
+                    "name": "Keyed",
+                    "base_url": "http://x/v1",
+                    "api_key": "real-secret",
+                    "models": ["m1"],
+                },
+            ]
+        )
         mod = _load_module()
-        result = mod.upsert_provider({
-            "name": "Keyed",
-            "base_url": "http://x/v1",
-            "api_key": "****",
-            "models": ["m1", "m2"],
-        })
+        result = mod.upsert_provider(
+            {
+                "name": "Keyed",
+                "base_url": "http://x/v1",
+                "api_key": "****",
+                "models": ["m1", "m2"],
+            }
+        )
         assert result["ok"] is True
         stored = sys.modules["api.config"]._config_store["custom_providers"]
         assert stored[0]["api_key"] == "real-secret"
 
     def test_rejects_empty_name(self):
         mod = _load_module()
-        result = mod.upsert_provider({"name": "", "base_url": "http://x/v1", "models": ["m"]})
+        result = mod.upsert_provider(
+            {"name": "", "base_url": "http://x/v1", "models": ["m"]}
+        )
         assert result["ok"] is False
         assert "required" in result["error"].lower()
 
     def test_rejects_invalid_url_scheme(self):
         mod = _load_module()
-        result = mod.upsert_provider({"name": "Bad", "base_url": "ftp://evil/v1", "models": ["m"]})
+        result = mod.upsert_provider(
+            {"name": "Bad", "base_url": "ftp://evil/v1", "models": ["m"]}
+        )
         assert result["ok"] is False
         assert "http" in result["error"].lower()
 
     def test_rejects_name_too_long(self):
         mod = _load_module()
-        result = mod.upsert_provider({"name": "x" * 65, "base_url": "http://x/v1", "models": ["m"]})
+        result = mod.upsert_provider(
+            {"name": "x" * 65, "base_url": "http://x/v1", "models": ["m"]}
+        )
         assert result["ok"] is False
         assert "64" in result["error"]
 
     def test_rejects_empty_models(self):
         mod = _load_module()
-        result = mod.upsert_provider({"name": "Bad", "base_url": "http://x/v1", "models": []})
+        result = mod.upsert_provider(
+            {"name": "Bad", "base_url": "http://x/v1", "models": []}
+        )
         assert result["ok"] is False
         assert "model" in result["error"].lower()
 
     def test_strips_trailing_slash_from_url(self):
         mod = _load_module()
-        mod.upsert_provider({"name": "T", "base_url": "http://x:8080/v1/", "models": ["m"]})
+        mod.upsert_provider(
+            {"name": "T", "base_url": "http://x:8080/v1/", "models": ["m"]}
+        )
         stored = sys.modules["api.config"]._config_store["custom_providers"]
         assert stored[0]["base_url"] == "http://x:8080/v1"
 
     def test_case_insensitive_name_matching(self):
         _set_providers([{"name": "My LLM", "base_url": "http://x/v1", "models": ["m"]}])
         mod = _load_module()
-        mod.upsert_provider({"name": "my llm", "base_url": "http://y/v1", "models": ["n"]})
+        mod.upsert_provider(
+            {"name": "my llm", "base_url": "http://y/v1", "models": ["n"]}
+        )
         stored = sys.modules["api.config"]._config_store["custom_providers"]
         assert len(stored) == 1
         assert stored[0]["base_url"] == "http://y/v1"
@@ -251,10 +314,12 @@ class TestUpsertProvider:
 
 class TestDeleteProvider:
     def test_delete_existing(self):
-        _set_providers([
-            {"name": "Keep", "base_url": "http://a/v1", "models": ["m"]},
-            {"name": "Remove", "base_url": "http://b/v1", "models": ["m"]},
-        ])
+        _set_providers(
+            [
+                {"name": "Keep", "base_url": "http://a/v1", "models": ["m"]},
+                {"name": "Remove", "base_url": "http://b/v1", "models": ["m"]},
+            ]
+        )
         mod = _load_module()
         result = mod.delete_provider({"name": "Remove"})
         assert result["ok"] is True
@@ -272,9 +337,29 @@ class TestDeleteProvider:
         _set_providers([{"name": "X", "base_url": "http://x/v1", "models": ["m"]}])
         mod = _load_module()
         handler = _make_handler({"name": "X"})
-        assert mod._handle_post(handler, _parsed("/api/settings/custom-providers/delete")) is True
+        assert (
+            mod._handle_post(handler, _parsed("/api/settings/custom-providers/delete"))
+            is True
+        )
         body = json.loads(handler._body)
         assert body["ok"] is True
+
+
+# A public (example.com) getaddrinfo tuple, so the #900 SSRF guard allows the
+# probe to proceed to the mocked opener.
+_PUBLIC_ADDRINFO = [(2, 1, 6, "", ("93.184.216.34", 0))]
+
+
+def _patch_public_dns(mod):
+    return mock.patch.object(mod.socket, "getaddrinfo", return_value=_PUBLIC_ADDRINFO)
+
+
+def _mock_opener_response(payload):
+    mock_resp = mock.MagicMock()
+    mock_resp.read.return_value = json.dumps(payload).encode()
+    mock_resp.__enter__ = mock.Mock(return_value=mock_resp)
+    mock_resp.__exit__ = mock.Mock(return_value=False)
+    return mock_resp
 
 
 class TestTestProvider:
@@ -285,44 +370,232 @@ class TestTestProvider:
 
     def test_successful_probe(self):
         mod = _load_module()
-        response_data = json.dumps({"data": [{"id": "m1"}, {"id": "m2"}]}).encode()
-        mock_resp = mock.MagicMock()
-        mock_resp.read.return_value = response_data
-        mock_resp.__enter__ = mock.Mock(return_value=mock_resp)
-        mock_resp.__exit__ = mock.Mock(return_value=False)
-        with mock.patch.object(mod.urllib.request, "urlopen", return_value=mock_resp):
-            result = mod.test_provider({"base_url": "http://localhost:8080/v1"})
+        mock_resp = _mock_opener_response({"data": [{"id": "m1"}, {"id": "m2"}]})
+        with (
+            _patch_public_dns(mod),
+            mock.patch.object(mod._PROBE_OPENER, "open", return_value=mock_resp),
+        ):
+            result = mod.test_provider({"base_url": "http://api.example.com/v1"})
         assert result["ok"] is True
         assert result["models_found"] == 2
 
     def test_connection_refused(self):
         mod = _load_module()
         import urllib.error
-        with mock.patch.object(mod.urllib.request, "urlopen", side_effect=urllib.error.URLError("Connection refused")):
-            result = mod.test_provider({"base_url": "http://localhost:9999/v1"})
+
+        with (
+            _patch_public_dns(mod),
+            mock.patch.object(
+                mod._PROBE_OPENER,
+                "open",
+                side_effect=urllib.error.URLError("Connection refused"),
+            ),
+        ):
+            result = mod.test_provider({"base_url": "http://api.example.com/v1"})
         assert result["ok"] is False
-        assert "connection" in result["error"].lower()
+        assert result["error"] == "Could not reach the provider endpoint."
 
     def test_auth_error(self):
         mod = _load_module()
         import urllib.error
-        with mock.patch.object(mod.urllib.request, "urlopen", side_effect=urllib.error.HTTPError(
-            "http://x/models", 401, "Unauthorized", {}, None
-        )):
-            result = mod.test_provider({"base_url": "http://x/v1"})
+
+        with (
+            _patch_public_dns(mod),
+            mock.patch.object(
+                mod._PROBE_OPENER,
+                "open",
+                side_effect=urllib.error.HTTPError(
+                    "http://x/models", 401, "Unauthorized", {}, None
+                ),
+            ),
+        ):
+            result = mod.test_provider({"base_url": "http://api.example.com/v1"})
         assert result["ok"] is False
         assert "auth" in result["error"].lower()
 
+    def test_error_surface_does_not_leak_status(self):
+        """#900: a non-auth HTTP status must not be reflected to the caller."""
+        mod = _load_module()
+        import urllib.error
+
+        with (
+            _patch_public_dns(mod),
+            mock.patch.object(
+                mod._PROBE_OPENER,
+                "open",
+                side_effect=urllib.error.HTTPError(
+                    "http://x/models", 404, "Not Found", {}, None
+                ),
+            ),
+        ):
+            result = mod.test_provider({"base_url": "http://api.example.com/v1"})
+        assert result["ok"] is False
+        assert "404" not in result["error"]
+        assert "Not Found" not in result["error"]
+
+    def test_allows_public_host(self):
+        mod = _load_module()
+        mock_resp = _mock_opener_response({"data": [{"id": "m1"}]})
+        with (
+            _patch_public_dns(mod),
+            mock.patch.object(mod._PROBE_OPENER, "open", return_value=mock_resp),
+        ):
+            result = mod.test_provider({"base_url": "http://api.example.com/v1"})
+        assert result["ok"] is True
+        assert result["models_found"] == 1
+
+    # ── SSRF guard: private/loopback/link-local/metadata denied ──────────────
+
+    def _assert_blocked_never_fetches(self, mod, base_url):
+        """The guard must reject before any socket opens: patch the opener to
+        fail the test if it is ever called."""
+
+        def _boom(*a, **kw):
+            raise AssertionError("opener must not be called for a blocked target")
+
+        with mock.patch.object(mod._PROBE_OPENER, "open", side_effect=_boom):
+            result = mod.test_provider({"base_url": base_url})
+        assert result["ok"] is False
+        assert result["error"] == mod._NONPUBLIC_MSG
+
+    def test_rejects_loopback(self):
+        mod = _load_module()
+        self._assert_blocked_never_fetches(mod, "http://127.0.0.1:8787/v1")
+
+    def test_rejects_loopback_ipv6(self):
+        mod = _load_module()
+        self._assert_blocked_never_fetches(mod, "http://[::1]/v1")
+
+    def test_rejects_private_rfc1918(self):
+        mod = _load_module()
+        self._assert_blocked_never_fetches(mod, "http://10.0.0.5/v1")
+        self._assert_blocked_never_fetches(mod, "http://192.168.1.1/v1")
+
+    def test_rejects_link_local_metadata(self):
+        mod = _load_module()
+        self._assert_blocked_never_fetches(mod, "http://169.254.169.254/v1")
+
+    def test_rejects_cgnat(self):
+        mod = _load_module()
+        self._assert_blocked_never_fetches(mod, "http://100.64.0.1/v1")
+
+    def test_rejects_unspecified(self):
+        mod = _load_module()
+        self._assert_blocked_never_fetches(mod, "http://0.0.0.0/v1")
+
+    def _assert_blocked_via_dns(self, mod, ip, family):
+        """Patch getaddrinfo to resolve to `ip` and assert the guard blocks it
+        without opening a socket. Locks the ipv4_mapped-unwrap branch and the
+        is_global backstop deterministically (independent of literal-IP
+        classification, which varies across Python versions)."""
+        # The guard reads only sockaddr[0]; shape differs by family.
+        sockaddr = (ip, 0, 0, 0) if family == mod.socket.AF_INET6 else (ip, 0)
+        with mock.patch.object(
+            mod.socket,
+            "getaddrinfo",
+            return_value=[(family, mod.socket.SOCK_STREAM, 6, "", sockaddr)],
+        ):
+
+            def _boom(*a, **kw):
+                raise AssertionError("opener must not be called for a blocked target")
+
+            with mock.patch.object(mod._PROBE_OPENER, "open", side_effect=_boom):
+                result = mod.test_provider({"base_url": "http://probe.example.com/v1"})
+        assert result["ok"] is False
+        assert result["error"] == mod._NONPUBLIC_MSG
+
+    def test_rejects_ipv6_ula(self):
+        mod = _load_module()
+        self._assert_blocked_via_dns(mod, "fd00::1", mod.socket.AF_INET6)
+
+    def test_rejects_ipv6_link_local(self):
+        mod = _load_module()
+        self._assert_blocked_via_dns(mod, "fe80::1", mod.socket.AF_INET6)
+
+    def test_rejects_ipv4_mapped_private(self):
+        mod = _load_module()
+        self._assert_blocked_via_dns(mod, "::ffff:10.0.0.5", mod.socket.AF_INET6)
+
+    def test_rejects_ipv4_mapped_metadata(self):
+        mod = _load_module()
+        self._assert_blocked_via_dns(mod, "::ffff:169.254.169.254", mod.socket.AF_INET6)
+
+    def test_rejects_multicast_v4(self):
+        mod = _load_module()
+        self._assert_blocked_via_dns(mod, "224.0.0.1", mod.socket.AF_INET)
+
+    def test_rejects_multicast_v6(self):
+        mod = _load_module()
+        self._assert_blocked_via_dns(mod, "ff02::1", mod.socket.AF_INET6)
+
+    def test_rejects_reserved(self):
+        mod = _load_module()
+        self._assert_blocked_via_dns(mod, "240.0.0.1", mod.socket.AF_INET)
+
+    def test_rejects_rebind_hostname(self):
+        """A public-looking hostname that resolves to a private address is
+        rejected (DNS-rebind style)."""
+        mod = _load_module()
+        with mock.patch.object(
+            mod.socket,
+            "getaddrinfo",
+            return_value=[(2, 1, 6, "", ("10.0.0.5", 0))],
+        ):
+
+            def _boom(*a, **kw):
+                raise AssertionError("opener must not be called for a blocked target")
+
+            with mock.patch.object(mod._PROBE_OPENER, "open", side_effect=_boom):
+                result = mod.test_provider({"base_url": "http://evil.example.com/v1"})
+        assert result["ok"] is False
+        assert result["error"] == mod._NONPUBLIC_MSG
+
+    def test_rejects_mixed_public_and_private(self):
+        """Deny if ANY resolved address is non-public."""
+        mod = _load_module()
+        with mock.patch.object(
+            mod.socket,
+            "getaddrinfo",
+            return_value=[
+                (2, 1, 6, "", ("93.184.216.34", 0)),
+                (2, 1, 6, "", ("127.0.0.1", 0)),
+            ],
+        ):
+
+            def _boom(*a, **kw):
+                raise AssertionError("opener must not be called for a blocked target")
+
+            with mock.patch.object(mod._PROBE_OPENER, "open", side_effect=_boom):
+                result = mod.test_provider({"base_url": "http://mixed.example.com/v1"})
+        assert result["ok"] is False
+        assert result["error"] == mod._NONPUBLIC_MSG
+
+    def test_upsert_still_accepts_private_url(self):
+        """Regression: the guard is fetch-only — storing a LAN provider works."""
+        mod = _load_module()
+        result = mod.upsert_provider(
+            {
+                "name": "LAN",
+                "base_url": "http://192.168.1.10:8080/v1",
+                "models": ["llama3"],
+            }
+        )
+        assert result["ok"] is True
+
     def test_handler_dispatches(self):
         mod = _load_module()
-        response_data = json.dumps({"data": []}).encode()
-        mock_resp = mock.MagicMock()
-        mock_resp.read.return_value = response_data
-        mock_resp.__enter__ = mock.Mock(return_value=mock_resp)
-        mock_resp.__exit__ = mock.Mock(return_value=False)
-        handler = _make_handler({"base_url": "http://localhost:8080/v1"})
-        with mock.patch.object(mod.urllib.request, "urlopen", return_value=mock_resp):
-            assert mod._handle_post(handler, _parsed("/api/settings/custom-providers/test")) is True
+        mock_resp = _mock_opener_response({"data": []})
+        handler = _make_handler({"base_url": "http://api.example.com/v1"})
+        with (
+            _patch_public_dns(mod),
+            mock.patch.object(mod._PROBE_OPENER, "open", return_value=mock_resp),
+        ):
+            assert (
+                mod._handle_post(
+                    handler, _parsed("/api/settings/custom-providers/test")
+                )
+                is True
+            )
         body = json.loads(handler._body)
         assert body["ok"] is True
 
@@ -331,17 +604,37 @@ class TestDispatchBoundary:
     def test_post_declines_wrong_path(self):
         mod = _load_module()
         handler = _make_handler()
-        assert mod._handle_post(handler, _parsed("/api/settings/custom-providersX")) is False
+        assert (
+            mod._handle_post(handler, _parsed("/api/settings/custom-providersX"))
+            is False
+        )
 
     def test_post_handles_upsert(self):
         mod = _load_module()
-        handler = _make_handler({"name": "X", "base_url": "http://x/v1", "models": ["m"]})
-        assert mod._handle_post(handler, _parsed("/api/settings/custom-providers")) is True
+        handler = _make_handler(
+            {"name": "X", "base_url": "http://x/v1", "models": ["m"]}
+        )
+        assert (
+            mod._handle_post(handler, _parsed("/api/settings/custom-providers")) is True
+        )
         body = json.loads(handler._body)
         assert body["ok"] is True
 
     def test_post_returns_400_on_validation_error(self):
         mod = _load_module()
-        handler = _make_handler({"name": "", "base_url": "http://x/v1", "models": ["m"]})
-        assert mod._handle_post(handler, _parsed("/api/settings/custom-providers")) is True
+        handler = _make_handler(
+            {"name": "", "base_url": "http://x/v1", "models": ["m"]}
+        )
+        assert (
+            mod._handle_post(handler, _parsed("/api/settings/custom-providers")) is True
+        )
+        assert handler._status == 400
+
+    def test_post_non_object_body_returns_400(self):
+        """#901: a list body yields a clean 400, not an AttributeError → 500."""
+        mod = _load_module()
+        handler = _make_handler([1, 2, 3])
+        assert (
+            mod._handle_post(handler, _parsed("/api/settings/custom-providers")) is True
+        )
         assert handler._status == 400

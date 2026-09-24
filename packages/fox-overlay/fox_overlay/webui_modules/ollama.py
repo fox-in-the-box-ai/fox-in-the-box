@@ -54,13 +54,17 @@ _PROBE_HOSTS_DEFAULT = (
     "http://localhost:11434",
 )
 _PROBE_TIMEOUT_SEC = 1.0
-_CACHE_TTL_SEC = 10.0  # keep Settings-page loads snappy without hiding state changes too long
+_CACHE_TTL_SEC = (
+    10.0  # keep Settings-page loads snappy without hiding state changes too long
+)
 
 # FITB#109: minimal validator for the custom Ollama URL. Reject malformed
 # values at save time AND at probe time (defense in depth). Allows
 # http(s)://host[:port][/path]; rejects leading dashes (would be parsed
 # as flags by some downstream subprocess invocations) and control chars.
-_OLLAMA_URL_RE = re.compile(r"^https?://[a-zA-Z0-9.\-_:/]+(?:/[a-zA-Z0-9.\-_:/?&=%~]*)?$")
+_OLLAMA_URL_RE = re.compile(
+    r"^https?://[a-zA-Z0-9.\-_:/]+(?:/[a-zA-Z0-9.\-_:/?&=%~]*)?$"
+)
 _OLLAMA_URL_MAX_LEN = 512
 
 
@@ -88,6 +92,7 @@ def validate_custom_ollama_url(value: Any) -> tuple[bool, str]:
         return False, "ollama_custom_url must be http(s)://host[:port]"
     return True, s.rstrip("/")
 
+
 # Module-level cache for the detection probe. We expect a few calls per
 # Settings render; caching avoids waiting on two TCP connect timeouts each
 # time. Cleared via `clear_cache()` for tests / explicit refresh.
@@ -104,8 +109,12 @@ def clear_cache() -> None:
         _cache_at = 0.0
 
 
-def _http_json(url: str, method: str = "GET", body: dict | None = None,
-               timeout: float = _PROBE_TIMEOUT_SEC) -> dict | None:
+def _http_json(
+    url: str,
+    method: str = "GET",
+    body: dict | None = None,
+    timeout: float = _PROBE_TIMEOUT_SEC,
+) -> dict | None:
     """Minimal urllib JSON client. Returns parsed JSON or None on any
     failure. Stays inside stdlib — Hermes WebUI is intentionally
     framework-free."""
@@ -121,7 +130,12 @@ def _http_json(url: str, method: str = "GET", body: dict | None = None,
         if not raw:
             return {}
         return json.loads(raw)
-    except (urllib.error.URLError, urllib.error.HTTPError, OSError, json.JSONDecodeError):
+    except (
+        urllib.error.URLError,
+        urllib.error.HTTPError,
+        OSError,
+        json.JSONDecodeError,
+    ):
         return None
 
 
@@ -136,6 +150,7 @@ def _probe_hosts() -> tuple[str, ...]:
     """
     try:
         from api.config import load_settings
+
         raw = (load_settings() or {}).get("ollama_custom_url", "")
     except Exception:
         raw = ""
@@ -193,7 +208,10 @@ def get_models() -> dict[str, Any]:
     raw = _http_json(f"{base}/api/tags", timeout=3.0)
     if raw is None or not isinstance(raw, dict):
         return {
-            "running": False, "host": base, "models": [], "total_size_bytes": 0,
+            "running": False,
+            "host": base,
+            "models": [],
+            "total_size_bytes": 0,
             "error": "Ollama responded but /api/tags failed",
         }
     models = []
@@ -205,14 +223,16 @@ def get_models() -> dict[str, Any]:
         size = entry.get("size") or 0
         if isinstance(size, (int, float)):
             total += int(size)
-        models.append({
-            "name": entry.get("name") or entry.get("model") or "",
-            "size_bytes": size,
-            "parameter_size": details.get("parameter_size") or "",
-            "quantization": details.get("quantization_level") or "",
-            "family": details.get("family") or "",
-            "modified_at": entry.get("modified_at") or "",
-        })
+        models.append(
+            {
+                "name": entry.get("name") or entry.get("model") or "",
+                "size_bytes": size,
+                "parameter_size": details.get("parameter_size") or "",
+                "quantization": details.get("quantization_level") or "",
+                "family": details.get("family") or "",
+                "modified_at": entry.get("modified_at") or "",
+            }
+        )
     return {
         "running": True,
         "host": base,
@@ -233,7 +253,10 @@ def _validate_model_name(raw: Any) -> tuple[str, str | None]:
     if len(name) > _MODEL_NAME_MAX:
         return "", f"model name longer than {_MODEL_NAME_MAX} characters"
     if not _MODEL_NAME_RE.match(name):
-        return "", "model name has invalid characters (allowed: letters, digits, . : / _ -)"
+        return (
+            "",
+            "model name has invalid characters (allowed: letters, digits, . : / _ -)",
+        )
     return name, None
 
 
@@ -383,7 +406,10 @@ def delete_model(name_raw: Any) -> dict[str, Any]:
 
     p = _cached_probe()
     if not p.get("up"):
-        return {"ok": False, "error": "Local Ollama daemon not detected. Is it running?"}
+        return {
+            "ok": False,
+            "error": "Local Ollama daemon not detected. Is it running?",
+        }
 
     freed = _model_size_bytes(name)
 
@@ -430,7 +456,10 @@ def use_model(model_name: str) -> dict[str, Any]:
 
     p = _cached_probe()
     if not p.get("up"):
-        return {"ok": False, "error": "Local Ollama daemon not detected. Is it running?"}
+        return {
+            "ok": False,
+            "error": "Local Ollama daemon not detected. Is it running?",
+        }
 
     base_url = f"{p['host']}/v1"
 
@@ -557,9 +586,13 @@ def _handle_get(handler, parsed) -> bool:
 
 def _handle_post(handler, parsed) -> bool:
     """POST /api/ollama/* — returns True if handled, False to fall through."""
-    from api.helpers import j, read_body
+    from api.helpers import j
 
-    body = read_body(handler)
+    from fox_overlay.webui_modules._body_shape import require_object_body
+
+    body = require_object_body(handler)
+    if body is None:
+        return True
 
     if parsed.path == "/api/ollama/refresh":
         j(handler, handle_post_refresh(handler))
@@ -586,4 +619,3 @@ def _handle_post(handler, parsed) -> bool:
 
 dispatch.register_get("/api/ollama/", _handle_get)
 dispatch.register_post("/api/ollama/", _handle_post)
-
