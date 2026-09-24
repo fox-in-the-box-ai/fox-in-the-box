@@ -89,7 +89,12 @@ HERMES_ENV="$DATA_DIR/config/hermes.env"
 if [ -f "$HERMES_ENV" ]; then
     set -a
     # shellcheck source=/dev/null
-    source "$HERMES_ENV"
+    # Best-effort: hermes.env is user-writable. preflight runs as systemd
+    # ExecStartPre= under set -e, so a malformed line here would abort preflight
+    # and systemd would never reach ExecStart= — bricking desktop boot. Guard it
+    # the same way as the container entrypoint; a missing key surfaces downstream
+    # as "no provider configured", not as a failed start.
+    source "$HERMES_ENV" || _warn "hermes.env failed to source (malformed) — continuing without it"
     set +a
 fi
 
