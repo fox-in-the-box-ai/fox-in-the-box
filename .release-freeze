@@ -1,1 +1,0 @@
-v0.7.67 release in progress. Do not merge bump(upstream): PRs (they auto-advance the container :stable tag) until the v0.7.67 tag is pushed and this marker is removed by the freeze-lift PR.
