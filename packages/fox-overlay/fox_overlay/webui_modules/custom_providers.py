@@ -10,6 +10,7 @@ Routes:
     POST /api/settings/custom-providers/test  → probe base_url/models
     POST /api/settings/custom-providers/delete → remove by name
 """
+
 from __future__ import annotations
 
 import json
@@ -69,6 +70,7 @@ def _validate_models(models: Any) -> tuple[bool, list[str] | str]:
 
 def _read_custom_providers() -> list[dict]:
     from api.config import get_config
+
     cfg = get_config()
     if not isinstance(cfg, dict):
         return []
@@ -86,6 +88,7 @@ def _modify_custom_providers(mutator) -> None:
         _load_yaml_config_file,
         _save_yaml_config_file,
     )
+
     with _cfg_lock:
         cfg = _load_yaml_config_file(_get_config_path())
         if not isinstance(cfg, dict):
@@ -99,6 +102,7 @@ def _modify_custom_providers(mutator) -> None:
         _save_yaml_config_file(_get_config_path(), cfg)
 
     from api.config import invalidate_models_cache, reload_config
+
     reload_config()
     invalidate_models_cache()
 
@@ -107,12 +111,14 @@ def get_providers_list() -> dict[str, Any]:
     entries = _read_custom_providers()
     result = []
     for entry in entries:
-        result.append({
-            "name": entry.get("name", ""),
-            "base_url": entry.get("base_url", ""),
-            "api_key": _mask_key(entry.get("api_key")),
-            "models": entry.get("models", []),
-        })
+        result.append(
+            {
+                "name": entry.get("name", ""),
+                "base_url": entry.get("base_url", ""),
+                "api_key": _mask_key(entry.get("api_key")),
+                "models": entry.get("models", []),
+            }
+        )
     return {"ok": True, "providers": result}
 
 
@@ -174,7 +180,9 @@ def delete_provider(body: dict) -> dict[str, Any]:
     found = [False]
 
     def _mutate(entries: list[dict]) -> list[dict]:
-        result = [e for e in entries if str(e.get("name", "")).strip().lower() != target]
+        result = [
+            e for e in entries if str(e.get("name", "")).strip().lower() != target
+        ]
         found[0] = len(result) < len(entries)
         return result
 
@@ -229,6 +237,7 @@ def test_provider(body: dict) -> dict[str, Any]:
 
 # ── Route handlers ──────────────────────────────────────────────────────────
 
+
 def handle_get(handler) -> dict[str, Any]:
     return get_providers_list()
 
@@ -251,6 +260,7 @@ from fox_overlay import dispatch  # noqa: E402
 
 def _handle_get(handler, parsed) -> bool:
     from api.helpers import j
+
     if parsed.path == "/api/settings/custom-providers":
         j(handler, handle_get(handler))
         return True
@@ -258,22 +268,30 @@ def _handle_get(handler, parsed) -> bool:
 
 
 def _handle_post(handler, parsed) -> bool:
-    from api.helpers import j, read_body
+    from api.helpers import j
+
+    from fox_overlay.webui_modules._body_shape import require_object_body
 
     if parsed.path == "/api/settings/custom-providers":
-        body = read_body(handler)
+        body = require_object_body(handler)
+        if body is None:
+            return True
         result = handle_post(handler, body)
         j(handler, result, status=200 if result.get("ok") else 400)
         return True
 
     if parsed.path == "/api/settings/custom-providers/test":
-        body = read_body(handler)
+        body = require_object_body(handler)
+        if body is None:
+            return True
         result = handle_test(handler, body)
         j(handler, result, status=200 if result.get("ok") else 400)
         return True
 
     if parsed.path == "/api/settings/custom-providers/delete":
-        body = read_body(handler)
+        body = require_object_body(handler)
+        if body is None:
+            return True
         result = handle_delete(handler, body)
         j(handler, result, status=200 if result.get("ok") else 400)
         return True

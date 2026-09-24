@@ -4,6 +4,7 @@ Critical invariant: when FITB_TEST_MODE is NOT set to "1", the module
 must NOT register anything with the dispatcher. Production builds need
 zero new attack surface from this module.
 """
+
 import importlib
 import os
 import sys
@@ -23,20 +24,26 @@ def fresh_dispatch(monkeypatch):
     def _read_body(handler):
         return getattr(handler, "_body", {})
 
+    def _bad(handler, msg, status=400):
+        _j(handler, {"error": msg}, status=status)
+
     fake_helpers.j = _j
     fake_helpers.read_body = _read_body
+    fake_helpers.bad = _bad
     fake_api = type(sys)("api")
     fake_api.helpers = fake_helpers
     monkeypatch.setitem(sys.modules, "api", fake_api)
     monkeypatch.setitem(sys.modules, "api.helpers", fake_helpers)
 
     import fox_overlay.dispatch as d
+
     importlib.reload(d)
     yield d
     importlib.reload(d)
 
 
 # ── Module-load gating (the critical invariant) ───────────────────────────
+
 
 def test_module_loads_cleanly_without_env(monkeypatch, fresh_dispatch):
     """FITB_TEST_MODE not set → module imports but registers nothing."""
@@ -72,6 +79,7 @@ def test_module_registers_when_env_set(monkeypatch, fresh_dispatch):
 
 
 # ── Handler behavior (when enabled) ────────────────────────────────────────
+
 
 def test_reset_handler_returns_ok_on_empty_state(monkeypatch, tmp_path, fresh_dispatch):
     """/test/reset on a clean state dir returns ok=True with zero removals."""
@@ -130,6 +138,7 @@ def test_tailscale_set_state_stub_returns_not_implemented(monkeypatch, fresh_dis
 
 # ── New Phase 1 hooks ────────────────────────────────────────────────────────
 
+
 def _make_fake_onboarding(monkeypatch, tmp_path):
     """Stub onboarding module and wire ONBOARDING_PATH to tmp_path."""
     monkeypatch.setenv("ONBOARDING_PATH", str(tmp_path / "onboarding.json"))
@@ -168,6 +177,7 @@ def test_skip_onboarding_marks_complete(monkeypatch, tmp_path, fresh_dispatch):
     onboarding_file = tmp_path / "onboarding.json"
     assert onboarding_file.exists(), "onboarding.json must be written"
     import json
+
     data = json.loads(onboarding_file.read_text())
     assert data.get("completed") is True
 
@@ -227,7 +237,8 @@ def test_inject_failure_sets_flag(monkeypatch, fresh_dispatch):
     local_fallback._INJECTED_FAILURE = None  # ensure clean state
 
     result = th.handle_post_inject_failure(
-        handler=None, body={"target": "local_fallback.enable", "kind": "supervisor-unavailable"}
+        handler=None,
+        body={"target": "local_fallback.enable", "kind": "supervisor-unavailable"},
     )
     assert result["ok"] is True
     assert local_fallback._INJECTED_FAILURE == "supervisor-unavailable"
@@ -258,6 +269,7 @@ def test_reset_clears_injected_failure(monkeypatch, tmp_path, fresh_dispatch):
     sys.modules.pop("fox_overlay.webui_modules.test_hooks", None)
     sys.modules.pop("fox_overlay.webui_modules.local_fallback", None)
     import fox_overlay.webui_modules.test_hooks as th
+
     # Use the same local_fallback instance that test_hooks imported, not a stale one.
     import fox_overlay.webui_modules.local_fallback as local_fallback
 

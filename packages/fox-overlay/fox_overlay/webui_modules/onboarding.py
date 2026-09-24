@@ -18,7 +18,9 @@ logger = logging.getLogger(__name__)
 
 # ── Onboarding state file ────────────────────────────────────────────────────
 
-ONBOARDING_PATH = Path(os.environ.get("ONBOARDING_PATH", "/data/config/onboarding.json"))
+ONBOARDING_PATH = Path(
+    os.environ.get("ONBOARDING_PATH", "/data/config/onboarding.json")
+)
 
 # ── Paths exempt from redirect ───────────────────────────────────────────────
 
@@ -87,6 +89,7 @@ def onboarding_complete() -> bool:
         pass
     try:
         from api.config import load_settings
+
         if load_settings().get("onboarding_completed") is True:
             return True
     except Exception:  # broad on purpose — settings are auxiliary state
@@ -160,7 +163,10 @@ def handle_setup_page(handler) -> None:
     # webui_static/. Read from overlay-local path; do NOT depend on
     # api.config.REPO_ROOT (fork-side concept).
     from pathlib import Path as _Path
-    setup_path = _Path(__file__).resolve().parent.parent.parent / "webui_static" / "setup.html"
+
+    setup_path = (
+        _Path(__file__).resolve().parent.parent.parent / "webui_static" / "setup.html"
+    )
     if not setup_path.exists():
         handler.send_response(500)
         handler.send_header("Content-Type", "text/plain")
@@ -245,6 +251,7 @@ def _mark_onboarding_complete(*, skipped: bool, extra: dict | None = None) -> di
     # consults settings (e.g. future CLI bootstrappers) sees the same truth.
     try:
         from api.config import load_settings, save_settings
+
         s = load_settings()
         s["onboarding_completed"] = True
         save_settings(s)
@@ -262,9 +269,9 @@ def _mark_onboarding_complete(*, skipped: bool, extra: dict | None = None) -> di
 # default below ships in packages/integration/default-configs/onboarding.md
 # and is copied into /data/config on first container run by entrypoint.sh.
 
-_ONBOARDING_MD_PATH = Path(os.environ.get(
-    "ONBOARDING_MD_PATH", "/data/config/onboarding.md"
-))
+_ONBOARDING_MD_PATH = Path(
+    os.environ.get("ONBOARDING_MD_PATH", "/data/config/onboarding.md")
+)
 
 _DEFAULT_WELCOME = (
     "Let's get you set up. This will only take a minute.\n\n"
@@ -299,8 +306,11 @@ def handle_setup_restart(handler) -> dict:
         result = subprocess.run(
             [
                 "supervisorctl",
-                "-c", os.environ.get("SUPERVISORD_CONF", "/etc/supervisor/supervisord.conf"),
-                "restart", "hermes-gateway", "hermes-webui",
+                "-c",
+                os.environ.get("SUPERVISORD_CONF", "/etc/supervisor/supervisord.conf"),
+                "restart",
+                "hermes-gateway",
+                "hermes-webui",
             ],
             capture_output=True,
             text=True,
@@ -358,9 +368,13 @@ def _handle_api_setup_get(handler, parsed) -> bool:
 
 def _handle_api_setup_post(handler, parsed) -> bool:
     """POST /api/setup/* — returns True if handled, False to fall through."""
-    from api.helpers import j, read_body
+    from api.helpers import j
 
-    body = read_body(handler)
+    from fox_overlay.webui_modules._body_shape import require_object_body
+
+    body = require_object_body(handler)
+    if body is None:
+        return True  # 400 already written by the helper
 
     if parsed.path == "/api/setup/openrouter":
         result = handle_setup_openrouter(handler, body)

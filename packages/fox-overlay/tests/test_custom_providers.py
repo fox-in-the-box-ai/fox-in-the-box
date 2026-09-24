@@ -1,4 +1,5 @@
 """Tests for fox_overlay.webui_modules.custom_providers — /api/settings/custom-providers (#144)."""
+
 from __future__ import annotations
 
 import json
@@ -22,14 +23,19 @@ def _stub_upstream():
         handler.end_headers()
         handler._body = body
 
+    def _bad(handler, msg, status=400):
+        _j(handler, {"error": msg}, status=status)
+
     def _read_body(handler):
         return handler._request_body
 
     helpers.j = _j
+    helpers.bad = _bad
     helpers.read_body = _read_body
     api.helpers = helpers
 
     import threading
+
     config._cfg_lock = threading.Lock()
     config._config_store = {"custom_providers": []}
 
@@ -38,14 +44,17 @@ def _stub_upstream():
 
     def _load_yaml_config_file(path):
         import copy
+
         return copy.deepcopy(config._config_store)
 
     def _save_yaml_config_file(path, cfg):
         import copy
+
         config._config_store = copy.deepcopy(cfg)
 
     def get_config():
         import copy
+
         return copy.deepcopy(config._config_store)
 
     config._get_config_path = _get_config_path
@@ -65,6 +74,7 @@ def _stub_upstream():
 def _upstream():
     _stub_upstream()
     from fox_overlay import dispatch
+
     dispatch._GET_TABLE.clear()
     dispatch._POST_TABLE.clear()
     dispatch._BootstrapState.frozen = False
@@ -78,9 +88,11 @@ def _upstream():
 def _load_module():
     sys.modules.pop("fox_overlay.webui_modules.custom_providers", None)
     import fox_overlay.webui_modules as _pkg
+
     if hasattr(_pkg, "custom_providers"):
         delattr(_pkg, "custom_providers")
     from fox_overlay.webui_modules import custom_providers
+
     return custom_providers
 
 
@@ -108,11 +120,13 @@ class TestRegistration:
     def test_registers_get_handler(self):
         _load_module()
         from fox_overlay.dispatch import GET_TABLE
+
         assert "/api/settings/custom-providers" in GET_TABLE
 
     def test_registers_post_handler(self):
         _load_module()
         from fox_overlay.dispatch import POST_TABLE
+
         assert "/api/settings/custom-providers" in POST_TABLE
 
 
@@ -124,10 +138,21 @@ class TestGetProviders:
         assert result["providers"] == []
 
     def test_returns_providers_with_masked_keys(self):
-        _set_providers([
-            {"name": "Local LLM", "base_url": "http://localhost:8080/v1", "api_key": "sk-secret-123", "models": ["llama3"]},
-            {"name": "No Key", "base_url": "http://example.com/v1", "models": ["gpt4"]},
-        ])
+        _set_providers(
+            [
+                {
+                    "name": "Local LLM",
+                    "base_url": "http://localhost:8080/v1",
+                    "api_key": "sk-secret-123",
+                    "models": ["llama3"],
+                },
+                {
+                    "name": "No Key",
+                    "base_url": "http://example.com/v1",
+                    "models": ["gpt4"],
+                },
+            ]
+        )
         mod = _load_module()
         result = mod.get_providers_list()
         assert result["ok"] is True
@@ -140,7 +165,9 @@ class TestGetProviders:
         _set_providers([{"name": "Test", "base_url": "http://x/v1", "models": ["m1"]}])
         mod = _load_module()
         handler = _make_handler()
-        assert mod._handle_get(handler, _parsed("/api/settings/custom-providers")) is True
+        assert (
+            mod._handle_get(handler, _parsed("/api/settings/custom-providers")) is True
+        )
         body = json.loads(handler._body)
         assert body["ok"] is True
         assert len(body["providers"]) == 1
@@ -148,17 +175,22 @@ class TestGetProviders:
     def test_get_declines_wrong_path(self):
         mod = _load_module()
         handler = _make_handler()
-        assert mod._handle_get(handler, _parsed("/api/settings/custom-providersX")) is False
+        assert (
+            mod._handle_get(handler, _parsed("/api/settings/custom-providersX"))
+            is False
+        )
 
 
 class TestUpsertProvider:
     def test_add_valid_provider(self):
         mod = _load_module()
-        result = mod.upsert_provider({
-            "name": "My LLM",
-            "base_url": "http://192.168.1.10:8080/v1",
-            "models": ["llama3", "phi4"],
-        })
+        result = mod.upsert_provider(
+            {
+                "name": "My LLM",
+                "base_url": "http://192.168.1.10:8080/v1",
+                "models": ["llama3", "phi4"],
+            }
+        )
         assert result["ok"] is True
         stored = sys.modules["api.config"]._config_store["custom_providers"]
         assert len(stored) == 1
@@ -169,26 +201,36 @@ class TestUpsertProvider:
 
     def test_add_with_api_key(self):
         mod = _load_module()
-        result = mod.upsert_provider({
-            "name": "Keyed",
-            "base_url": "https://api.example.com/v1",
-            "api_key": "sk-test-key-123",
-            "models": ["model1"],
-        })
+        result = mod.upsert_provider(
+            {
+                "name": "Keyed",
+                "base_url": "https://api.example.com/v1",
+                "api_key": "sk-test-key-123",
+                "models": ["model1"],
+            }
+        )
         assert result["ok"] is True
         stored = sys.modules["api.config"]._config_store["custom_providers"]
         assert stored[0]["api_key"] == "sk-test-key-123"
 
     def test_update_existing_provider(self):
-        _set_providers([
-            {"name": "My LLM", "base_url": "http://old/v1", "models": ["old-model"]},
-        ])
+        _set_providers(
+            [
+                {
+                    "name": "My LLM",
+                    "base_url": "http://old/v1",
+                    "models": ["old-model"],
+                },
+            ]
+        )
         mod = _load_module()
-        result = mod.upsert_provider({
-            "name": "My LLM",
-            "base_url": "http://new/v1",
-            "models": ["new-model"],
-        })
+        result = mod.upsert_provider(
+            {
+                "name": "My LLM",
+                "base_url": "http://new/v1",
+                "models": ["new-model"],
+            }
+        )
         assert result["ok"] is True
         stored = sys.modules["api.config"]._config_store["custom_providers"]
         assert len(stored) == 1
@@ -196,54 +238,75 @@ class TestUpsertProvider:
         assert stored[0]["models"] == ["new-model"]
 
     def test_update_preserves_key_when_masked(self):
-        _set_providers([
-            {"name": "Keyed", "base_url": "http://x/v1", "api_key": "real-secret", "models": ["m1"]},
-        ])
+        _set_providers(
+            [
+                {
+                    "name": "Keyed",
+                    "base_url": "http://x/v1",
+                    "api_key": "real-secret",
+                    "models": ["m1"],
+                },
+            ]
+        )
         mod = _load_module()
-        result = mod.upsert_provider({
-            "name": "Keyed",
-            "base_url": "http://x/v1",
-            "api_key": "****",
-            "models": ["m1", "m2"],
-        })
+        result = mod.upsert_provider(
+            {
+                "name": "Keyed",
+                "base_url": "http://x/v1",
+                "api_key": "****",
+                "models": ["m1", "m2"],
+            }
+        )
         assert result["ok"] is True
         stored = sys.modules["api.config"]._config_store["custom_providers"]
         assert stored[0]["api_key"] == "real-secret"
 
     def test_rejects_empty_name(self):
         mod = _load_module()
-        result = mod.upsert_provider({"name": "", "base_url": "http://x/v1", "models": ["m"]})
+        result = mod.upsert_provider(
+            {"name": "", "base_url": "http://x/v1", "models": ["m"]}
+        )
         assert result["ok"] is False
         assert "required" in result["error"].lower()
 
     def test_rejects_invalid_url_scheme(self):
         mod = _load_module()
-        result = mod.upsert_provider({"name": "Bad", "base_url": "ftp://evil/v1", "models": ["m"]})
+        result = mod.upsert_provider(
+            {"name": "Bad", "base_url": "ftp://evil/v1", "models": ["m"]}
+        )
         assert result["ok"] is False
         assert "http" in result["error"].lower()
 
     def test_rejects_name_too_long(self):
         mod = _load_module()
-        result = mod.upsert_provider({"name": "x" * 65, "base_url": "http://x/v1", "models": ["m"]})
+        result = mod.upsert_provider(
+            {"name": "x" * 65, "base_url": "http://x/v1", "models": ["m"]}
+        )
         assert result["ok"] is False
         assert "64" in result["error"]
 
     def test_rejects_empty_models(self):
         mod = _load_module()
-        result = mod.upsert_provider({"name": "Bad", "base_url": "http://x/v1", "models": []})
+        result = mod.upsert_provider(
+            {"name": "Bad", "base_url": "http://x/v1", "models": []}
+        )
         assert result["ok"] is False
         assert "model" in result["error"].lower()
 
     def test_strips_trailing_slash_from_url(self):
         mod = _load_module()
-        mod.upsert_provider({"name": "T", "base_url": "http://x:8080/v1/", "models": ["m"]})
+        mod.upsert_provider(
+            {"name": "T", "base_url": "http://x:8080/v1/", "models": ["m"]}
+        )
         stored = sys.modules["api.config"]._config_store["custom_providers"]
         assert stored[0]["base_url"] == "http://x:8080/v1"
 
     def test_case_insensitive_name_matching(self):
         _set_providers([{"name": "My LLM", "base_url": "http://x/v1", "models": ["m"]}])
         mod = _load_module()
-        mod.upsert_provider({"name": "my llm", "base_url": "http://y/v1", "models": ["n"]})
+        mod.upsert_provider(
+            {"name": "my llm", "base_url": "http://y/v1", "models": ["n"]}
+        )
         stored = sys.modules["api.config"]._config_store["custom_providers"]
         assert len(stored) == 1
         assert stored[0]["base_url"] == "http://y/v1"
@@ -251,10 +314,12 @@ class TestUpsertProvider:
 
 class TestDeleteProvider:
     def test_delete_existing(self):
-        _set_providers([
-            {"name": "Keep", "base_url": "http://a/v1", "models": ["m"]},
-            {"name": "Remove", "base_url": "http://b/v1", "models": ["m"]},
-        ])
+        _set_providers(
+            [
+                {"name": "Keep", "base_url": "http://a/v1", "models": ["m"]},
+                {"name": "Remove", "base_url": "http://b/v1", "models": ["m"]},
+            ]
+        )
         mod = _load_module()
         result = mod.delete_provider({"name": "Remove"})
         assert result["ok"] is True
@@ -272,7 +337,10 @@ class TestDeleteProvider:
         _set_providers([{"name": "X", "base_url": "http://x/v1", "models": ["m"]}])
         mod = _load_module()
         handler = _make_handler({"name": "X"})
-        assert mod._handle_post(handler, _parsed("/api/settings/custom-providers/delete")) is True
+        assert (
+            mod._handle_post(handler, _parsed("/api/settings/custom-providers/delete"))
+            is True
+        )
         body = json.loads(handler._body)
         assert body["ok"] is True
 
@@ -298,7 +366,12 @@ class TestTestProvider:
     def test_connection_refused(self):
         mod = _load_module()
         import urllib.error
-        with mock.patch.object(mod.urllib.request, "urlopen", side_effect=urllib.error.URLError("Connection refused")):
+
+        with mock.patch.object(
+            mod.urllib.request,
+            "urlopen",
+            side_effect=urllib.error.URLError("Connection refused"),
+        ):
             result = mod.test_provider({"base_url": "http://localhost:9999/v1"})
         assert result["ok"] is False
         assert "connection" in result["error"].lower()
@@ -306,9 +379,14 @@ class TestTestProvider:
     def test_auth_error(self):
         mod = _load_module()
         import urllib.error
-        with mock.patch.object(mod.urllib.request, "urlopen", side_effect=urllib.error.HTTPError(
-            "http://x/models", 401, "Unauthorized", {}, None
-        )):
+
+        with mock.patch.object(
+            mod.urllib.request,
+            "urlopen",
+            side_effect=urllib.error.HTTPError(
+                "http://x/models", 401, "Unauthorized", {}, None
+            ),
+        ):
             result = mod.test_provider({"base_url": "http://x/v1"})
         assert result["ok"] is False
         assert "auth" in result["error"].lower()
@@ -322,7 +400,12 @@ class TestTestProvider:
         mock_resp.__exit__ = mock.Mock(return_value=False)
         handler = _make_handler({"base_url": "http://localhost:8080/v1"})
         with mock.patch.object(mod.urllib.request, "urlopen", return_value=mock_resp):
-            assert mod._handle_post(handler, _parsed("/api/settings/custom-providers/test")) is True
+            assert (
+                mod._handle_post(
+                    handler, _parsed("/api/settings/custom-providers/test")
+                )
+                is True
+            )
         body = json.loads(handler._body)
         assert body["ok"] is True
 
@@ -331,17 +414,37 @@ class TestDispatchBoundary:
     def test_post_declines_wrong_path(self):
         mod = _load_module()
         handler = _make_handler()
-        assert mod._handle_post(handler, _parsed("/api/settings/custom-providersX")) is False
+        assert (
+            mod._handle_post(handler, _parsed("/api/settings/custom-providersX"))
+            is False
+        )
 
     def test_post_handles_upsert(self):
         mod = _load_module()
-        handler = _make_handler({"name": "X", "base_url": "http://x/v1", "models": ["m"]})
-        assert mod._handle_post(handler, _parsed("/api/settings/custom-providers")) is True
+        handler = _make_handler(
+            {"name": "X", "base_url": "http://x/v1", "models": ["m"]}
+        )
+        assert (
+            mod._handle_post(handler, _parsed("/api/settings/custom-providers")) is True
+        )
         body = json.loads(handler._body)
         assert body["ok"] is True
 
     def test_post_returns_400_on_validation_error(self):
         mod = _load_module()
-        handler = _make_handler({"name": "", "base_url": "http://x/v1", "models": ["m"]})
-        assert mod._handle_post(handler, _parsed("/api/settings/custom-providers")) is True
+        handler = _make_handler(
+            {"name": "", "base_url": "http://x/v1", "models": ["m"]}
+        )
+        assert (
+            mod._handle_post(handler, _parsed("/api/settings/custom-providers")) is True
+        )
+        assert handler._status == 400
+
+    def test_post_non_object_body_returns_400(self):
+        """#901: a list body yields a clean 400, not an AttributeError → 500."""
+        mod = _load_module()
+        handler = _make_handler([1, 2, 3])
+        assert (
+            mod._handle_post(handler, _parsed("/api/settings/custom-providers")) is True
+        )
         assert handler._status == 400

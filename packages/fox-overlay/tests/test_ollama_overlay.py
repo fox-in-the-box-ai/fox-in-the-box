@@ -11,6 +11,7 @@ These tests prove:
 * Unknown sub-paths under /api/ollama/ return False (dispatcher falls
   through; routes.py 404s — same as pre-migration).
 """
+
 import importlib
 import sys
 
@@ -33,8 +34,12 @@ def fresh_dispatch_and_module(monkeypatch):
     def _read_body(handler):
         return getattr(handler, "_body", {})
 
+    def _bad(handler, msg, status=400):
+        _j(handler, {"error": msg}, status=status)
+
     fake_helpers.j = _j
     fake_helpers.read_body = _read_body
+    fake_helpers.bad = _bad
     fake_api = type(sys)("api")
     fake_api.helpers = fake_helpers
     monkeypatch.setitem(sys.modules, "api", fake_api)
@@ -42,9 +47,11 @@ def fresh_dispatch_and_module(monkeypatch):
 
     # Reset dispatch
     import fox_overlay.dispatch as d
+
     importlib.reload(d)
     # Reload ollama module so its register_* fires against the fresh table
     import fox_overlay.webui_modules.ollama as m
+
     importlib.reload(m)
     yield d, m
     # Reload BOTH on teardown so the next test (with/without this fixture)
@@ -64,6 +71,7 @@ class _FakeHandler:
 
 # ── registration ────────────────────────────────────────────────────────────
 
+
 def test_module_registers_get_and_post(fresh_dispatch_and_module):
     d, _m = fresh_dispatch_and_module
     assert "/api/ollama/" in d.GET_TABLE
@@ -72,10 +80,12 @@ def test_module_registers_get_and_post(fresh_dispatch_and_module):
 
 # ── GET routing ─────────────────────────────────────────────────────────────
 
+
 def test_get_status_routes_to_handle_get_status(fresh_dispatch_and_module, monkeypatch):
     d, m = fresh_dispatch_and_module
     monkeypatch.setattr(m, "handle_get_status", lambda h: {"ollama": "ok"})
     from urllib.parse import urlparse
+
     h = _FakeHandler()
     assert d.handle_get(h, urlparse("/api/ollama/status")) is True
     assert h.responses == [{"status": 200, "payload": {"ollama": "ok"}}]
@@ -85,6 +95,7 @@ def test_get_models_routes_to_handle_get_models(fresh_dispatch_and_module, monke
     d, m = fresh_dispatch_and_module
     monkeypatch.setattr(m, "handle_get_models", lambda h: {"models": []})
     from urllib.parse import urlparse
+
     h = _FakeHandler()
     assert d.handle_get(h, urlparse("/api/ollama/models")) is True
     assert h.responses[-1]["payload"] == {"models": []}
@@ -94,6 +105,7 @@ def test_get_unknown_subpath_falls_through(fresh_dispatch_and_module):
     """Unknown /api/ollama/* GET returns False — dispatcher continues, upstream 404s."""
     d, _m = fresh_dispatch_and_module
     from urllib.parse import urlparse
+
     h = _FakeHandler()
     # /api/ollama/nonexistent — overlay declines, dispatcher returns False overall
     assert d.handle_get(h, urlparse("/api/ollama/nonexistent")) is False
@@ -102,10 +114,14 @@ def test_get_unknown_subpath_falls_through(fresh_dispatch_and_module):
 
 # ── POST routing ────────────────────────────────────────────────────────────
 
-def test_post_refresh_routes_to_handle_post_refresh(fresh_dispatch_and_module, monkeypatch):
+
+def test_post_refresh_routes_to_handle_post_refresh(
+    fresh_dispatch_and_module, monkeypatch
+):
     d, m = fresh_dispatch_and_module
     monkeypatch.setattr(m, "handle_post_refresh", lambda h: {"refreshed": True})
     from urllib.parse import urlparse
+
     h = _FakeHandler()
     assert d.handle_post(h, urlparse("/api/ollama/refresh")) is True
     assert h.responses[-1]["payload"] == {"refreshed": True}
@@ -113,8 +129,11 @@ def test_post_refresh_routes_to_handle_post_refresh(fresh_dispatch_and_module, m
 
 def test_post_use_model_ok_status_200(fresh_dispatch_and_module, monkeypatch):
     d, m = fresh_dispatch_and_module
-    monkeypatch.setattr(m, "handle_post_use_model", lambda h, body: {"ok": True, "model": body["model"]})
+    monkeypatch.setattr(
+        m, "handle_post_use_model", lambda h, body: {"ok": True, "model": body["model"]}
+    )
     from urllib.parse import urlparse
+
     h = _FakeHandler(body={"model": "llama3"})
     assert d.handle_post(h, urlparse("/api/ollama/use-model")) is True
     assert h.responses == [{"status": 200, "payload": {"ok": True, "model": "llama3"}}]
@@ -122,11 +141,18 @@ def test_post_use_model_ok_status_200(fresh_dispatch_and_module, monkeypatch):
 
 def test_post_use_model_failure_status_400(fresh_dispatch_and_module, monkeypatch):
     d, m = fresh_dispatch_and_module
-    monkeypatch.setattr(m, "handle_post_use_model", lambda h, body: {"ok": False, "error": "no such model"})
+    monkeypatch.setattr(
+        m,
+        "handle_post_use_model",
+        lambda h, body: {"ok": False, "error": "no such model"},
+    )
     from urllib.parse import urlparse
+
     h = _FakeHandler(body={"model": "bogus"})
     assert d.handle_post(h, urlparse("/api/ollama/use-model")) is True
-    assert h.responses == [{"status": 400, "payload": {"ok": False, "error": "no such model"}}]
+    assert h.responses == [
+        {"status": 400, "payload": {"ok": False, "error": "no such model"}}
+    ]
 
 
 def test_post_pull_calls_stream_pull(fresh_dispatch_and_module, monkeypatch):
@@ -135,6 +161,7 @@ def test_post_pull_calls_stream_pull(fresh_dispatch_and_module, monkeypatch):
     calls = []
     monkeypatch.setattr(m, "stream_pull", lambda h, name: calls.append(name))
     from urllib.parse import urlparse
+
     h = _FakeHandler(body={"model": "qwen2:1.5b"})
     assert d.handle_post(h, urlparse("/api/ollama/pull")) is True
     assert calls == ["qwen2:1.5b"]
@@ -146,15 +173,22 @@ def test_post_delete_ok_status_200(fresh_dispatch_and_module, monkeypatch):
     d, m = fresh_dispatch_and_module
     monkeypatch.setattr(m, "delete_model", lambda name: {"ok": True, "deleted": name})
     from urllib.parse import urlparse
+
     h = _FakeHandler(body={"model": "llama3"})
     assert d.handle_post(h, urlparse("/api/ollama/delete")) is True
-    assert h.responses[-1] == {"status": 200, "payload": {"ok": True, "deleted": "llama3"}}
+    assert h.responses[-1] == {
+        "status": 200,
+        "payload": {"ok": True, "deleted": "llama3"},
+    }
 
 
 def test_post_delete_failure_status_400(fresh_dispatch_and_module, monkeypatch):
     d, m = fresh_dispatch_and_module
-    monkeypatch.setattr(m, "delete_model", lambda name: {"ok": False, "error": "in use"})
+    monkeypatch.setattr(
+        m, "delete_model", lambda name: {"ok": False, "error": "in use"}
+    )
     from urllib.parse import urlparse
+
     h = _FakeHandler(body={"model": "in-use"})
     assert d.handle_post(h, urlparse("/api/ollama/delete")) is True
     assert h.responses[-1]["status"] == 400
@@ -163,16 +197,19 @@ def test_post_delete_failure_status_400(fresh_dispatch_and_module, monkeypatch):
 def test_post_unknown_subpath_falls_through(fresh_dispatch_and_module):
     d, _m = fresh_dispatch_and_module
     from urllib.parse import urlparse
+
     h = _FakeHandler()
     assert d.handle_post(h, urlparse("/api/ollama/nonexistent")) is False
 
 
 # ── prefix-boundary safety ──────────────────────────────────────────────────
 
+
 def test_prefix_does_not_match_adjacent_paths(fresh_dispatch_and_module):
     """Dispatcher must NOT match /api/ollamaX/... or /api/ollamax."""
     d, _m = fresh_dispatch_and_module
     from urllib.parse import urlparse
+
     h = _FakeHandler()
     # "/api/ollamax" doesn't start with "/api/ollama/" → no match
     assert d.handle_get(h, urlparse("/api/ollamax")) is False

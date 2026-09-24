@@ -283,7 +283,9 @@ def _download_thread(model: dict[str, Any], job: JobState) -> None:
             resume_offset = partial_size
             logger.info(
                 "Resuming download of %s from %d/%d bytes",
-                model["id"], resume_offset, bytes_total,
+                model["id"],
+                resume_offset,
+                bytes_total,
             )
         else:
             # Fresh start — clear any stale partial.
@@ -293,13 +295,16 @@ def _download_thread(model: dict[str, Any], job: JobState) -> None:
                 meta.unlink()
 
         # ── Persist meta sidecar ──────────────────────────────────────
-        _write_meta(meta, {
-            "url": model["url"],
-            "etag": etag_now,
-            "expected_sha256": expected_sha,
-            "total_bytes": bytes_total,
-            "started_at": time.time(),
-        })
+        _write_meta(
+            meta,
+            {
+                "url": model["url"],
+                "etag": etag_now,
+                "expected_sha256": expected_sha,
+                "total_bytes": bytes_total,
+                "started_at": time.time(),
+            },
+        )
 
         _set_state(
             job,
@@ -382,10 +387,12 @@ def _download_thread(model: dict[str, Any], job: JobState) -> None:
             _set_state(
                 job,
                 status="failed",
-                error=(f"sha256 mismatch — expected {expected_sha}, "
-                       f"got {actual_sha}. The file you downloaded does not "
-                       f"match the pinned hash; the upstream may have been "
-                       f"rotated. Retry to attempt a clean re-download."),
+                error=(
+                    f"sha256 mismatch — expected {expected_sha}, "
+                    f"got {actual_sha}. The file you downloaded does not "
+                    f"match the pinned hash; the upstream may have been "
+                    f"rotated. Retry to attempt a clean re-download."
+                ),
             )
             return
 
@@ -434,8 +441,10 @@ def start_download(model_id: str) -> dict[str, Any]:
     job._cancel_event.clear()
     _set_state(job, status="running", error=None, started_at=time.time())
     thread = threading.Thread(
-        target=_download_thread, args=(model, job),
-        name=f"model-download-{model_id}", daemon=True,
+        target=_download_thread,
+        args=(model, job),
+        name=f"model-download-{model_id}",
+        daemon=True,
     )
     thread.start()
     return {"ok": True, "state": job.to_dict()}
@@ -472,9 +481,12 @@ def delete_model(model_id: str) -> dict[str, Any]:
 
     if job is not None:
         _set_state(
-            job, status="idle",
-            bytes_downloaded=0, bytes_total=0,
-            sha256_verified=False, error=None,
+            job,
+            status="idle",
+            bytes_downloaded=0,
+            bytes_total=0,
+            sha256_verified=False,
+            error=None,
         )
 
     return {"ok": True, "model_id": model_id, "freed_bytes": freed}
@@ -494,16 +506,18 @@ def list_models() -> dict[str, Any]:
             size_on_disk = partial.stat().st_size
         total_disk += size_on_disk
         job = _jobs.get(model_id)
-        out.append({
-            "id": model_id,
-            "name": model["name"],
-            "filename": model["filename"],
-            "description": model.get("description", ""),
-            "expected_size_bytes": int(model["size_bytes"]),
-            "size_on_disk_bytes": size_on_disk,
-            "installed": installed,
-            "state": job.to_dict() if job else None,
-        })
+        out.append(
+            {
+                "id": model_id,
+                "name": model["name"],
+                "filename": model["filename"],
+                "description": model.get("description", ""),
+                "expected_size_bytes": int(model["size_bytes"]),
+                "size_on_disk_bytes": size_on_disk,
+                "installed": installed,
+                "state": job.to_dict() if job else None,
+            }
+        )
     return {"models": out, "total_size_bytes": total_disk}
 
 
@@ -646,8 +660,10 @@ def _handle_get(handler, parsed) -> bool:
         return True
 
     # SSE progress endpoint — handle_progress_sse manages its own response.
-    if parsed.path.startswith("/api/local-models/") and parsed.path.endswith("/progress"):
-        model_id = parsed.path[len("/api/local-models/"):-len("/progress")]
+    if parsed.path.startswith("/api/local-models/") and parsed.path.endswith(
+        "/progress"
+    ):
+        model_id = parsed.path[len("/api/local-models/") : -len("/progress")]
         return handle_progress_sse(handler, model_id)
 
     # Anything else under (or adjacent to) /api/local-models — not ours.
@@ -660,14 +676,18 @@ def _handle_post(handler, parsed) -> bool:
     Boundary contract: must reject /api/local-models (no action),
     /api/local-modelsX, and unknown actions.
     """
-    from api.helpers import j, read_body
+    from api.helpers import j
+
+    from fox_overlay.webui_modules._body_shape import require_object_body
 
     # Reject bare path AND adjacency attacks — must start with the slash form.
     if not parsed.path.startswith("/api/local-models/"):
         return False
 
-    body = read_body(handler)
-    suffix = parsed.path[len("/api/local-models/"):]
+    body = require_object_body(handler)
+    if body is None:
+        return True
+    suffix = parsed.path[len("/api/local-models/") :]
     if "/" not in suffix:
         return False  # malformed (no action)
     model_id, action = suffix.rsplit("/", 1)
@@ -693,4 +713,3 @@ def _handle_post(handler, parsed) -> bool:
 # Boundary checks live in the handlers above.
 dispatch.register_get("/api/local-models", _handle_get, allow_bare=True)
 dispatch.register_post("/api/local-models", _handle_post, allow_bare=True)
-

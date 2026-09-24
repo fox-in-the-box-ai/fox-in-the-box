@@ -75,7 +75,7 @@ fi
 [ -n "$PYTHON_BIN" ] && echo "Using interpreter: $PYTHON_BIN ($("$PYTHON_BIN" --version 2>&1))"
 
 # ── 0. Python unit tests ──────────────────────────────────────────────────────
-echo "[0/3] Running Python unit tests (packages/fox-overlay/tests/)..."
+echo "[0/4] Running Python unit tests (packages/fox-overlay/tests/)..."
 
 PYTHON_BIN_EARLY="$PYTHON_BIN"
 
@@ -98,7 +98,7 @@ else
 fi
 
 # ── 1. Submodule cleanliness ───────────────────────────────────────────────────
-echo "[1/3] Checking submodule cleanliness..."
+echo "[1/4] Checking submodule cleanliness..."
 for fork in forks/hermes-agent forks/hermes-webui; do
     if [ ! -d "$fork" ]; then
         fail "submodule $fork is missing — run: git submodule update --init $fork"
@@ -117,17 +117,38 @@ done
 ok "Submodules are clean"
 
 # ── 2. Patch series + .fox-removals (delegates to existing script) ─────────────
-echo "[2/3] Running check-overlay-basis.sh..."
+echo "[2/4] Running check-overlay-basis.sh..."
 if ! bash packages/fox-overlay/scripts/check-overlay-basis.sh > /tmp/check-overlay-basis.log 2>&1; then
     cat /tmp/check-overlay-basis.log >&2
     fail "check-overlay-basis.sh failed — see output above. Likely cause: a patch in packages/fox-overlay/patches/{webui,agent}/ no longer applies cleanly (upstream anchor drift). Fix the patch via: make regen-patch FORK=webui PATCH=<name>"
 fi
 ok "Overlay basis clean"
 
-# ── 3. Bootstrap import smoke ──────────────────────────────────────────────────
+# ── 3. Overlay POST body-shape guard (#901) ────────────────────────────────────
+# Every overlay POST handler must route its body read through
+# require_object_body (webui_modules/_body_shape.py) so a valid-JSON non-object
+# body yields a clean 400 rather than an AttributeError → HTTP 500. A raw
+# read_body(handler) in webui_modules/ (anywhere but _body_shape.py, which owns
+# the single legitimate call) reintroduces the gap. Fail loud if one appears.
+echo "[3/4] Checking overlay POST handlers route bodies through require_object_body (#901)..."
+STRAY_READ_BODY=$(
+    grep -rn "read_body(" packages/fox-overlay/fox_overlay/webui_modules/ \
+        --include="*.py" \
+        | grep -v "packages/fox-overlay/fox_overlay/webui_modules/_body_shape.py" \
+        || true
+)
+if [ -n "$STRAY_READ_BODY" ]; then
+    echo "" >&2
+    echo "Unguarded read_body() call(s) in webui_modules (must use require_object_body):" >&2
+    echo "$STRAY_READ_BODY" | sed 's/^/   /' >&2
+    fail "raw read_body() in an overlay POST handler reopens the #901 non-object-body → HTTP 500 gap. Route it through fox_overlay.webui_modules._body_shape.require_object_body."
+fi
+ok "Overlay POST handlers route bodies through require_object_body"
+
+# ── 4. Bootstrap import smoke ──────────────────────────────────────────────────
 # Catches anchor-drift in webui_patches/*.py at <500ms instead of waiting for
 # a real container boot.
-echo "[3/3] Smoke-testing fox_overlay.bootstrap.install() locally..."
+echo "[4/4] Smoke-testing fox_overlay.bootstrap.install() locally..."
 
 # Reuse the interpreter selected at the top of the script so the smoke runs
 # under the same Python that ran (or would have run) the unit tests.

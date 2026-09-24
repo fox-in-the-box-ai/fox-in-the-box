@@ -125,6 +125,7 @@ def is_enabled() -> bool:
     """Read the opt-in flag from settings.json. Defaults to False."""
     try:
         from api.config import load_settings
+
         return bool(load_settings().get(SETTINGS_KEY, False))
     except Exception:
         return False
@@ -135,6 +136,7 @@ def set_enabled(enabled: bool) -> bool:
     write failed — rare)."""
     try:
         from api.config import load_settings, save_settings
+
         s = load_settings()
         s[SETTINGS_KEY] = bool(enabled)
         save_settings(s)
@@ -155,8 +157,15 @@ def _supervisorctl(*args: str, timeout: float = 10.0) -> tuple[int, str, str]:
         return 127, "", "supervisorctl not on PATH"
     try:
         result = subprocess.run(
-            ["supervisorctl", "-c", os.environ.get("SUPERVISORD_CONF", "/etc/supervisor/supervisord.conf"), *args],
-            capture_output=True, text=True, timeout=timeout,
+            [
+                "supervisorctl",
+                "-c",
+                os.environ.get("SUPERVISORD_CONF", "/etc/supervisor/supervisord.conf"),
+                *args,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
         )
         return result.returncode, result.stdout, result.stderr
     except subprocess.TimeoutExpired:
@@ -196,7 +205,11 @@ def start_llama_server() -> dict[str, Any]:
     new_status = supervisor_status()
     if rc == 0 or new_status in ("RUNNING", "STARTING"):
         return {"ok": True, "status": new_status}
-    return {"ok": False, "status": new_status, "error": err.strip() or "Failed to start llama-server"}
+    return {
+        "ok": False,
+        "status": new_status,
+        "error": err.strip() or "Failed to start llama-server",
+    }
 
 
 def stop_llama_server() -> dict[str, Any]:
@@ -209,7 +222,11 @@ def stop_llama_server() -> dict[str, Any]:
     new_status = supervisor_status()
     if rc == 0 or new_status in ("STOPPED", "EXITED"):
         return {"ok": True, "status": new_status}
-    return {"ok": False, "status": new_status, "error": err.strip() or "Failed to stop llama-server"}
+    return {
+        "ok": False,
+        "status": new_status,
+        "error": err.strip() or "Failed to stop llama-server",
+    }
 
 
 # ── Health ─────────────────────────────────────────────────────────────────
@@ -246,7 +263,9 @@ def get_fallback_endpoint() -> dict[str, Any] | None:
     }
 
 
-def should_failover(error: Exception | str | None, http_status: int | None = None) -> bool:
+def should_failover(
+    error: Exception | str | None, http_status: int | None = None
+) -> bool:
     """Classify whether an upstream error is failover-eligible.
 
     Returns True for transient provider issues (5xx, 429, connection
@@ -280,6 +299,7 @@ def get_status() -> dict[str, Any]:
     # Model installation state from #10's manager.
     try:
         from api.models_download import list_models
+
         models = list_models().get("models", [])
         model = next((m for m in models if m["id"] == MODEL_ID), None)
     except Exception:
@@ -349,7 +369,9 @@ def _start_when_ready(timeout_s: float = 600.0, poll_s: float = 1.0) -> None:
     """
     try:
         from api.models_download import (
-            KNOWN_MODELS, _is_final_present, list_models,
+            KNOWN_MODELS,
+            _is_final_present,
+            list_models,
         )
     except Exception:
         return
@@ -403,6 +425,7 @@ def enable() -> dict[str, Any]:
     """
     # Test-mode failure injection — /test/inject-failure sets this.
     import os as _os
+
     if _os.environ.get("FITB_TEST_MODE") == "1" and _INJECTED_FAILURE:
         return {
             **get_status(),
@@ -420,6 +443,7 @@ def enable() -> dict[str, Any]:
     # Make sure the model is on disk (or downloading).
     try:
         from api.models_download import KNOWN_MODELS, _is_final_present, start_download
+
         model = KNOWN_MODELS.get(MODEL_ID)
         if model and not _is_final_present(model):
             start_download(MODEL_ID)
@@ -431,12 +455,15 @@ def enable() -> dict[str, Any]:
     # background watcher that starts llama-server once the file appears.
     try:
         from api.models_download import KNOWN_MODELS, _is_final_present
+
         model = KNOWN_MODELS.get(MODEL_ID)
         if model and _is_final_present(model):
             start_llama_server()
         else:
             threading.Thread(
-                target=_start_when_ready, name="local-fallback-watcher", daemon=True,
+                target=_start_when_ready,
+                name="local-fallback-watcher",
+                daemon=True,
             ).start()
     except Exception as exc:
         logger.exception("Local fallback: could not schedule llama-server start")
@@ -487,15 +514,28 @@ def activate() -> dict[str, Any]:
         # Granular error so the failover loop can decide between
         # "offer download", "wait for warmup", or "give up".
         if not snap.get("enabled"):
-            return {"ok": False, "error": "Local fallback is disabled. Enable it in Settings first.",
-                    "reason": "disabled"}
+            return {
+                "ok": False,
+                "error": "Local fallback is disabled. Enable it in Settings first.",
+                "reason": "disabled",
+            }
         if not snap.get("model_installed"):
-            return {"ok": False, "error": "Local model is not installed. Download it first.",
-                    "reason": "missing-model"}
+            return {
+                "ok": False,
+                "error": "Local model is not installed. Download it first.",
+                "reason": "missing-model",
+            }
         if not snap.get("server_healthy"):
-            return {"ok": False, "error": "Local model server is not healthy yet. Try again in a moment.",
-                    "reason": "unhealthy"}
-        return {"ok": False, "error": "Local fallback is not ready.", "reason": "not-ready"}
+            return {
+                "ok": False,
+                "error": "Local model server is not healthy yet. Try again in a moment.",
+                "reason": "unhealthy",
+            }
+        return {
+            "ok": False,
+            "error": "Local fallback is not ready.",
+            "reason": "not-ready",
+        }
 
     # Lazy import to keep import time of this module light.
     from api.config import (
@@ -523,12 +563,17 @@ def activate() -> dict[str, Any]:
         reload_config()
     except Exception as exc:
         logger.exception("Failed to activate local fallback: %s", exc)
-        return {"ok": False, "error": f"Failed to update config: {exc}", "reason": "config-write-failed"}
+        return {
+            "ok": False,
+            "error": f"Failed to update config: {exc}",
+            "reason": "config-write-failed",
+        }
 
     # Best-effort gateway hot-reload (mirrors api/providers._reload_provider_runtime,
     # added in v0.2.0 PR #61). Safe no-op outside FITB.
     try:
         from api.providers import _reload_provider_runtime
+
         _reload_provider_runtime()
     except Exception:
         pass
@@ -552,7 +597,10 @@ _REMOTE_HEALTH_PROBE_URLS = (
     # know "the network path to this provider works". If any one returns
     # 200 we declare remote_healthy.
     ("openrouter", "https://openrouter.ai/api/v1/models"),
-    ("openai", "https://api.openai.com/v1/models"),  # 401 without key, but 401 means reachable
+    (
+        "openai",
+        "https://api.openai.com/v1/models",
+    ),  # 401 without key, but 401 means reachable
     ("anthropic", "https://api.anthropic.com/v1/models"),  # same: 401 = reachable
 )
 
@@ -564,7 +612,8 @@ def _probe_one(url: str, timeout: float = 5.0) -> tuple[bool, str]:
     api.openai.com still proves the network path works."""
     try:
         req = urllib.request.Request(
-            url, headers={"User-Agent": "fitb-remote-health/1.0"},
+            url,
+            headers={"User-Agent": "fitb-remote-health/1.0"},
         )
         with urllib.request.urlopen(req, timeout=timeout) as r:
             return (200 <= r.status < 600), ""
@@ -687,9 +736,13 @@ def _handle_get(handler, parsed) -> bool:
 
 def _handle_post(handler, parsed) -> bool:
     """POST /api/local-fallback/* — returns True if handled, False to fall through."""
-    from api.helpers import j, read_body
+    from api.helpers import j
 
-    body = read_body(handler)
+    from fox_overlay.webui_modules._body_shape import require_object_body
+
+    body = require_object_body(handler)
+    if body is None:
+        return True
 
     # /enable + /disable: default 200, no ok-check (pre-migration parity).
     if parsed.path == "/api/local-fallback/enable":
@@ -711,5 +764,3 @@ def _handle_post(handler, parsed) -> bool:
 
 dispatch.register_get("/api/local-fallback/", _handle_get)
 dispatch.register_post("/api/local-fallback/", _handle_post)
-
-

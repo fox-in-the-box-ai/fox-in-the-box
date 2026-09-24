@@ -29,6 +29,7 @@ Phase 1 will likely add:
 All routes accept JSON bodies (read via upstream's `api.helpers.read_body`)
 and respond with `j(handler, {"ok": True/False, ...})`.
 """
+
 from __future__ import annotations
 
 import json
@@ -62,13 +63,17 @@ def handle_post_reset(handler) -> dict[str, Any]:
                     p.unlink()
                     removed["json_files"] += 1
                 except OSError as e:
-                    logger.warning("[test-hooks] /test/reset: failed to remove %s: %s", p, e)
+                    logger.warning(
+                        "[test-hooks] /test/reset: failed to remove %s: %s", p, e
+                    )
             elif p.is_dir() and p.name.startswith("session_"):
                 try:
                     shutil.rmtree(p)
                     removed["session_dirs"] += 1
                 except OSError as e:
-                    logger.warning("[test-hooks] /test/reset: failed to remove %s: %s", p, e)
+                    logger.warning(
+                        "[test-hooks] /test/reset: failed to remove %s: %s", p, e
+                    )
     # Onboarding hint file may live elsewhere — best-effort clear.
     onboarding = Path(os.environ.get("ONBOARDING_PATH", "/data/config/onboarding.json"))
     onboarding_removed = False
@@ -77,10 +82,13 @@ def handle_post_reset(handler) -> dict[str, Any]:
             onboarding.unlink()
             onboarding_removed = True
         except OSError as e:
-            logger.warning("[test-hooks] /test/reset: failed to remove %s: %s", onboarding, e)
+            logger.warning(
+                "[test-hooks] /test/reset: failed to remove %s: %s", onboarding, e
+            )
     # Clear any injected failures so a reset always leaves the system clean.
     try:
         from fox_overlay.webui_modules import local_fallback
+
         local_fallback._INJECTED_FAILURE = None
     except Exception:
         pass
@@ -113,6 +121,7 @@ def handle_post_skip_onboarding(handler) -> dict[str, Any]:
     """
     try:
         from fox_overlay.webui_modules.onboarding import _mark_onboarding_complete
+
         result = _mark_onboarding_complete(skipped=True, extra={"via": "test-hook"})
         return {"ok": True, "result": result}
     except Exception as exc:
@@ -142,13 +151,14 @@ def handle_post_seed_provider(handler, body: dict) -> dict[str, Any]:
 
     PROVIDER_KEY_MAP = {
         "openrouter": "openrouter_api_key",
-        "anthropic":  "anthropic_api_key",
-        "gemini":     "gemini_api_key",
-        "openai":     "openai_api_key",
+        "anthropic": "anthropic_api_key",
+        "gemini": "gemini_api_key",
+        "openai": "openai_api_key",
     }
     settings_key = PROVIDER_KEY_MAP[provider]
     try:
         from api.config import load_settings, save_settings
+
         s = load_settings()
         s[settings_key] = api_key
         save_settings(s)
@@ -159,6 +169,7 @@ def handle_post_seed_provider(handler, body: dict) -> dict[str, Any]:
     # Best-effort hot-reload so the gateway picks up the new key immediately.
     try:
         from api.providers import _reload_provider_runtime
+
         _reload_provider_runtime()
     except Exception:
         pass  # not fatal — the key is persisted, next request will reload
@@ -183,6 +194,7 @@ def handle_post_inject_failure(handler, body: dict) -> dict[str, Any]:
     if target == "local_fallback.enable":
         try:
             from fox_overlay.webui_modules import local_fallback
+
             local_fallback._INJECTED_FAILURE = kind
             return {"ok": True, "target": target, "kind": kind}
         except Exception as exc:
@@ -193,7 +205,9 @@ def handle_post_inject_failure(handler, body: dict) -> dict[str, Any]:
 
 def _handle_post(handler, parsed) -> bool:
     """Dispatch POST /test/*. Returns True if handled, False to fall through."""
-    from api.helpers import j, read_body
+    from api.helpers import j
+
+    from fox_overlay.webui_modules._body_shape import require_object_body
 
     if parsed.path == "/test/reset":
         j(handler, handle_post_reset(handler))
@@ -204,17 +218,23 @@ def _handle_post(handler, parsed) -> bool:
         return True
 
     if parsed.path == "/test/seed-provider":
-        body = read_body(handler) or {}
+        body = require_object_body(handler)
+        if body is None:
+            return True
         j(handler, handle_post_seed_provider(handler, body))
         return True
 
     if parsed.path == "/test/inject-failure":
-        body = read_body(handler) or {}
+        body = require_object_body(handler)
+        if body is None:
+            return True
         j(handler, handle_post_inject_failure(handler, body))
         return True
 
     if parsed.path == "/test/tailscale/set-state":
-        body = read_body(handler) or {}
+        body = require_object_body(handler)
+        if body is None:
+            return True
         j(handler, handle_post_tailscale_set_state(handler, body), status=501)
         return True
 
