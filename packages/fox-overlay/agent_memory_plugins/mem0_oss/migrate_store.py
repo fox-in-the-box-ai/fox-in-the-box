@@ -79,7 +79,18 @@ _SERVER_TIMEOUT_S = 30.0
 # success or a verified-empty source — NEVER before the server is touched and
 # NEVER on a partial/crashed run — so a crashed run re-attempts on the next
 # boot instead of silently marking itself done.
+# READ-SIDE contract (issue #905): a sentinel suppresses migration ONLY when it
+# parses, matches the current schema and the currently-resolved collection, and
+# reads reason:"migrated".  An empty-source record is a transient observation,
+# not a terminal state; a corrupt / foreign / wrong-collection / old-schema
+# record is treated as absent and re-attempted (re-migration is idempotent).
 _SENTINEL_NAME = ".migrated-to-server"
+# Kept at 1 on purpose (issues #905/#906): the forward-compatible trust
+# mechanism is CONTENT MATCH (collection == resolved AND reason == "migrated"),
+# not the schema number.  Bumping would invalidate every already-migrated
+# install's sentinel on upgrade and trigger a blind re-migration of the retained
+# embedded store — resurrecting points the user deleted server-side, the exact
+# data-loss class this work closes.
 _SENTINEL_SCHEMA = 1
 
 # Truthy spellings for MEM0_OSS_DISABLED.  Mirrors __init__._TRUE_VALUES, restated
@@ -362,6 +373,11 @@ def _read_file_overrides() -> dict:
             data = json.loads(config_path.read_text(encoding="utf-8"))
             if isinstance(data, dict):
                 return {k: v for k, v in data.items() if v is not None and v != ""}
+            logger.warning(
+                "mem0_oss.migrate: %s is not a JSON object — ignoring, using "
+                "env/defaults",
+                config_path,
+            )
     except (OSError, ValueError) as exc:  # unreadable / malformed JSON
         logger.warning(
             "mem0_oss.migrate: failed to read %s (%s) — falling back to env/defaults",
@@ -552,6 +568,43 @@ def _write_sentinel(
     os.replace(tmp, path)
 
 
+def _read_sentinel(path: Path) -> Optional[dict]:
+    """Parse and validate the migration sentinel.  Returns the payload dict ONLY
+    when it is a well-formed, current-schema object carrying the keys we write;
+    returns ``None`` for a missing, unreadable, non-JSON, wrong-schema, or
+    key-incomplete file so the boot path treats it as "not migrated" and
+    re-attempts rather than trusting a stray, foreign, or legacy marker
+    (issue #905).
+
+    A corrupt marker must never brick boot: every failure maps to ``None``
+    (re-attempt), never to a false skip and never to a hard exit.  Only
+    ``OSError`` / ``ValueError`` are caught — never a bare except, never
+    ``KeyboardInterrupt`` / ``SystemExit``."""
+    try:
+        raw = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return None
+    except OSError as exc:  # unreadable (perms, is-a-dir, …)
+        logger.warning(
+            "mem0_oss.migrate: sentinel unreadable (%s) — re-attempting", exc
+        )
+        return None
+    try:
+        data = json.loads(raw)
+    except ValueError:  # JSONDecodeError is a ValueError
+        logger.warning("mem0_oss.migrate: sentinel is not valid JSON — re-attempting")
+        return None
+    if not isinstance(data, dict) or data.get("schema") != _SENTINEL_SCHEMA:
+        logger.warning("mem0_oss.migrate: sentinel schema unrecognized — re-attempting")
+        return None
+    if not {"reason", "collection", "source_count", "migrated"} <= data.keys():
+        logger.warning(
+            "mem0_oss.migrate: sentinel missing required keys — re-attempting"
+        )
+        return None
+    return data
+
+
 def _wait_for_readyz(server_url: str, api_key: str = "") -> bool:
     """Poll ``<server_url>/readyz`` until the server answers or the bounded
     budget is spent.  ANY HTTP response (including 5xx while Qdrant warms up)
@@ -694,11 +747,38 @@ def run_boot_migration() -> int:
         logger.error("mem0_oss.migrate: boot migration FAILED — %s", exc)
         return 1
 
-    # 3. Already migrated → the sentinel is the single source of truth.
+    # 3. Honour the sentinel ONLY when it is a well-formed, current-schema record
+    #    for THIS collection whose reason is a completed migration.  An
+    #    "empty-source" record is a transient observation, not a terminal state:
+    #    it must not suppress a source that appears later (a restore / late volume
+    #    mount), so it falls through to the source probe below.  An unreadable /
+    #    foreign / wrong-collection / legacy-schema sentinel is treated as absent
+    #    and likewise re-attempts — re-migration is idempotent (upsert by stable
+    #    id), so a redundant copy is safe while a false skip strands memories
+    #    permanently (issue #905).
     sentinel = _sentinel_path()
-    if sentinel.exists():
-        logger.info("mem0_oss.migrate: already migrated (%s) — skipping", sentinel)
-        return 0
+    sentinel_data = _read_sentinel(sentinel)
+    if sentinel_data is not None and sentinel_data.get("collection") == collection:
+        if sentinel_data.get("reason") == "migrated":
+            logger.info("mem0_oss.migrate: already migrated (%s) — skipping", sentinel)
+            return 0
+        logger.info(
+            "mem0_oss.migrate: sentinel records an empty source (%s) — re-checking "
+            "whether a source has since appeared",
+            sentinel,
+        )
+    elif sentinel_data is not None:
+        logger.info(
+            "mem0_oss.migrate: sentinel is for collection %r but %r is configured "
+            "— re-attempting for the current collection",
+            sentinel_data.get("collection"),
+            collection,
+        )
+    elif sentinel.exists():
+        logger.warning(
+            "mem0_oss.migrate: ignoring untrustworthy sentinel %s — re-attempting",
+            sentinel,
+        )
 
     api_key = os.environ.get("MEM0_OSS_QDRANT_API_KEY", "").strip()
 
