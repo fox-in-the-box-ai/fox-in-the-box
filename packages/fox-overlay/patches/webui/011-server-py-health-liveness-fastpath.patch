@@ -1,0 +1,120 @@
+diff --git a/server.py b/server.py
+index d6a8664..b52bb8b 100644
+--- a/server.py
++++ b/server.py
+@@ -151,6 +151,18 @@ class QuietHTTPServer(ThreadingHTTPServer):
+         b"Content-Length: 0\r\n"
+         b"\r\n"
+     )
++    # Fox #913: a canned liveness 200, served from the overflow lane so a
++    # data-plane flood that exhausts the 128-slot main pool cannot starve
++    # the Docker HEALTHCHECK /health probe.  Content-Length must equal the
++    # body byte count exactly (keep-alive framing).
++    _HEALTH_LIVENESS_RESPONSE = (
++        b"HTTP/1.1 200 OK\r\n"
++        b"Connection: close\r\n"
++        b"Content-Type: application/json\r\n"
++        b"Content-Length: 15\r\n"
++        b"\r\n"
++        b'{"status":"ok"}'
++    )
+ 
+     def __init__(self, *args, **kwargs):
+         server_address = args[0] if args else kwargs.get('server_address', None)
+@@ -252,6 +264,50 @@ class QuietHTTPServer(ThreadingHTTPServer):
+             except Exception:
+                 pass
+ 
++    def _read_request_line_bounded(self, request, *, deadline_seconds: float = 2.0,
++                                   max_bytes: int = 8192) -> bytes:
++        # Fox #913: read up to the first CRLF under a TOTAL wall-clock deadline
++        # (not the per-recv timeout), so peeking the request line in the
++        # overflow lane cannot itself become a slowloris surface.
++        deadline = time.monotonic() + deadline_seconds
++        buffered = bytearray()
++        try:
++            original_timeout = request.gettimeout()
++        except Exception:
++            original_timeout = None
++        try:
++            while len(buffered) < max_bytes and b"\r\n" not in buffered:
++                wait = deadline - time.monotonic()
++                if wait <= 0:
++                    break
++                try:
++                    request.settimeout(wait)
++                    chunk = request.recv(min(1024, max_bytes - len(buffered)))
++                except (BlockingIOError, InterruptedError, TimeoutError, socket.timeout, OSError):
++                    break
++                if not chunk:
++                    break
++                buffered.extend(chunk)
++        finally:
++            try:
++                request.settimeout(original_timeout)
++            except Exception:
++                pass
++        return bytes(buffered)
++
++    def _is_health_liveness_probe(self, request_line: bytes) -> bool:
++        # Exact "/health" with NO query string only.  Never /readyz (a deep
++        # dependency probe) and never /health?deep=1 — those must fall through
++        # to the real handler so a degraded subsystem is never masked by a
++        # canned 200.
++        try:
++            parts = request_line.split(b"\r\n", 1)[0].split()
++            if len(parts) < 2 or parts[0].upper() not in (b"GET", b"HEAD"):
++                return False
++            return parts[1] == b"/health"
++        except Exception:
++            return False
++
+     def _reject_overflow_request(self, request) -> None:
+         if getattr(self, "ssl_context", None) is not None:
+             self._close_request_quietly(request)
+@@ -271,9 +327,17 @@ class QuietHTTPServer(ThreadingHTTPServer):
+ 
+     def _reject_overflow_request_worker(self, request) -> None:
+         try:
++            # Fox #913: peek the request line first so a liveness probe that
++            # fell to the overflow lane gets a 200, while everything else keeps
++            # the 503.  Drain (kept for the Windows unread-input RST reason)
++            # only after the peek.
++            request_line = self._read_request_line_bounded(request)
++            response = (self._HEALTH_LIVENESS_RESPONSE
++                        if self._is_health_liveness_probe(request_line)
++                        else self._OVERFLOW_RESPONSE)
+             self._drain_request_input_nonblocking(request)
+             try:
+-                request.sendall(self._OVERFLOW_RESPONSE)
++                request.sendall(response)
+                 try:
+                     request.shutdown(socket.SHUT_WR)
+                 except Exception:
+@@ -319,6 +383,26 @@ class Handler(BaseHTTPRequestHandler):
+     # HTTP/1.1 keep-alive stays on, so every response must declare framing.
+     protocol_version = "HTTP/1.1"
+     timeout = 30  # seconds — kills idle/incomplete connections to prevent thread exhaustion
++    header_read_timeout = 5  # Fox #913: bound the request-line+header read below the connection budget
++
++    def handle_one_request(self):
++        # Fox #913: re-arm a tight timeout for the request-line + header read
++        # each cycle (incl. keep-alive follow-ups); parse_request restores the
++        # full budget before the body/response/SSE phase.
++        try:
++            self.connection.settimeout(self.header_read_timeout)
++        except OSError:
++            pass
++        return super().handle_one_request()
++
++    def parse_request(self):
++        result = super().parse_request()
++        if result:  # headers are in; restore the full budget for body/SSE
++            try:
++                self.connection.settimeout(self.timeout)
++            except OSError:
++                pass
++        return result
+     
+     def setup(self):
+         """Set socket options for each accepted connection."""

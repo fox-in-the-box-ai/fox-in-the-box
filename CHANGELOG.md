@@ -9,6 +9,17 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.7.69] — 2026-09-24
+
+### Fixed
+
+- Readiness (`/readyz`) no longer reports the assistant ready when the gateway's state cannot be verified. A supervisor probe timeout or error, or the gateway process being absent from the process list, now fails closed (not-ready) instead of being reported as a healthy standalone runtime. (#904)
+
+### Security
+
+- `/readyz` no longer forks a `supervisorctl` subprocess on every request. It now serves a single-flight cached snapshot (1s TTL) and probes supervisord over its local socket in-process, removing an unauthenticated CPU/PID amplification vector and the throughput ceiling that could starve the `/health` probe under load. (#914)
+- The container `/health` liveness probe is now served on a reserved fast path that a slow-client (slowloris) or request flood cannot starve, so connection-pool exhaustion can no longer trip the Docker healthcheck to unhealthy and cause a restart loop. The request header-read phase is now bounded by a deadline. `/readyz` and deep health probes are unaffected and are never served a canned response. (#913)
+
 ## [0.7.68] — 2026-09-24
 
 ### Fixed
