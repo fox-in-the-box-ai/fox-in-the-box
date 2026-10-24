@@ -1,37 +1,19 @@
 diff --git a/static/ui.js b/static/ui.js
-index 809563e7..d6b9fcac 100644
+index 3213751..e4f3186 100644
 --- a/static/ui.js
 +++ b/static/ui.js
-@@ -2830,12 +2830,12 @@ function _getOptionProviderId(opt){
-     return group.dataset.provider;
-   }
-   const value=String(opt.value||'');
--  if(value.startsWith('@') && value.includes(':')) return value.slice(1,value.lastIndexOf(':'));
-+  if(value.startsWith('@') && value.includes(':')) return value.slice(1,value.indexOf(':'));
-   return '';
- }
- function _providerFromModelValue(modelId){
-   const value=String(modelId||'').trim();
--  if(value.startsWith('@')&&value.includes(':')) return value.slice(1,value.lastIndexOf(':'));
-+  if(value.startsWith('@')&&value.includes(':')) return value.slice(1,value.indexOf(':'));
-   return '';
- }
- function _modelPickerOptionIdentity(modelId, providerId){
-@@ -3190,7 +3190,7 @@ function _findModelInDropdown(modelId, sel, preferredProviderId){
+@@ -3889,9 +3889,11 @@ function _findModelInDropdown(modelId, sel, preferredProviderId){
+   const target=norm(modelId);
    let explicitProvider='';
    const rawModel=String(modelId||'');
-   if(rawModel.startsWith('@')&&rawModel.includes(':')){
+-  if(rawModel.startsWith('@')&&rawModel.includes(':')){
 -    explicitProvider=rawModel.slice(1,rawModel.lastIndexOf(':'));
-+    explicitProvider=rawModel.slice(1,rawModel.indexOf(':'));
-   }
+-  }
++  // Fox #007 re-anchor: non-greedy provider parse via upstream's own parser
++  // (a bare first-colon slice mis-groups named custom slugs like
++  // @custom:backup:model-a — lastIndexOf grouped 'custom:backup:model-a',
++  // first-colon would flatten it to 'custom' and match the wrong lane).
++  explicitProvider=_providerFromModelValue(rawModel);
    const preferred=String(preferredProviderId||explicitProvider||'').toLowerCase();
    if(preferred){
-@@ -6939,7 +6939,7 @@ function getModelLabel(modelId){
-   //   @custom:qwen397b-64k               -> qwen397b-64k
-   if(rawId.startsWith('@custom:')){
-     const rest=rawId.slice('@custom:'.length);
--    if(rest.includes(':')) return rest.slice(rest.lastIndexOf(':')+1)||rawId;
-+    if(rest.includes(':')) return rest.slice(rest.indexOf(':')+1)||rawId;
-     if(rest.includes('/')) return rest.slice(rest.indexOf('/')+1)||rawId;
-     return rest||rawId;
-   }
+     if(preferred==='custom'||preferred.startsWith('custom:')){

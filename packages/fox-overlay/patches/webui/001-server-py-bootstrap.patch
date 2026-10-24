@@ -1,8 +1,8 @@
 diff --git a/server.py b/server.py
-index 8ccac36b..ecb3c8eb 100644
+index 1368a12..466c25b 100644
 --- a/server.py
 +++ b/server.py
-@@ -100,6 +100,16 @@ from urllib.parse import urlparse
+@@ -107,6 +107,16 @@ activate_managed_agent()
  
  logger = logging.getLogger(__name__)
  
@@ -16,6 +16,6 @@ index 8ccac36b..ecb3c8eb 100644
 +except Exception as _fox_e:
 +    logger.warning("fox_overlay.bootstrap failed (%s); Fox routes disabled", _fox_e)
 +
- from api.auth import check_auth, reset_trusted_auth_request_state
+ from api.request_logging import emit_request_log
+ from api.auth import check_auth_or_close, reset_trusted_auth_request_state
  from api.config import HOST, PORT, STATE_DIR, SESSION_DIR, DEFAULT_WORKSPACE
- from api.helpers import (

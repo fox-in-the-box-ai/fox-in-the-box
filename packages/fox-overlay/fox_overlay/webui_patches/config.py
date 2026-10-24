@@ -301,9 +301,13 @@ def apply() -> None:
                 "    if config_path is None:\n",
             ),
             (
-                "    if _old_cfg_mtime != 0.0:\n"
+                # v0.52.492: upstream tightened the eviction gate to also require
+                # the config path to be unchanged (per-client profile switches
+                # must not wipe the previous profile's disk cache). Same intent,
+                # new anchor.
+                "    if _old_cfg_mtime != 0.0 and _old_cfg_path == config_path:\n"
                 "        _delete_models_cache_on_disk()\n",
-                "    if _old_cfg_mtime != 0.0:\n"
+                "    if _old_cfg_mtime != 0.0 and _old_cfg_path == config_path:\n"
                 "        _delete_models_cache_on_disk()\n"
                 "        # Fox #138: evict in-memory cache too — same gating as\n"
                 "        # on-disk delete (only on actual changes, not first load).\n"

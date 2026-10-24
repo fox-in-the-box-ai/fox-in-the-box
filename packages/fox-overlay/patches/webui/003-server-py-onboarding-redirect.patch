@@ -1,8 +1,8 @@
 diff --git a/server.py b/server.py
-index ecb3c8eb..d6a86647 100644
+index 466c25b..2d99d83 100644
 --- a/server.py
 +++ b/server.py
-@@ -110,6 +110,20 @@ except ModuleNotFoundError as _fox_e:
+@@ -117,6 +117,20 @@ except ModuleNotFoundError as _fox_e:
  except Exception as _fox_e:
      logger.warning("fox_overlay.bootstrap failed (%s); Fox routes disabled", _fox_e)
  
@@ -20,28 +20,28 @@ index ecb3c8eb..d6a86647 100644
 +    redirect_to_setup = None
 +
 +
- from api.auth import check_auth, reset_trusted_auth_request_state
+ from api.request_logging import emit_request_log
+ from api.auth import check_auth_or_close, reset_trusted_auth_request_state
  from api.config import HOST, PORT, STATE_DIR, SESSION_DIR, DEFAULT_WORKSPACE
- from api.helpers import (
-@@ -389,6 +403,10 @@ class Handler(BaseHTTPRequestHandler):
+@@ -397,6 +411,10 @@ class Handler(BaseHTTPRequestHandler):
              set_request_profile(cookie_profile)
          try:
-             parsed = urlparse(self.path)
+             parsed = fold_api_path(self, urlparse(self.path))  # case-insensitive /api/ routing (#3943)
 +            # Fox #331: bounce un-onboarded users to /setup before auth.
 +            if should_redirect_to_setup(parsed.path) and redirect_to_setup is not None:
 +                return redirect_to_setup(self)
 +
-             if not check_auth(self, parsed): return
+             # Body-pending-aware: a body-bearing GET failing auth would poison reuse (#7550).
+             if not check_auth_or_close(self, parsed): return
              result = handle_get(self, parsed)
-             if result is False:
-@@ -414,6 +432,10 @@ class Handler(BaseHTTPRequestHandler):
+@@ -423,6 +441,10 @@ class Handler(BaseHTTPRequestHandler):
              set_request_profile(cookie_profile)
          try:
-             parsed = urlparse(self.path)
+             parsed = fold_api_path(self, urlparse(self.path))  # case-insensitive /api/ routing (#3943)
 +            # Fox #331: same redirect on POST/PATCH/DELETE (shared method).
 +            if should_redirect_to_setup(parsed.path) and redirect_to_setup is not None:
 +                return redirect_to_setup(self)
 +
-             _is_csp_report_post = (
-                 parsed.path == "/api/csp-report" and self.command == "POST"
-             )
+             _is_csp_report_post = parsed.path == "/api/csp-report" and self.command == "POST"
+             if not _is_csp_report_post and not check_auth_or_close(self, parsed): return
+             result = route_func(self, parsed)

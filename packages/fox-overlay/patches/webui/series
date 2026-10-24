@@ -15,7 +15,6 @@
 005-fox-avatar-override.patch
 006-fox-empty-state-branding.patch
 007-ui-js-colon-split-fix.patch
-008-routes-py-colon-split-fix.patch
 009-remove-onboarding-js-script-tag.patch
 010-bedrock-settings-credentials.patch
 011-server-py-health-liveness-fastpath.patch

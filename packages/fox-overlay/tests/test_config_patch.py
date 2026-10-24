@@ -76,9 +76,10 @@ def _refresh_config_cache(config_path: Path | None = None) -> None:
         config_path = _get_config_path()
     _cfg_cache.clear()
     _old_cfg_mtime = _cfg_mtime
+    _old_cfg_path = _cfg_path
     # ... upstream content collapsed ...
     # still hits the fast path without a cold run.
-    if _old_cfg_mtime != 0.0:
+    if _old_cfg_mtime != 0.0 and _old_cfg_path == config_path:
         _delete_models_cache_on_disk()
 
 

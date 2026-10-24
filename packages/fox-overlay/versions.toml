@@ -10,20 +10,21 @@
 # for shell-friendly grepping.
 
 [upstream]
-hermes_webui_tag = "v0.52.113"
+hermes_webui_tag = "v0.52.492"
 hermes_webui_url = "https://github.com/nesquena/hermes-webui"
-hermes_agent_tag = "v2026.9.21"
+hermes_agent_tag = "v0.22.5"
 hermes_agent_url = "https://github.com/NousResearch/hermes-agent"
 
 [meta]
-pinned_at = "2026-09-22"
-pinned_in_pr = "fox-in-the-box-ai/fox-in-the-box#849"
+pinned_at = "2026-10-24"
+pinned_in_pr = "resolves fox-in-the-box-ai/fox-in-the-box#947"
 phase = "option-b-bump"
-notes = "Agent-only bump v2026.8.31 to v2026.9.21 with the #849 cron-diagnostics overlay refresh (webui stays v0.52.113). The upstream v2026.9.7 cron refactor broke 4 of the 6 Fox agent monkey-patch anchors; KEEP decision -> cron_diagnostics.py re-implemented against v2026.9.21 seams using the FUNCTION-WRAP idiom. Anchor audit (all verified against the checked-out submodule at v2026.9.21): cron.jobs._record_run_outcome wrapped (native failure_streak preserved); cron.scheduler.run_job FAILED splice re-anchored on the `output = _run_doc_header(...) + format_run_error(e)` expression (unique in run_job); tools.cronjob_job_args._format_job wrapped at the relocated definition module; auxiliary_client patch #1 re-anchored (two-return tail dedented 8->4, blank line dropped), patch #2 byte-identical. Old create_job + _mark_job_run_locked substitution patches retired (the _record_run_outcome wrap handles history + lazy init). Gateway bootstrap shim regenerated against gateway/run_startup.py::_start_recover_previous_run (relocated from gateway/run.py). requirements.lock untouched (all pins satisfied)."
+notes = "Dual bump webui v0.52.113 -> v0.52.492 + agent v2026.9.21 -> v0.22.5 (agent versioning scheme changed to v0.22.x on 2026-10-14), resolving drift issue #947. Anchor audit (all verified against tarball snapshots of both tags + full validate-overlay.sh locally: 520 unit tests green, overlay basis clean, bootstrap smoke OK). WEBUI static patches: 001-server-py-bootstrap re-anchored (upstream inserted managed_agent_startup block + api.request_logging import; check_auth renamed check_auth_or_close); 003-server-py-onboarding-redirect re-anchored 3/3 hunks (POST/PATCH/DELETE merged into _handle_write; urlparse -> fold_api_path); 007-ui-js-colon-split-fix trimmed to the one hunk upstream did NOT fix (_findModelInDropdown still used lastIndexOf) and re-anchored to delegate to upstream's own _providerFromModelValue parser; 008-routes-py-colon-split-fix RETIRED (upstream #6722 rewrote _split_provider_qualified_model to delegate to the shared _parse_provider_qualified_model_id grammar — intent fully covered); 002/004/005/006/009/010/011 byte-identical, still apply clean. WEBUI runtime patches: config.py substitution #2 re-anchored (eviction gate tightened by upstream to require unchanged path); streaming.py substitutions #2 and #3 re-anchored (upstream #1401 follow-up inserted _result_public_error rewrite + compression_snapshot_stale blocks before both _provider_error_payload sites); auth/csrf/providers patches unchanged (apply clean). AGENT: 001-gateway-bootstrap-shim re-anchored (upstream made _start_recover_previous_run async and inserted the #87770 plugin re-wire subscription between the hook registration and hooks.discover_and_load). Tests updated: test_config_patch stub mirrors the new eviction gate; test_ollama_provider_routing split_fn now execs upstream's delegating splitter with a faithful _parse_provider_qualified_model_id stub, expectations updated to the #6722 named-slug grammar (2-segment custom ids are named providers, not plain-lane tagged models); host:port slug case added. requirements.lock untouched."
 
 [history]
 prior_pins = [
   # newest first
+  "webui=v0.52.113, agent=v2026.9.21 -- agent-only bump #849 anchor refresh (2026-09-22)",
   "webui=v0.52.113, agent=v2026.8.31 -- agent-only bump #791 (2026-09-02)",
   "webui=v0.52.113, agent=v2026.8.18 -- upstream bump #764 (2026-08-19)",
   "webui=v0.52.113, agent=v2026.8.16.2 -- upstream bump #740 (2026-08-18)",

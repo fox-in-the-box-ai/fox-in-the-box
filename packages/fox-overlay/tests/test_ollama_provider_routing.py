@@ -135,10 +135,62 @@ def split_fn(monkeypatch):
     source = routes_path.read_text(encoding="utf-8")
 
     # Extract _clean_session_model_provider and _split_provider_qualified_model.
-    # The colon-split fix (patch 008) changes rsplit(":", 1) to split(":", 1)
-    # at Docker build time. Apply the same substitution here so the test
-    # validates the PATCHED behavior.
-    ns = {}
+    # v0.52.492 (upstream #6722): _split_provider_qualified_model now delegates
+    # the grammar to config._parse_provider_qualified_model_id(), the shared
+    # non-greedy parser. Patch 008 was retired — its intent (first-colon split
+    # for provider hints) is superseded by upstream's smarter grammar. The
+    # shared parser is provided below as a faithful exec-able stub.
+    def _custom_slug_rest_looks_like_host_port(rest: str) -> bool:
+        # Faithful stub of upstream api/config.py:2609 — host must be an IP,
+        # 'localhost', or a dotted DNS label; port must be numeric 1..65535.
+        import ipaddress
+
+        rest = str(rest or "").strip()
+        if ":" not in rest:
+            return False
+        host, port_s = rest.rsplit(":", 1)
+        if not host or ":" in host or not port_s.isdigit():
+            return False
+        try:
+            port_n = int(port_s)
+        except ValueError:
+            return False
+        if not (1 <= port_n <= 65535):
+            return False
+        try:
+            ipaddress.ip_address(host)
+            return True
+        except ValueError:
+            pass
+        return host.lower() == "localhost" or "." in host
+
+    def _parse_provider_qualified_model_id(model_id: str) -> tuple[str, str] | None:
+        candidate = str(model_id or "").strip()
+        if not candidate.startswith("@") or ":" not in candidate:
+            return None
+        inner = candidate[1:]
+        provider_hint, bare_model = inner.rsplit(":", 1)
+        if provider_hint.startswith("custom:") and provider_hint.count(":") >= 2:
+            _slug_rest = provider_hint[len("custom:"):]
+            if not _custom_slug_rest_looks_like_host_port(_slug_rest):
+                provider_hint, extra = provider_hint.rsplit(":", 1)
+                bare_model = f"{extra}:{bare_model}"
+        elif (provider_hint not in _PROVIDER_MODELS
+                and provider_hint not in _PROVIDER_DISPLAY
+                and not provider_hint.startswith("custom:")):
+            provider_hint, bare_model = inner.split(":", 1)
+        return bare_model, provider_hint
+
+    # Fixture-local tables the closure above captures (mirrors upstream's
+    # module-level registries; only the known-lane names the tests use).
+    _PROVIDER_MODELS = {"openrouter", "anthropic", "ollama"}
+    _PROVIDER_DISPLAY = {}
+
+    ns = {
+        "_parse_provider_qualified_model_id": _parse_provider_qualified_model_id,
+        "_PROVIDER_MODELS": _PROVIDER_MODELS,
+        "_PROVIDER_DISPLAY": _PROVIDER_DISPLAY,
+    }
     for fn_name in ("_clean_session_model_provider", "_split_provider_qualified_model"):
         start = source.index(f"def {fn_name}(")
         rest = source[start:]
@@ -149,24 +201,37 @@ def split_fn(monkeypatch):
                 break
             fn_lines.append(line)
         fn_source = "\n".join(fn_lines)
-        if fn_name == "_split_provider_qualified_model":
-            assert '.rsplit(":", 1)' in fn_source or '.split(":", 1)' in fn_source, (
-                "anchor for patch 008 not found in _split_provider_qualified_model"
-            )
-            fn_source = fn_source.replace('.rsplit(":", 1)', '.split(":", 1)')
         exec(fn_source, ns)
 
     yield ns["_split_provider_qualified_model"]
 
 
 class TestSplitProviderQualifiedModel:
-    """Regression: rsplit(":", 1) mis-parses model tags with colons."""
+    """Colon-bearing ids parse via upstream's shared grammar (#6722).
+
+    v0.52.492 semantic change: ``@custom:<seg>:<model>`` is a NAMED custom
+    provider (slug = first segment) unless the slug is a host:port authority.
+    The old patch-008 expectation (``@custom:llama3.1:latest`` → plain custom
+    lane, bare model keeps its tag) was superseded — the colon-tag protection
+    now lives in the 3-segment shape ``@custom:<slug>:<model>:<tag>``.
+    """
 
     def test_custom_provider_with_model_tag(self, split_fn):
-        """@custom:llama3.1:latest -> ("llama3.1:latest", "custom")"""
-        bare, provider = split_fn("@custom:llama3.1:latest")
+        """@custom:backup:llama3.1:latest -> ("llama3.1:latest", "custom:backup")"""
+        bare, provider = split_fn("@custom:backup:llama3.1:latest")
         assert bare == "llama3.1:latest"
-        assert provider == "custom"
+        assert provider == "custom:backup"
+
+    def test_two_segment_custom_is_named_slug(self, split_fn):
+        """@custom:llama3.1:latest -> ("latest", "custom:llama3.1").
+
+        Under the #6722 grammar a 2-segment custom id is a named provider
+        whose slug is 'llama3.1' — NOT the plain custom lane with a tagged
+        model (that lane doesn't need a slug; the catalog resolves it).
+        """
+        bare, provider = split_fn("@custom:llama3.1:latest")
+        assert bare == "latest"
+        assert provider == "custom:llama3.1"
 
     def test_simple_provider_no_tag(self, split_fn):
         """@anthropic:claude-sonnet-4-20250514 -> ("claude-sonnet-4-20250514", "anthropic")"""
@@ -209,7 +274,22 @@ class TestSplitProviderQualifiedModel:
         assert provider is None
 
     def test_model_with_multiple_colons_in_tag(self, split_fn):
-        """@custom:org/model:v2:latest -> provider is 'custom', rest is model"""
-        bare, provider = split_fn("@custom:org/model:v2:latest")
-        assert bare == "org/model:v2:latest"
-        assert provider == "custom"
+        """Multi-colon custom ids peel exactly one model segment.
+
+        Upstream #6722 grammar: the #1776 peel removes only ONE trailing
+        segment (the model), so the provider keeps the remaining slug
+        segments verbatim. For a 4-colon id like
+        @custom:backup:org/model:v2:latest the slug is
+        'custom:backup:org/model' and the model is 'v2:latest'. Slash-style
+        ids belong in the plain custom lane (@custom:org/model:v2:latest),
+        not behind a named slug.
+        """
+        bare, provider = split_fn("@custom:backup:org/model:v2:latest")
+        assert bare == "v2:latest"
+        assert provider == "custom:backup:org/model"
+
+    def test_host_port_slug_stays_whole(self, split_fn):
+        """@custom:192.168.1.5:11434:llama4 -> ("llama4", "custom:192.168.1.5:11434")"""
+        bare, provider = split_fn("@custom:192.168.1.5:11434:llama4")
+        assert bare == "llama4"
+        assert provider == "custom:192.168.1.5:11434"

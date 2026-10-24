@@ -138,11 +138,20 @@ def apply() -> None:
             # is unique to this block (the exception-path block does NOT
             # have the `if _assistant_added:` pre-amble).
             (
+                # v0.52.492: upstream #1401 follow-up inserted the public-error
+                # rewrite block (_result_public_error + compression_snapshot_stale
+                # rewording) between the else: and _error_payload. Re-anchored:
+                # splice the failover attempt right before the payload build.
                 "                    if _assistant_added:\n"
                 "                        # Self-heal succeeded: messages are already merged into s,\n"
                 "                        # fall through to normal post-result persistence below.\n"
                 "                        pass\n"
                 "                    else:\n"
+                "                        _result_public_error = _err_str or f'{_err_label}.'\n"
+                "                        if _err_type == 'compression_snapshot_stale':\n"
+                "                            _result_public_error = (\n"
+                "                                'The conversation changed while context compression was being prepared.'\n"
+                "                            )\n"
                 "                        _error_payload = _provider_error_payload(\n",
 
                 "                    if _assistant_added:\n"
@@ -150,6 +159,11 @@ def apply() -> None:
                 "                        # fall through to normal post-result persistence below.\n"
                 "                        pass\n"
                 "                    else:\n"
+                "                        _result_public_error = _err_str or f'{_err_label}.'\n"
+                "                        if _err_type == 'compression_snapshot_stale':\n"
+                "                            _result_public_error = (\n"
+                "                                'The conversation changed while context compression was being prepared.'\n"
+                "                            )\n"
                 "                        # ── FITB v0.7.6 silent failover (success path, #303) ──\n"
                 "                        # When upstream's classification says the error is failover-\n"
                 "                        # eligible AND the bundled local llama-server is ready, swap\n"
@@ -187,14 +201,29 @@ def apply() -> None:
             # the trailing `else: _exc_label, _exc_type, _exc_hint = 'Error',
             # 'error', ''` line which is unique to the exception path.
             (
+                # v0.52.492: upstream inserted the _exc_is_compression_snapshot_stale
+                # err_str rewrite between the else-block and _error_payload.
+                # Re-anchored on the tightened sequence.
                 "        else:\n"
                 "            _exc_label, _exc_type, _exc_hint = 'Error', 'error', ''\n"
                 "\n"
+                "        if _exc_is_compression_snapshot_stale:\n"
+                "            # The typed exception may carry expected/observed revision details for\n"
+                "            # diagnostics. Keep those out of the persisted transcript and SSE UI.\n"
+                "            err_str = (\n"
+                "                'The conversation changed while context compression was being prepared.'\n"
+                "            )\n"
                 "        _error_payload = _provider_error_payload(err_str, _exc_type, _exc_hint)\n",
 
                 "        else:\n"
                 "            _exc_label, _exc_type, _exc_hint = 'Error', 'error', ''\n"
                 "\n"
+                "        if _exc_is_compression_snapshot_stale:\n"
+                "            # The typed exception may carry expected/observed revision details for\n"
+                "            # diagnostics. Keep those out of the persisted transcript and SSE UI.\n"
+                "            err_str = (\n"
+                "                'The conversation changed while context compression was being prepared.'\n"
+                "            )\n"
                 "        # ── FITB v0.7.6 silent failover (exception path, #303) ──\n"
                 "        # Same logic as the success-path splice. On failover success we\n"
                 "        # return without persisting any error message; the user's original\n"
