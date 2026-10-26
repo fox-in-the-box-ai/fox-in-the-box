@@ -44,7 +44,7 @@ jobs:
           gh release view "${{ inputs.tag }}" --repo "${{ github.repository }}" >/dev/null
 
       - name: Log in to GHCR
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -71,7 +71,7 @@ jobs:
           fi
           echo "ref=${IMAGE}@${DIGEST}" >> "$GITHUB_OUTPUT"
 
-      - uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
+      - uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
         with:
           # Scan the shipped multi-arch image by immutable index digest, not
           # the source tree (#898). syft resolves the index to the runner's
