@@ -24,7 +24,7 @@
   },
   "devDependencies": {
     "electron": "^44.4.3",
-    "electron-builder": "^26.15.3",
+    "electron-builder": "^26.18.0",
     "electron-builder-squirrel-windows": "26.15.3",
     "jest": "^30.5.2",
     "js-yaml": "^5.4.2",
